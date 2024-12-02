@@ -1,0 +1,391 @@
+//echo "0eNq9V9uOmzAQ/Rc/tmYVSNhsUNtfqNSnSlGEDEw21hqb2ibZaMW/dwy5kRBy2bTRPpiBOXPmeMbj/SCJKKHQXFoSfRCeKmlINP0ghr9KJpxNshxIRJjmdpGD5amXqjzhklmlSUUJlxm8k8ivaIeXw7NM2m6foJpRAtJyy6EJWz+sY1nmCWgEpX1AlBTKoK+SLqLDGzyFlKxJ5I2eQgyTcQ1p835EHYTVSsQJLNiSoz86mea9aa+RyDYrSuZcWNDH1g2tlVIZSC9dgLHI50/JBPLHF1LpHJVwUfOC6ZpvRL7XhtKJ7bvcGUZcIs6cCQPVrKqciEcaBPdqED5KAySGW2Zih9Ew7aA53NE0mLjwBMuLDnZBe4e6+KRcpyW3MUiWCMhIZHUJdGdGl2wHiXzxMT6pO6uZNIXS1ktAWFId7cM30in16MYcwofkMOfa2NMUWqWFYc6lyrU6+Oqo3GqLUDrOEaxuUsLEiq2bzXSkOmQIaX/TnyryfFvX7WH3SpgeKZJSS9AelwY09uKBGtuWINGAElUAZl4HJl+RpSptUV4D11kMz/eqEH5WhUu5femu3vGOcAYpzzDDPrZD/za2G8wjqodP00+XsrEAYvuZy/AMXtOdIJCyxk0plIA+WKHkq7dgeJplrRpq9coP0hfQKglegsHeGsftzoQD/J0izbbFd2aYtvDag9OuC/fFkmtb1gNk61J/4Q2a+MU6rudIPNcqj7nEUAdTBDdbsDVuVgYm1bzY1E3mfqSjcl7uHTHBvx6zF9W4cebSHfh+rB7NiluneBuz97YA74UGY7zPRezK4bCgbk7gfMWsmMn2f521M7m3doYPvJ50HYf+4MZp3hTz5fHo+zcCu0y7cIJ7J0zw6Dl7zaFzcrpecPKd0+HY8rpG8jWRD9nGEuxK6bc6Db2/Wb1qgP31tFPu4b1yD/+z3MDSxTV3nN8/f90h6Ra9X9VayJ2sdSf0nhKb2YKDb4U6uQad+jSgQxrM6DSgPh1RH1cvuMK6b5aBW7r3E2cd1taJs/oba+CswQxBuYXc3dx2/6xSssRjto4fPgeT0WQSjsaTcTgeVtVfdzQVUw==" | cut -c2- | base64 -d | pigz -d | python3 -m json.tool
+{
+    "blueprint": {
+        "icons": [
+            {
+                "signal": {
+                    "name": "arithmetic-combinator"
+                },
+                "index": 1
+            },
+            {
+                "signal": {
+                    "name": "constant-combinator"
+                },
+                "index": 2
+            }
+        ],
+        "entities": [
+            {
+                "entity_number": 1,
+                "name": "constant-combinator",
+                "position": {
+                    "x": 20.5,
+                    "y": -4.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "sections": {
+                        "sections": [
+                            {
+                                "index": 1,
+                                "filters": [
+                                    {
+                                        "index": 1,
+                                        "name": "wooden-chest",
+                                        "quality": "normal",
+                                        "comparator": "=",
+                                        "count": 1
+                                    }
+                                ],
+                                "active": false
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "entity_number": 2,
+                "name": "constant-combinator",
+                "position": {
+                    "x": 20.5,
+                    "y": -5.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "sections": {
+                        "sections": [
+                            {
+                                "index": 1
+                            }
+                        ]
+                    },
+                    "is_on": false
+                }
+            },
+            {
+                "entity_number": 3,
+                "name": "small-lamp",
+                "position": {
+                    "x": 22.5,
+                    "y": -4.5
+                },
+                "control_behavior": {
+                    "circuit_enabled": true,
+                    "circuit_condition": {
+                        "second_signal": {
+                            "name": "transport-belt"
+                        },
+                        "comparator": "<"
+                    }
+                }
+            },
+            {
+                "entity_number": 4,
+                "name": "small-lamp",
+                "position": {
+                    "x": 22.5,
+                    "y": -5.5
+                },
+                "control_behavior": {
+                    "circuit_enabled": true,
+                    "circuit_condition": {
+                        "first_signal": {
+                            "name": "wooden-chest"
+                        },
+                        "second_signal": {
+                            "name": "iron-chest"
+                        },
+                        "comparator": "="
+                    },
+                    "color_mode": 1
+                },
+                "always_on": true
+            },
+            {
+                "entity_number": 5,
+                "name": "arithmetic-combinator",
+                "position": {
+                    "x": 26,
+                    "y": -4.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "arithmetic_conditions": {
+                        "first_signal": {
+                            "name": "burner-inserter"
+                        },
+                        "second_constant": 0,
+                        "operation": "+",
+                        "output_signal": {
+                            "name": "burner-inserter"
+                        }
+                    }
+                }
+            },
+            {
+                "entity_number": 6,
+                "name": "arithmetic-combinator",
+                "position": {
+                    "x": 26,
+                    "y": -5.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "arithmetic_conditions": {
+                        "second_constant": 0,
+                        "operation": "*"
+                    }
+                }
+            },
+            {
+                "entity_number": 7,
+                "name": "decider-combinator",
+                "position": {
+                    "x": 31,
+                    "y": -5.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "decider_conditions": {
+                        "conditions": [
+                            {
+                                "first_signal": {
+                                    "name": "wooden-chest"
+                                },
+                                "second_signal": {
+                                    "name": "steel-chest"
+                                }
+                            },
+                            {
+                                "first_signal": {
+                                    "name": "small-electric-pole"
+                                },
+                                "second_signal": {
+                                    "name": "long-handed-inserter"
+                                },
+                                "comparator": ">"
+                            },
+                            {
+                                "first_signal": {
+                                    "name": "stone-brick"
+                                },
+                                "constant": 50000,
+                                "comparator": ">"
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "signal": {
+                                    "name": "stone-brick"
+                                }
+                            },
+                            {
+                                "signal": {
+                                    "type": "virtual",
+                                    "name": "signal-0"
+                                },
+                                "copy_count_from_input": false
+                            }
+                        ]
+                    }
+                },
+                "player_description": "ddddd"
+            },
+            {
+                "entity_number": 8,
+                "name": "constant-combinator",
+                "position": {
+                    "x": 20.5,
+                    "y": -2.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "sections": {
+                        "sections": [
+                            {
+                                "index": 1,
+                                "filters": [
+                                    {
+                                        "index": 1,
+                                        "type": "virtual",
+                                        "name": "signal-0",
+                                        "quality": "normal",
+                                        "comparator": "=",
+                                        "count": 1
+                                    },
+                                    {
+                                        "index": 2,
+                                        "name": "transport-belt",
+                                        "quality": "normal",
+                                        "comparator": "=",
+                                        "count": 1
+                                    }
+                                ]
+                            },
+                            {
+                                "index": 2,
+                                "filters": [
+                                    {
+                                        "index": 1,
+                                        "name": "express-transport-belt",
+                                        "quality": "normal",
+                                        "comparator": "=",
+                                        "count": 1
+                                    },
+                                    {
+                                        "index": 2,
+                                        "name": "stone-brick",
+                                        "quality": "normal",
+                                        "comparator": "=",
+                                        "count": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "player_description": "wasdasdasdasdad"
+            },
+            {
+                "entity_number": 9,
+                "name": "constant-combinator",
+                "position": {
+                    "x": 20.5,
+                    "y": -3.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "sections": {
+                        "sections": [
+                            {
+                                "index": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "entity_number": 10,
+                "name": "small-lamp",
+                "position": {
+                    "x": 22.5,
+                    "y": -2.5
+                },
+                "always_on": true
+            },
+            {
+                "entity_number": 11,
+                "name": "small-lamp",
+                "position": {
+                    "x": 22.5,
+                    "y": -3.5
+                }
+            },
+            {
+                "entity_number": 12,
+                "name": "arithmetic-combinator",
+                "position": {
+                    "x": 26,
+                    "y": -2.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "arithmetic_conditions": {
+                        "first_signal": {
+                            "type": "virtual",
+                            "name": "signal-0"
+                        },
+                        "second_signal": {
+                            "type": "virtual",
+                            "name": "signal-1"
+                        },
+                        "operation": "-",
+                        "output_signal": {
+                            "type": "virtual",
+                            "name": "signal-0"
+                        },
+                        "first_signal_networks": {
+                            "red": true,
+                            "green": false
+                        }
+                    }
+                }
+            },
+            {
+                "entity_number": 13,
+                "name": "arithmetic-combinator",
+                "position": {
+                    "x": 26,
+                    "y": -3.5
+                },
+                "direction": 4,
+                "control_behavior": {
+                    "arithmetic_conditions": {
+                        "first_signal": {
+                            "type": "virtual",
+                            "name": "signal-each"
+                        },
+                        "second_constant": 0,
+                        "operation": "XOR",
+                        "output_signal": {
+                            "type": "virtual",
+                            "name": "signal-each"
+                        },
+                        "first_signal_networks": {
+                            "red": false,
+                            "green": true
+                        }
+                    }
+                },
+                "player_description": "wasdddddd"
+            }
+        ],
+        "wires": [
+            [
+                1,
+                2,
+                3,
+                2
+            ],
+            [
+                2,
+                1,
+                4,
+                1
+            ],
+            [
+                8,
+                1,
+                12,
+                1
+            ],
+            [
+                8,
+                2,
+                12,
+                2
+            ],
+            [
+                9,
+                1,
+                13,
+                1
+            ],
+            [
+                9,
+                2,
+                11,
+                2
+            ],
+            [
+                9,
+                2,
+                13,
+                2
+            ]
+        ],
+        "item": "blueprint",
+        "version": 562949954797573
+    }
+}
