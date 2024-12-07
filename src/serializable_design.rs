@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-use crate::logical_design::{self, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal};
+use crate::logical_design::{
+	self, ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal,
+};
 use crate::physical_design::{Combinator, PhysicalDesign};
 use crate::signal_lookup_table;
 
@@ -96,7 +98,7 @@ struct ArithmeticCombinatorParameters {
 	second_signal: Option<SignalID>,
 	first_constant: Option<i32>,
 	second_constant: Option<i32>,
-	operation: String,
+	operation: &'static str,
 	output_signal: Option<SignalID>,
 }
 
@@ -214,7 +216,24 @@ impl Combinator {
 	fn resolve_control_behaviour(&self, logical: &LogicalDesign) -> Option<ControlBehavior> {
 		let node = logical.get_node(self.logic);
 		match &node.function {
-			logical_design::NodeFunction::Arithmetic { .. } => None,
+			logical_design::NodeFunction::Arithmetic {
+				op,
+				input_1,
+				input_2,
+			} => Some(ControlBehavior {
+				is_on: None,
+				arithmetic_conditions: Some(ArithmeticCombinatorParameters {
+					first_signal: input_1.resolve_signal_id(),
+					second_signal: input_2.resolve_signal_id(),
+					first_constant: input_1.resolve_constant(),
+					second_constant: input_2.resolve_constant(),
+					operation: op.resolve_string(),
+					output_signal: node.output[0].resolve_signal_id(),
+				}),
+				decider_conditions: None,
+				sections: None,
+				use_color: None,
+			}),
 			logical_design::NodeFunction::Decider {
 				expressions,
 				expression_conj_disj,
@@ -319,6 +338,24 @@ impl DeciderOperator {
 			DeciderOperator::NotEqual => "\u{2260}",
 			DeciderOperator::GreaterThanEqual => "\u{2265}",
 			DeciderOperator::LessThanEqual => "\u{2264}",
+		}
+	}
+}
+
+impl ArithmeticOperator {
+	fn resolve_string(&self) -> &'static str {
+		match self {
+			ArithmeticOperator::Mult => "*",
+			ArithmeticOperator::Div => "/",
+			ArithmeticOperator::Add => "+",
+			ArithmeticOperator::Sub => "-",
+			ArithmeticOperator::Mod => "%",
+			ArithmeticOperator::Exp => "^",
+			ArithmeticOperator::Sll => "<<",
+			ArithmeticOperator::Srl => ">>",
+			ArithmeticOperator::And => "AND",
+			ArithmeticOperator::Or => "OR",
+			ArithmeticOperator::Xor => "XOR",
 		}
 	}
 }
