@@ -26,6 +26,10 @@ pub enum ArithmeticOperator {
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,
+	Equal,
+	NotEqual,
+	GreaterThanEqual,
+	LessThanEqual,
 }
 
 #[derive(Debug, Clone)]

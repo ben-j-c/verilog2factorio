@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::logical_design::{self, LogicalDesign, Signal};
+use crate::logical_design::{self, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal};
 use crate::physical_design::{Combinator, PhysicalDesign};
 use crate::signal_lookup_table;
 
@@ -111,8 +111,8 @@ struct DeciderCombinatorCondition {
 	first_signal: Option<SignalID>,
 	second_signal: Option<SignalID>,
 	constant: Option<i32>,
-	comparator: String,
-	compare_type: Option<String>,
+	comparator: &'static str,
+	compare_type: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -223,7 +223,26 @@ impl Combinator {
 				is_on: None,
 				arithmetic_conditions: None,
 				decider_conditions: Some(DeciderCombinatorParameters {
-					conditions: vec![],
+					conditions: expressions
+						.iter()
+						.zip(expression_conj_disj.iter())
+						.enumerate()
+						.map(
+							|(idx, ((left_signal, operator, right_signal), row_operator))| {
+								DeciderCombinatorCondition {
+									first_signal: left_signal.resolve_signal_id(),
+									second_signal: right_signal.resolve_signal_id(),
+									constant: right_signal.resolve_constant(),
+									comparator: operator.resolve_string(),
+									compare_type: if idx == 0 {
+										None
+									} else {
+										row_operator.resolve_string()
+									},
+								}
+							},
+						)
+						.collect(),
 					outputs: node
 						.output
 						.iter()
@@ -234,8 +253,8 @@ impl Combinator {
 						})
 						.collect(),
 				}),
-				sections: todo!(),
-				use_color: todo!(),
+				sections: None,
+				use_color: None,
 			}),
 			logical_design::NodeFunction::Constant { enabled } => None,
 			logical_design::NodeFunction::Lamp { expression } => None,
@@ -269,6 +288,37 @@ impl Signal {
 			}),
 			Signal::Constant(_) => None,
 			Signal::None => None,
+		}
+	}
+
+	fn resolve_constant(&self) -> Option<i32> {
+		match self {
+			Signal::Constant(v) => Some(*v),
+			Signal::None => Some(0),
+			_ => None,
+		}
+	}
+}
+
+impl DeciderRowConjDisj {
+	fn resolve_string(&self) -> Option<&'static str> {
+		match self {
+			logical_design::DeciderRowConjDisj::And => Some("and"),
+			logical_design::DeciderRowConjDisj::Or => Some("or"),
+			logical_design::DeciderRowConjDisj::FirstRow => None,
+		}
+	}
+}
+
+impl DeciderOperator {
+	fn resolve_string(&self) -> &'static str {
+		match self {
+			DeciderOperator::LessThan => "<",
+			DeciderOperator::GreaterThan => ">",
+			DeciderOperator::Equal => "=",
+			DeciderOperator::NotEqual => "\u{2260}",
+			DeciderOperator::GreaterThanEqual => "\u{2265}",
+			DeciderOperator::LessThanEqual => "\u{2264}",
 		}
 	}
 }
