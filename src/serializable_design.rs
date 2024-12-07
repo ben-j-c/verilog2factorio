@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::logical_design::LogicalDesign;
+use crate::physical_design::PhysicalDesign;
 
 #[derive(Debug, Clone, Serialize)]
 struct Blueprint {
@@ -156,16 +157,17 @@ struct Color {
 	a: Option<f64>,
 }
 
-impl Serialize for LogicalDesign {
+impl Serialize for PhysicalDesign {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
 	{
-		todo!()
+		let bp = convert_to_blueprint(self);
+		bp.serialize(serializer)
 	}
 }
 
-fn convert_to_blueprint(design: LogicalDesign) -> Blueprint {
+fn convert_to_blueprint(design: &PhysicalDesign) -> Blueprint {
 	Blueprint {
 		item: "blueprint".to_owned(),
 		entities: vec![],

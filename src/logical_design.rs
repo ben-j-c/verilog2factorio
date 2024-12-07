@@ -93,6 +93,7 @@ struct LogicalDesignCache {
 	root_nodes: Vec<NodeId>,
 	leaf_nodes: Vec<NodeId>,
 	depth: HashMap<NodeId, i32>,
+	max_depth: i32,
 	rev_depth: HashMap<NodeId, i32>,
 	idx_depth: HashMap<i32, Vec<NodeId>>,
 	idx_rev_depth: HashMap<i32, Vec<NodeId>>,
@@ -121,6 +122,7 @@ impl LogicalDesign {
 				root_nodes: vec![],
 				leaf_nodes: vec![],
 				depth: HashMap::new(),
+				max_depth: 0,
 				rev_depth: HashMap::new(),
 				idx_depth: HashMap::new(),
 				idx_rev_depth: HashMap::new(),
@@ -257,7 +259,9 @@ impl LogicalDesign {
 		let mut root_nodes = vec![];
 		let mut leaf_nodes = vec![];
 		let mut depth = HashMap::new();
+		let mut global_max_depth = -1;
 		let mut idx_depth = HashMap::<i32, Vec<NodeId>>::new();
+
 		for node in &self.nodes {
 			if node.fanin.is_empty() {
 				root_nodes.push(node.id);
@@ -280,6 +284,7 @@ impl LogicalDesign {
 				}
 			}
 			depth.insert(id, max_depth + 1);
+			global_max_depth = max(max_depth + 1, global_max_depth);
 			match idx_depth.entry(max_depth + 1) {
 				std::collections::hash_map::Entry::Occupied(mut e) => {
 					e.get_mut().push(id);
@@ -340,6 +345,7 @@ impl LogicalDesign {
 			root_nodes,
 			leaf_nodes,
 			depth,
+			max_depth: global_max_depth,
 			rev_depth,
 			idx_depth,
 			idx_rev_depth,
@@ -355,5 +361,52 @@ impl LogicalDesign {
 		for node in &self.cache.borrow().topological_order {
 			func(&self.nodes[node.0]);
 		}
+	}
+
+	pub fn for_all_depth<F>(&self, depth: i32, mut func: F)
+	where
+		F: Fn(&Node),
+	{
+		self.update_cache();
+		for node in &self.cache.borrow().idx_depth[&depth] {
+			func(&self.nodes[node.0]);
+		}
+	}
+
+	pub fn for_all_rev_depth<F>(&self, depth: i32, mut func: F)
+	where
+		F: Fn(&Node),
+	{
+		self.update_cache();
+		for node in &self.cache.borrow().idx_rev_depth[&depth] {
+			func(&self.nodes[node.0]);
+		}
+	}
+
+	pub fn max_depth(&self) -> i32 {
+		self.update_cache();
+		return self.cache.borrow().max_depth;
+	}
+
+	pub fn for_all_roots<F>(&self, mut func: F)
+	where
+		F: FnMut(&Node),
+	{
+		self.update_cache();
+		for node in &self.cache.borrow().root_nodes {
+			func(&self.nodes[node.0]);
+		}
+	}
+
+	pub fn get_rev_depth(&self, id: NodeId) -> i32 {
+		*self.cache.borrow().rev_depth.get(&id).unwrap()
+	}
+
+	pub fn get_node(&self, id: NodeId) -> &Node {
+		&self.nodes[id.0]
+	}
+
+	pub fn mut_node(&mut self, id: NodeId) -> &mut Node {
+		&mut self.nodes[id.0]
 	}
 }
