@@ -1,10 +1,11 @@
 use serde::Serialize;
 
-use crate::logical_design::LogicalDesign;
-use crate::physical_design::PhysicalDesign;
+use crate::logical_design::{self, LogicalDesign, Signal};
+use crate::physical_design::{Combinator, PhysicalDesign};
+use crate::signal_lookup_table;
 
 #[derive(Debug, Clone, Serialize)]
-struct Blueprint {
+pub struct SerializableDesign {
 	item: String,
 	entities: Vec<Entity>,
 	icons: Vec<()>,
@@ -38,15 +39,15 @@ impl Serialize for BlueprintWire {
 
 #[derive(Debug, Clone, Serialize)]
 struct SignalID {
-	name: String,
+	name: &'static str,
 	#[serde(rename = "type")]
-	type_: Option<String>,
+	type_: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct Entity {
 	entity_number: usize,
-	name: String,
+	name: &'static str,
 	position: Position,
 	direction: Option<u32>,
 	connections: Option<Connections>,
@@ -117,7 +118,7 @@ struct DeciderCombinatorCondition {
 #[derive(Debug, Clone, Serialize)]
 struct DeciderCombinatorOutput {
 	signal: SignalID,
-	copy_count_from_inpit: bool,
+	copy_count_from_input: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,6 +128,15 @@ struct ProgrammableSpeakerCircuitParameters {}
 struct Position {
 	x: f64,
 	y: f64,
+}
+
+impl Into<Position> for (f64, f64) {
+	fn into(self) -> Position {
+		Position {
+			x: self.0,
+			y: self.1,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -157,29 +167,108 @@ struct Color {
 	a: Option<f64>,
 }
 
-impl Serialize for PhysicalDesign {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		let bp = convert_to_blueprint(self);
-		bp.serialize(serializer)
+impl SerializableDesign {
+	pub fn new() -> Self {
+		SerializableDesign {
+			item: "blueprint".to_owned(),
+			entities: vec![],
+			icons: vec![],
+			description: Some("v2f compile".to_owned()),
+			version: 562949954797573,
+			wires: vec![],
+		}
+	}
+
+	pub fn build_from(&mut self, physical: &PhysicalDesign, logical: &LogicalDesign) {
+		let mut entities = vec![];
+		physical.for_all_combinators(|comb| {
+			entities.push(Entity {
+				entity_number: entities.len() + 1,
+				name: comb.resolve_name(logical),
+				position: comb.position.into(),
+				direction: Some(comb.orientation),
+				connections: None,
+				neighbours: None,
+				control_behavior: comb.resolve_control_behaviour(logical),
+				variation: todo!(),
+				switch_state: todo!(),
+				tags: todo!(),
+			})
+		});
+		physical.for_all_poles(|pole| {});
+		physical.for_all_wires(|wire| {});
 	}
 }
 
-fn convert_to_blueprint(design: &PhysicalDesign) -> Blueprint {
-	Blueprint {
-		item: "blueprint".to_owned(),
-		entities: vec![],
-		icons: vec![],
-		description: Some("v2f compile".to_owned()),
-		version: 562949954797573,
-		wires: vec![],
+impl Combinator {
+	fn resolve_name(&self, logical: &LogicalDesign) -> &'static str {
+		match &logical.get_node(self.logic).function {
+			logical_design::NodeFunction::Arithmetic { .. } => "arithmetic-combinator",
+			logical_design::NodeFunction::Decider { .. } => "decide-combinator",
+			logical_design::NodeFunction::Constant { .. } => "constant-combinator",
+			logical_design::NodeFunction::Lamp { .. } => "small-lamp",
+			logical_design::NodeFunction::WireSum => unreachable!(),
+		}
+	}
+
+	fn resolve_control_behaviour(&self, logical: &LogicalDesign) -> Option<ControlBehavior> {
+		let node = logical.get_node(self.logic);
+		match &node.function {
+			logical_design::NodeFunction::Arithmetic { .. } => None,
+			logical_design::NodeFunction::Decider {
+				expressions,
+				expression_conj_disj,
+				use_input_count,
+			} => Some(ControlBehavior {
+				is_on: None,
+				arithmetic_conditions: None,
+				decider_conditions: Some(DeciderCombinatorParameters {
+					conditions: vec![],
+					outputs: node
+						.output
+						.iter()
+						.enumerate()
+						.map(|(idx, signal)| DeciderCombinatorOutput {
+							signal: signal.resolve_signal_id().unwrap(),
+							copy_count_from_input: use_input_count[idx],
+						})
+						.collect(),
+				}),
+				sections: todo!(),
+				use_color: todo!(),
+			}),
+			logical_design::NodeFunction::Constant { enabled } => None,
+			logical_design::NodeFunction::Lamp { expression } => None,
+			logical_design::NodeFunction::WireSum => unreachable!(),
+		}
 	}
 }
 
-#[cfg(test)]
-mod test {
-	#[test]
-	fn serialize_simple() {}
+impl Signal {
+	fn resolve_signal_id(&self) -> Option<SignalID> {
+		match *self {
+			Signal::Virtual(id) => Some(SignalID {
+				name: signal_lookup_table::virtual_signal(id),
+				type_: Some("virtual"),
+			}),
+			Signal::Physical(id) => Some(SignalID {
+				name: signal_lookup_table::entity_signal(id),
+				type_: None,
+			}),
+			Signal::Everything => Some(SignalID {
+				name: "signal-everything",
+				type_: Some("virtual"),
+			}),
+			Signal::Anything => Some(SignalID {
+				name: "signal-anything",
+				type_: Some("virtual"),
+			}),
+			Signal::Each => Some(SignalID {
+				name: "signal-each",
+				type_: Some("virtual"),
+			}),
+			Signal::Constant(_) => None,
+			Signal::None => None,
+		}
+	}
 }

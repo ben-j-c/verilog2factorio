@@ -1,45 +1,40 @@
-use std::{
-	cmp::{min, Ordering},
-	collections::{linked_list, HashMap},
-	hash::Hash,
-	vec,
-};
+use std::{cmp::Ordering, collections::HashMap, vec};
 
-use crate::logical_design::{self as ld, LogicalDesign, NodeId};
+use crate::logical_design::{self as ld, LogicalDesign};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct CombinatorId(usize);
+pub struct CombinatorId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct WireId(usize);
+pub struct WireId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct TerminalId(u32);
+pub struct TerminalId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct PoleId(usize);
+pub struct PoleId(usize);
 
 #[derive(Debug)]
-struct Combinator {
-	id: CombinatorId,
-	logic: ld::NodeId,
-	position: (f64, f64),
-	placed: bool,
-	orientation: u32,
+pub struct Combinator {
+	pub id: CombinatorId,
+	pub logic: ld::NodeId,
+	pub position: (f64, f64),
+	pub placed: bool,
+	pub orientation: u32,
 }
 
 #[derive(Debug)]
-struct Wire {
-	id: WireId,
-	logic: ld::NodeId,
-	node1_id: CombinatorId,
-	node2_id: CombinatorId,
-	terminal1_id: TerminalId,
-	terminal2_id: TerminalId,
+pub struct Wire {
+	pub id: WireId,
+	pub logic: ld::NodeId,
+	pub node1_id: CombinatorId,
+	pub node2_id: CombinatorId,
+	pub terminal1_id: TerminalId,
+	pub terminal2_id: TerminalId,
 }
 
 #[derive(Debug)]
-enum WireHopType {
+pub enum WireHopType {
 	Small,
 	Medium,
 	Big,
@@ -49,10 +44,10 @@ enum WireHopType {
 }
 
 #[derive(Debug)]
-struct Pole {
-	id: PoleId,
-	logic: ld::NodeId,
-	position: (f64, f64),
+pub struct Pole {
+	pub id: PoleId,
+	pub logic: ld::NodeId,
+	pub position: (f64, f64),
 }
 
 #[derive(Debug)]
@@ -65,8 +60,6 @@ pub struct PhysicalDesign {
 	idx_wires: HashMap<ld::NodeId, WireId>,
 	idx_poles: HashMap<ld::NodeId, PoleId>,
 	space: HashMap<(i32, i32), SpaceNode>,
-
-	logical: ld::LogicalDesign,
 }
 
 #[derive(Debug)]
@@ -83,26 +76,9 @@ enum SpaceNode {
 }
 
 impl PhysicalDesign {
-	pub fn new(logical: LogicalDesign) -> Self {
+	pub fn new() -> Self {
 		let mut combs = vec![];
 		let mut idx_combs = HashMap::new();
-		logical.for_all(|_, ld_node| match &ld_node.function {
-			ld::NodeFunction::Arithmetic { .. }
-			| ld::NodeFunction::Decider { .. }
-			| ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. } => {
-				let id = CombinatorId(combs.len());
-				combs.push(Combinator {
-					id,
-					logic: ld_node.id,
-					position: (0.0, 0.0), // Later we spread them out
-					placed: false,
-					orientation: 4, // This shouldn't have to change
-				});
-				idx_combs.insert(ld_node.id, id);
-			}
-			ld::NodeFunction::WireSum => { /* Do nothing for now */ }
-		});
 
 		let ret = PhysicalDesign {
 			combs,
@@ -112,33 +88,73 @@ impl PhysicalDesign {
 			idx_wires: HashMap::new(),
 			idx_poles: HashMap::new(),
 			space: HashMap::new(),
-			logical,
 		};
 		ret
 	}
 
-	pub fn mut_comb_and_logical(&mut self, id: CombinatorId) -> (&mut Combinator, &ld::Node) {
-		let comb = &mut self.combs[id.0];
-		let ld_node = self.logical.get_node(comb.logic);
-		(comb, ld_node)
+	pub fn build_from(&mut self, logical: &LogicalDesign) {
+		self.extract_combs(logical);
+		self.place_combs(logical);
+		self.connect_combs(logical);
 	}
 
-	pub fn get_comb_and_logical(&mut self, id: CombinatorId) -> (&Combinator, &ld::Node) {
-		let comb = &self.combs[id.0];
-		let ld_node = self.logical.get_node(comb.logic);
-		(comb, ld_node)
+	pub fn for_all_combinators<F>(&self, mut func: F)
+	where
+		F: FnMut(&Combinator),
+	{
+		for x in &self.combs {
+			func(x)
+		}
 	}
 
-	pub fn get_logical(&self, id: CombinatorId) -> &ld::Node {
+	pub fn for_all_poles<F>(&self, mut func: F)
+	where
+		F: FnMut(&Pole),
+	{
+		for x in &self.poles {
+			func(x)
+		}
+	}
+
+	pub fn for_all_wires<F>(&self, mut func: F)
+	where
+		F: FnMut(&Wire),
+	{
+		for x in &self.wires {
+			func(x)
+		}
+	}
+
+	fn extract_combs(&mut self, logical: &LogicalDesign) {
+		logical.for_all(|_, ld_node| match &ld_node.function {
+			ld::NodeFunction::Arithmetic { .. }
+			| ld::NodeFunction::Decider { .. }
+			| ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. } => {
+				let id = CombinatorId(self.combs.len());
+				self.combs.push(Combinator {
+					id,
+					logic: ld_node.id,
+					position: (0.0, 0.0), // Later we spread them out
+					placed: false,
+					orientation: 4, // This shouldn't have to change
+				});
+				self.idx_combs.insert(ld_node.id, id);
+			}
+			ld::NodeFunction::WireSum => { /* Do nothing for now */ }
+		});
+	}
+
+	pub fn get_logical<'a>(&self, id: CombinatorId, logical: &'a LogicalDesign) -> &'a ld::Node {
 		let comb = &self.combs[id.0];
-		let ld_node = self.logical.get_node(comb.logic);
+		let ld_node = logical.get_node(comb.logic);
 		ld_node
 	}
 
-	pub fn place_combs(&mut self) {
+	fn place_combs(&mut self, logical: &LogicalDesign) {
 		let mut max_node = None;
-		self.logical.for_all_roots(|ld_node| {
-			let cur_rev_depth = self.logical.get_rev_depth(ld_node.id);
+		logical.for_all_roots(|ld_node| {
+			let cur_rev_depth = logical.get_rev_depth(ld_node.id);
 			max_node = match max_node {
 				Some((_, rev_depth)) => {
 					if cur_rev_depth > rev_depth {
@@ -154,24 +170,24 @@ impl PhysicalDesign {
 			Some((ld_id, _)) => ld_id,
 			None => return,
 		};
-		match self.logical.get_node(start_ld_id).function {
+		match logical.get_node(start_ld_id).function {
 			ld::NodeFunction::WireSum => assert!(false, ""),
 			_ => {}
 		};
 
 		let start_id = *self.idx_combs.get(&start_ld_id).unwrap();
-		self.place_comb_physical((0.0, 0.0), start_id);
-		self.recurse_place_comb(start_id)
+		self.recurse_place_comb(start_id, logical)
 	}
 
-	pub fn place_comb_physical(
+	fn place_comb_physical(
 		&mut self,
 		position: (f64, f64),
 		id_to_place: CombinatorId,
+		logical: &LogicalDesign,
 	) -> Result<(), ()> {
 		let pos_start = (position.0 as i32, position.1 as i32);
 		let comb_to_place = &mut self.combs[id_to_place.0];
-		let ld_node = self.logical.get_node(comb_to_place.logic);
+		let ld_node = logical.get_node(comb_to_place.logic);
 		let hop_spec = ld_node.function.wire_hop_type().wire_hop_spec();
 		for x in 0..hop_spec.dim.0 {
 			for y in 0..hop_spec.dim.1 {
@@ -201,12 +217,12 @@ impl PhysicalDesign {
 		Result::Ok(())
 	}
 
-	fn recurse_place_comb(&mut self, id: CombinatorId) {
+	fn recurse_place_comb(&mut self, id: CombinatorId, logical: &LogicalDesign) {
 		if self.combs[id.0].placed {
 			return;
 		}
 		let sum = {
-			let ld_comb = self.get_logical(id);
+			let ld_comb = self.get_logical(id, logical);
 			ld_comb
 				.fanin
 				.iter()
@@ -228,24 +244,27 @@ impl PhysicalDesign {
 				let avg_pos = (pos.0 / count, (pos.1 / count / 2.0).round() * 2.0);
 				for offset in get_proposed_placements() {
 					let placement_pos = (avg_pos.0 + offset.0, avg_pos.1 + offset.1);
-					match self.place_comb_physical(placement_pos, id) {
+					match self.place_comb_physical(placement_pos, id, logical) {
 						Ok(_) => break,
 						Err(_) => {}
 					}
 				}
 				assert!(false, "Placement failed");
 			}
-			None => match self.place_comb_physical((0.0, 0.0), id) {
+			None => match self.place_comb_physical((0.0, 0.0), id, logical) {
 				Ok(_) => {}
 				Err(_) => assert!(false),
 			},
 		}
-		for fanout_wire_id in self.get_logical(id).fanout.clone() {
-			let fo_node = self.logical.get_node(fanout_wire_id);
+		for fanout_wire_id in self.get_logical(id, logical).fanout.iter() {
+			let fo_node = logical.get_node(*fanout_wire_id);
 			match fo_node.function {
 				ld::NodeFunction::WireSum => {
 					for fanout_combinator in fo_node.fanout.clone() {
-						self.recurse_place_comb(*self.idx_combs.get(&fanout_combinator).unwrap())
+						self.recurse_place_comb(
+							*self.idx_combs.get(&fanout_combinator).unwrap(),
+							logical,
+						)
 					}
 				}
 				_ => assert!(
@@ -254,12 +273,15 @@ impl PhysicalDesign {
 				),
 			}
 		}
-		for fanin_wire_id in self.get_logical(id).fanin.clone() {
-			let fo_node = self.logical.get_node(fanin_wire_id);
+		for fanin_wire_id in self.get_logical(id, logical).fanin.iter() {
+			let fo_node = logical.get_node(*fanin_wire_id);
 			match fo_node.function {
 				ld::NodeFunction::WireSum => {
 					for fanin_combinator in fo_node.fanin.clone() {
-						self.recurse_place_comb(*self.idx_combs.get(&fanin_combinator).unwrap())
+						self.recurse_place_comb(
+							*self.idx_combs.get(&fanin_combinator).unwrap(),
+							logical,
+						)
 					}
 				}
 				_ => assert!(
@@ -270,9 +292,9 @@ impl PhysicalDesign {
 		}
 	}
 
-	pub fn connect_combs(&mut self) {
+	fn connect_combs(&mut self, logical: &LogicalDesign) {
 		let mut global_edges: Vec<(ld::NodeId, Vec<(ld::NodeId, ld::NodeId)>)> = vec![];
-		self.logical.for_all(|_, ld_node| {
+		logical.for_all(|_, ld_node| {
 			match ld_node.function {
 				ld::NodeFunction::WireSum => {
 					let to_connect: Vec<ld::NodeId> = ld_node
@@ -289,8 +311,8 @@ impl PhysicalDesign {
 							}
 							let comb_i = &self.combs[self.idx_combs.get(&id_i).unwrap().0];
 							let comb_j = &self.combs[self.idx_combs.get(&id_j).unwrap().0];
-							let ld_node_i = self.logical.get_node(comb_i.logic);
-							let ld_node_j = self.logical.get_node(comb_j.logic);
+							let ld_node_i = logical.get_node(comb_i.logic);
+							let ld_node_j = logical.get_node(comb_j.logic);
 							let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
 							let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
 							let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
@@ -316,6 +338,7 @@ impl PhysicalDesign {
 					wires.0,
 					*self.idx_combs.get(&edge.0).unwrap(),
 					*self.idx_combs.get(&edge.1).unwrap(),
+					logical,
 				);
 			}
 		}
@@ -326,14 +349,15 @@ impl PhysicalDesign {
 		ld_id_wire: ld::NodeId,
 		id_comb_a: CombinatorId,
 		id_comb_b: CombinatorId,
+		logical: &LogicalDesign,
 	) {
 		let id_wire = self.wires.len();
 		let comb_a = &self.combs[id_comb_a.0];
-		let ld_comb_a = self.logical.get_node(comb_a.logic);
+		let ld_comb_a = logical.get_node(comb_a.logic);
 		let (term_a, term_b) = if ld_comb_a.fanout.contains(&ld_id_wire) {
-			(TerminalId(2), TerminalId(0))
+			(TerminalId(3), TerminalId(1))
 		} else {
-			(TerminalId(0), TerminalId(2))
+			(TerminalId(1), TerminalId(3))
 		};
 		self.wires.push(Wire {
 			id: WireId(id_wire),
