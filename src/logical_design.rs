@@ -431,11 +431,37 @@ impl LogicalDesign {
 		self.cache.borrow_mut().valid = false;
 		&mut self.nodes[id.0]
 	}
+
+	pub fn assert_is_wire_sum(&self, id: NodeId) {
+		match self.get_node(id).function {
+			NodeFunction::WireSum => {}
+			_ => assert!(false, "Expected wire sum node, but got something else."),
+		}
+	}
+
+	pub fn assert_is_not_wire_sum(&self, id: NodeId) {
+		match self.get_node(id).function {
+			NodeFunction::WireSum => assert!(false, "Expected anything but a wire sum node."),
+			_ => {}
+		}
+	}
 }
 
 #[cfg(test)]
 pub fn get_simple_logical_design() -> LogicalDesign {
+	use ArithmeticOperator as Aop;
+	use DeciderOperator as Dop;
+	use Signal as Sig;
 	let mut d = LogicalDesign::new();
+	let constant1 = d.add_constant_comb(vec![Sig::Virtual(0)], vec![100]);
+	let constant2 = d.add_constant_comb(vec![Sig::Virtual(1)], vec![4]);
+	let mult = d.add_arithmetic_comb(
+		(Sig::Virtual(1), Aop::Mult, Sig::Virtual(0)),
+		Sig::Virtual(10),
+	);
+	let lamp = d.add_lamp((Sig::Virtual(10), Dop::Equal, Sig::Constant(400)));
+	let wire_pre_mult = d.add_wire(vec![constant1, constant2], vec![mult]);
+	let wire_post_mult = d.add_wire(vec![mult], vec![lamp]);
 	d
 }
 

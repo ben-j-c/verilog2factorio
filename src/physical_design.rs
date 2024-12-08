@@ -223,10 +223,26 @@ impl PhysicalDesign {
 		}
 		let sum = {
 			let ld_comb = self.get_logical(id, logical);
-			ld_comb
+			let ld_in_wire_fanin_iter = ld_comb
 				.fanin
-				.iter()
-				.chain(ld_comb.fanout.iter())
+				.get(0) // Option<NodeId>
+				.map(|id| {
+					logical.assert_is_wire_sum(*id);
+					logical.get_node(*id).fanin.iter()
+				})
+				.into_iter()
+				.flatten();
+			let ld_out_wire_fanout_iter = ld_comb
+				.fanout
+				.get(0) // Option<NodeId>
+				.map(|id| {
+					logical.assert_is_wire_sum(*id);
+					logical.get_node(*id).fanout.iter()
+				})
+				.into_iter()
+				.flatten();
+			ld_in_wire_fanin_iter
+				.chain(ld_out_wire_fanout_iter)
 				.filter_map(|ld_id| {
 					let comb = &self.combs[self.idx_combs.get(ld_id).unwrap().0];
 					if comb.placed {
@@ -242,14 +258,20 @@ impl PhysicalDesign {
 		match sum {
 			Some((pos, count)) => {
 				let avg_pos = ((pos.0 / count / 2.0).round() * 2.0, pos.1 / count - 0.5);
+				let mut good = false;
 				for offset in get_proposed_placements() {
 					let placement_pos = (avg_pos.0 + offset.0, avg_pos.1 + offset.1);
 					match self.place_comb_physical(placement_pos, id, logical) {
-						Ok(_) => break,
+						Ok(_) => {
+							good = true;
+							break;
+						}
 						Err(_) => {}
 					}
 				}
-				assert!(false, "Placement failed");
+				if !good {
+					assert!(false, "Placement failed");
+				}
 			}
 			None => match self.place_comb_physical((0.0, 0.0), id, logical) {
 				Ok(_) => {}
@@ -260,7 +282,7 @@ impl PhysicalDesign {
 			let fo_node = logical.get_node(*fanout_wire_id);
 			match fo_node.function {
 				ld::NodeFunction::WireSum => {
-					for fanout_combinator in fo_node.fanout.clone() {
+					for fanout_combinator in &fo_node.fanout {
 						self.recurse_place_comb(
 							*self.idx_combs.get(&fanout_combinator).unwrap(),
 							logical,
@@ -277,7 +299,7 @@ impl PhysicalDesign {
 			let fo_node = logical.get_node(*fanin_wire_id);
 			match fo_node.function {
 				ld::NodeFunction::WireSum => {
-					for fanin_combinator in fo_node.fanin.clone() {
+					for fanin_combinator in &fo_node.fanin {
 						self.recurse_place_comb(
 							*self.idx_combs.get(&fanin_combinator).unwrap(),
 							logical,
@@ -428,7 +450,7 @@ fn get_proposed_placements() -> Vec<(f64, f64)> {
 	// Generate points
 	for x in -max_distance..=max_distance {
 		for y in -max_distance..=max_distance {
-			if y % 2 == 0 && euclidean_distance_squared(x, y) <= max_distance_squared {
+			if x % 2 == 0 && euclidean_distance_squared(x, y) <= max_distance_squared {
 				points.push((x, y));
 			}
 		}
@@ -453,4 +475,15 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 		*counts.entry(item.clone()).or_insert(0) += 1;
 	}
 	vec.into_iter().filter(|item| counts[item] == 1).collect()
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	#[test]
+	fn new() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_simple_logical_design();
+		p.build_from(&l);
+	}
 }

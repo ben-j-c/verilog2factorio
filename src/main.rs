@@ -41,6 +41,19 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
 	#[test]
-	fn grid_construction() {}
+	fn make_simple_design() {
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		let l = logical_design::get_simple_logical_design();
+		p.build_from(&l);
+		s.build_from(&p, &l);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		let compressed = deflate::deflate_bytes(blueprint_json.as_bytes());
+		let blueprint_string = BASE64_STANDARD.encode(compressed);
+		println!("{}", blueprint_json.as_str());
+		println!("0e{}", blueprint_string);
+	}
 }

@@ -422,3 +422,16 @@ impl ArithmeticOperator {
 		}
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	#[test]
+	fn new() {
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		let l = logical_design::get_simple_logical_design();
+		p.build_from(&l);
+		s.build_from(&p, &l);
+	}
+}
