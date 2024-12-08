@@ -297,6 +297,7 @@ impl LogicalDesign {
 		}
 		while !queue.is_empty() {
 			let id = queue.pop_front().unwrap();
+			topo_seen.insert(id);
 			topological_order.push(id);
 			let mut max_depth = -1;
 			for fiid in &self.nodes[id.0].fanin {
@@ -320,7 +321,6 @@ impl LogicalDesign {
 					.iter()
 					.all(|fiid| topo_seen.contains(fiid))
 				{
-					topo_seen.insert(*foid);
 					queue.push_back(*foid);
 				}
 			}
@@ -334,9 +334,10 @@ impl LogicalDesign {
 		}
 		while !queue.is_empty() {
 			let id = queue.pop_front().unwrap();
+			topo_seen.insert(id);
 			let mut max_depth = -1;
 			for foid in &self.nodes[id.0].fanout {
-				if let Some(d) = depth.get(foid) {
+				if let Some(d) = rev_depth.get(foid) {
 					max_depth = max(max_depth, *d);
 				}
 			}
@@ -351,11 +352,10 @@ impl LogicalDesign {
 			};
 			for fiid in &self.nodes[id.0].fanin {
 				if self.nodes[fiid.0]
-					.fanin
+					.fanout
 					.iter()
-					.all(|fiid| topo_seen.contains(fiid))
+					.all(|foid| topo_seen.contains(foid))
 				{
-					topo_seen.insert(*fiid);
 					queue.push_back(*fiid);
 				}
 			}
@@ -376,7 +376,7 @@ impl LogicalDesign {
 
 	pub fn for_all_topological_order<F>(&self, mut func: F)
 	where
-		F: Fn(&Node),
+		F: FnMut(&Node),
 	{
 		self.update_cache();
 		for node in &self.cache.borrow().topological_order {
@@ -428,6 +428,85 @@ impl LogicalDesign {
 	}
 
 	pub fn mut_node(&mut self, id: NodeId) -> &mut Node {
+		self.cache.borrow_mut().valid = false;
 		&mut self.nodes[id.0]
+	}
+}
+
+#[cfg(test)]
+pub fn get_simple_logical_design() -> LogicalDesign {
+	let mut d = LogicalDesign::new();
+	d
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use ArithmeticOperator as Aop;
+	use DeciderOperator as Dop;
+	use Signal as Sig;
+
+	#[test]
+	fn new() {
+		let d = LogicalDesign::new();
+		assert_eq!(d.nodes.len(), 0);
+	}
+
+	#[test]
+	fn single_combinator() {
+		let mut d = LogicalDesign::new();
+		let lamp = d.add_lamp((Sig::Virtual(0), Dop::Equal, Sig::Virtual(1)));
+		assert_eq!(d.nodes.len(), 1);
+		assert_eq!(lamp.0, 0);
+		assert_eq!(d.nodes[lamp.0].id, lamp);
+	}
+
+	#[test]
+	fn output_to_input() {
+		let mut d = LogicalDesign::new();
+		let constant = d.add_constant_comb(vec![Sig::Virtual(2)], vec![100]);
+		let lamp = d.add_lamp((Sig::Virtual(2), Dop::Equal, Sig::Constant(100)));
+		d.connect(constant, lamp);
+		assert_eq!(d.nodes.len(), 2);
+
+		assert_eq!(constant.0, 0);
+		assert_eq!(lamp.0, 1);
+
+		assert_eq!(d.nodes[constant.0].id, constant);
+		assert_eq!(d.nodes[lamp.0].id, lamp);
+
+		assert!(d.nodes[constant.0].fanout.contains(&lamp));
+		assert!(d.nodes[lamp.0].fanin.contains(&constant));
+
+		assert_eq!(d.nodes[constant.0].fanout.len(), 1);
+		assert_eq!(d.nodes[lamp.0].fanin.len(), 1);
+
+		d.for_all_depth(0, |n| {
+			assert_eq!(n.id, constant);
+		});
+
+		d.for_all_depth(1, |n| {
+			assert_eq!(n.id, lamp);
+		});
+
+		d.for_all_rev_depth(0, |n| {
+			assert_eq!(n.id, lamp);
+		});
+
+		d.for_all_rev_depth(1, |n| {
+			assert_eq!(n.id, constant);
+		});
+
+		d.for_all_roots(|n| {
+			assert_eq!(n.id, constant);
+		});
+
+		let mut id = 0;
+		d.for_all_topological_order(|n| {
+			assert_eq!(n.id.0, id);
+			id += 1;
+		});
+
+		assert_eq!(d.get_node(constant).output.len(), 1);
 	}
 }
