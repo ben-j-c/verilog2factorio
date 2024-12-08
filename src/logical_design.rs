@@ -466,6 +466,38 @@ pub fn get_simple_logical_design() -> LogicalDesign {
 }
 
 #[cfg(test)]
+pub fn get_complex_40_logical_design() -> LogicalDesign {
+	use ArithmeticOperator as Aop;
+	use DeciderOperator as Dop;
+	use Signal as Sig;
+	let mut d = LogicalDesign::new();
+	let mut constants = vec![];
+	for i in 0..20 {
+		constants.push(d.add_constant_comb(vec![(Sig::Virtual(i))], vec![i + 1]));
+	}
+	let mut mults = vec![];
+	for i in 0..10 {
+		mults.push(d.add_arithmetic_comb(
+			(Sig::Virtual(i * 2), Aop::Mult, Sig::Virtual(i * 2 + 1)),
+			Sig::Virtual(20 + i),
+		));
+	}
+	let mut lamps = vec![];
+	for i in 0..10 {
+		lamps.push(d.add_lamp((
+			Sig::Virtual(20 + i),
+			Dop::Equal,
+			Sig::Constant((i * 2 + 1) * (i * 2 + 2)),
+		)));
+	}
+	for i in 0..10 {
+		d.add_wire(vec![constants[i * 2], constants[i * 2 + 1]], vec![mults[i]]);
+		d.add_wire(vec![mults[i]], vec![lamps[i]]);
+	}
+	d
+}
+
+#[cfg(test)]
 mod test {
 	use super::*;
 	use ArithmeticOperator as Aop;

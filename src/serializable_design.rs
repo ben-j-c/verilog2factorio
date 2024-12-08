@@ -176,8 +176,8 @@ struct Position {
 impl Into<Position> for (f64, f64) {
 	fn into(self) -> Position {
 		Position {
-			x: self.0,
-			y: self.1,
+			x: self.0 + 0.5,
+			y: self.1 + 0.5,
 		}
 	}
 }

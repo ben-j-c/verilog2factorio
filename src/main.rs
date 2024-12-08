@@ -65,4 +65,15 @@ mod tests {
 		let json = serde_json::to_string(&s).unwrap();
 		println!("{}", json.as_str());
 	}
+
+	#[test]
+	fn make_complex_40_design() {
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		let l = logical_design::get_complex_40_logical_design();
+		p.build_from(&l);
+		s.build_from(&p, &l);
+		let json = serde_json::to_string(&s).unwrap();
+		println!("{}", json.as_str());
+	}
 }

@@ -1,6 +1,7 @@
 use std::{
 	cmp::Ordering,
 	collections::{HashMap, HashSet},
+	mem::offset_of,
 	vec,
 };
 
@@ -156,31 +157,18 @@ impl PhysicalDesign {
 	}
 
 	fn place_combs(&mut self, logical: &LogicalDesign) {
-		let mut max_node = None;
+		let mut roots_and_depth = vec![];
 		logical.for_all_roots(|ld_node| {
-			let cur_rev_depth = logical.get_rev_depth(ld_node.id);
-			max_node = match max_node {
-				Some((_, rev_depth)) => {
-					if cur_rev_depth > rev_depth {
-						Some((ld_node.id, cur_rev_depth))
-					} else {
-						max_node
-					}
-				}
-				None => Some((ld_node.id, cur_rev_depth)),
-			};
+			let rev_depth = logical.get_rev_depth(ld_node.id);
+			roots_and_depth.push((*self.idx_combs.get(&ld_node.id).unwrap(), rev_depth));
 		});
-		let start_ld_id = match max_node {
-			Some((ld_id, _)) => ld_id,
-			None => return,
-		};
-		match logical.get_node(start_ld_id).function {
-			ld::NodeFunction::WireSum => assert!(false, ""),
-			_ => {}
-		};
 
-		let start_id = *self.idx_combs.get(&start_ld_id).unwrap();
-		self.recurse_place_comb(start_id, logical)
+		roots_and_depth
+			.sort_by(|(_, rev_depth_a), (_, rev_depth_b)| rev_depth_a.cmp(rev_depth_b).reverse());
+
+		for (root, _) in roots_and_depth {
+			self.recurse_place_comb(root, logical)
+		}
 	}
 
 	fn place_comb_physical(
@@ -261,10 +249,13 @@ impl PhysicalDesign {
 		};
 		match sum {
 			Some((pos, count)) => {
-				let avg_pos = ((pos.0 / count / 2.0).round() * 2.0, pos.1 / count);
+				let avg_pos = (pos.0 / count, pos.1 / count);
 				let mut good = false;
 				for offset in get_proposed_placements() {
-					let placement_pos = (avg_pos.0 + offset.0, avg_pos.1 + offset.1);
+					let placement_pos = (
+						((avg_pos.0 + offset.0).floor() / 2.0).floor() * 2.0,
+						(avg_pos.1 + offset.1).floor(),
+					);
 					match self.place_comb_physical(placement_pos, id, logical) {
 						Ok(_) => {
 							good = true;
@@ -277,10 +268,29 @@ impl PhysicalDesign {
 					assert!(false, "Placement failed");
 				}
 			}
-			None => match self.place_comb_physical((0.0, 0.0), id, logical) {
-				Ok(_) => {}
-				Err(_) => assert!(false),
-			},
+			None => {
+				let mut good = false;
+				let mut offset_factor = 1.0;
+				while !good {
+					for offset in get_proposed_placements() {
+						match self.place_comb_physical(
+							(offset.0 * offset_factor, offset.1 * offset_factor),
+							id,
+							logical,
+						) {
+							Ok(_) => {
+								good = true;
+								break;
+							}
+							Err(_) => {}
+						};
+					}
+					if offset_factor > 100.0 {
+						assert!(false, "Placement failed");
+					}
+					offset_factor += 1.0;
+				}
+			}
 		}
 		for fanout_wire_id in self.get_logical(id, logical).fanout.iter() {
 			let fo_node = logical.get_node(*fanout_wire_id);
