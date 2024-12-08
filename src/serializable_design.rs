@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 use crate::logical_design::{
 	self, ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal,
 };
-use crate::physical_design::{Combinator, PhysicalDesign};
+use crate::physical_design::{Combinator, CombinatorId, PhysicalDesign};
 use crate::signal_lookup_table;
 
 #[derive(Debug, Clone, Serialize)]
@@ -185,6 +187,7 @@ impl SerializableDesign {
 
 	pub fn build_from(&mut self, physical: &PhysicalDesign, logical: &LogicalDesign) {
 		let mut entities = vec![];
+		let mut idx_entities: HashMap<CombinatorId, usize> = HashMap::new();
 		physical.for_all_combinators(|comb| {
 			entities.push(Entity {
 				entity_number: entities.len() + 1,
@@ -197,10 +200,21 @@ impl SerializableDesign {
 				variation: None,
 				switch_state: None,
 				tags: None,
-			})
+			});
+			idx_entities.insert(comb.id, entities.len());
 		});
 		physical.for_all_poles(|pole| {});
-		physical.for_all_wires(|wire| {});
+		let mut wires = vec![];
+		physical.for_all_wires(|wire| {
+			wires.push(BlueprintWire {
+				source_entity_number: idx_entities[&wire.node1_id],
+				source_wire_connector_id: wire.terminal1_id.0 as usize,
+				target_entity_number: idx_entities[&wire.node2_id],
+				target_wire_connector_id: wire.terminal2_id.0 as usize,
+			})
+		});
+		self.entities = entities;
+		self.wires = wires;
 	}
 }
 
