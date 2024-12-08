@@ -323,18 +323,9 @@ impl PhysicalDesign {
 		logical.for_all(|_, ld_node| {
 			match ld_node.function {
 				ld::NodeFunction::WireSum => {
-					let to_connect: Vec<ld::NodeId> = ld_node
-						.fanin
-						.iter()
-						.chain(ld_node.fanout.iter())
-						.cloned()
-						.collect();
 					let mut edges = vec![];
-					for id_i in to_connect.iter() {
-						for id_j in to_connect.iter() {
-							if id_i == id_j {
-								continue;
-							}
+					for id_i in ld_node.fanout.iter() {
+						for id_j in ld_node.fanin.iter() {
 							let comb_i = &self.combs[self.idx_combs.get(&id_i).unwrap().0];
 							let comb_j = &self.combs[self.idx_combs.get(&id_j).unwrap().0];
 							let ld_node_i = logical.get_node(comb_i.logic);
@@ -379,12 +370,17 @@ impl PhysicalDesign {
 	) {
 		let id_wire = self.wires.len();
 		let comb_a = &self.combs[id_comb_a.0];
+		let comb_b = &self.combs[id_comb_b.0];
 		let ld_comb_a = logical.get_node(comb_a.logic);
-		let (term_a, term_b) = if ld_comb_a.fanout.contains(&ld_id_wire) {
-			(TerminalId(3), TerminalId(1))
-		} else {
-			(TerminalId(1), TerminalId(3))
+		let ld_comb_b = logical.get_node(comb_b.logic);
+		assert!(ld_comb_a.fanout.contains(&ld_id_wire));
+		assert!(ld_comb_b.fanin.contains(&ld_id_wire));
+		let term_a = match ld_comb_a.function {
+			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => TerminalId(3),
+			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => TerminalId(1),
+			ld::NodeFunction::WireSum => unreachable!(),
 		};
+		let term_b = TerminalId(1);
 		self.wires.push(Wire {
 			id: WireId(id_wire),
 			logic: ld_id_wire,

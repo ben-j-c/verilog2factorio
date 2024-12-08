@@ -121,6 +121,7 @@ struct BlueprintLogisticFilter {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	comparator: Option<&'static str>,
 	count: i32,
+	quality: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -357,6 +358,7 @@ impl Combinator {
 										signal: signal.resolve_signal_id(),
 										comparator: Some("="),
 										count: constants[idx],
+										quality: "normal",
 									})
 									.collect(),
 							),

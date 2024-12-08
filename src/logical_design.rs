@@ -460,8 +460,8 @@ pub fn get_simple_logical_design() -> LogicalDesign {
 		Sig::Virtual(10),
 	);
 	let lamp = d.add_lamp((Sig::Virtual(10), Dop::Equal, Sig::Constant(400)));
-	let wire_pre_mult = d.add_wire(vec![constant1, constant2], vec![mult]);
-	let wire_post_mult = d.add_wire(vec![mult], vec![lamp]);
+	let _wire_pre_mult = d.add_wire(vec![constant1, constant2], vec![mult]);
+	let _wire_post_mult = d.add_wire(vec![mult], vec![lamp]);
 	d
 }
 
