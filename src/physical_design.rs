@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, collections::HashMap, vec};
+use std::{
+	cmp::Ordering,
+	collections::{HashMap, HashSet},
+	vec,
+};
 
 use crate::logical_design::{self as ld, LogicalDesign};
 
@@ -257,7 +261,7 @@ impl PhysicalDesign {
 		};
 		match sum {
 			Some((pos, count)) => {
-				let avg_pos = ((pos.0 / count / 2.0).round() * 2.0, pos.1 / count - 0.5);
+				let avg_pos = ((pos.0 / count / 2.0).round() * 2.0, pos.1 / count);
 				let mut good = false;
 				for offset in get_proposed_placements() {
 					let placement_pos = (avg_pos.0 + offset.0, avg_pos.1 + offset.1);
@@ -443,14 +447,14 @@ fn heuristic(x: i32, y: i32) -> f64 {
 }
 
 fn get_proposed_placements() -> Vec<(f64, f64)> {
-	let max_distance = 10;
+	let max_distance = 10i32;
 	let max_distance_squared = max_distance * max_distance;
 	let mut points = Vec::new();
 
 	// Generate points
 	for x in -max_distance..=max_distance {
 		for y in -max_distance..=max_distance {
-			if x % 2 == 0 && euclidean_distance_squared(x, y) <= max_distance_squared {
+			if x.rem_euclid(2) == 0 && euclidean_distance_squared(x, y) <= max_distance_squared {
 				points.push((x, y));
 			}
 		}
@@ -470,11 +474,11 @@ fn get_proposed_placements() -> Vec<(f64, f64)> {
 }
 
 fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
-	let mut counts: HashMap<T, usize> = HashMap::new();
+	let mut marks: HashSet<T> = HashSet::new();
 	for item in &vec {
-		*counts.entry(item.clone()).or_insert(0) += 1;
+		marks.insert(item.clone());
 	}
-	vec.into_iter().filter(|item| counts[item] == 1).collect()
+	marks.into_iter().collect()
 }
 
 #[cfg(test)]

@@ -9,13 +9,19 @@ use crate::physical_design::{Combinator, CombinatorId, PhysicalDesign};
 use crate::signal_lookup_table;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SerializableDesign {
-	item: String,
-	entities: Vec<Entity>,
+pub struct BlueprintInterior {
 	icons: Vec<()>,
+	entities: Vec<Entity>,
+	item: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	description: Option<String>,
 	version: i64,
 	wires: Vec<BlueprintWire>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerializableDesign {
+	blueprint: BlueprintInterior,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +50,7 @@ impl Serialize for BlueprintWire {
 #[derive(Debug, Clone, Serialize)]
 struct SignalID {
 	name: &'static str,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[serde(rename = "type")]
 	type_: Option<&'static str>,
 }
@@ -53,24 +60,38 @@ struct Entity {
 	entity_number: usize,
 	name: &'static str,
 	position: Position,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	direction: Option<u32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	connections: Option<Connections>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	neighbours: Option<Vec<usize>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	control_behavior: Option<ControlBehavior>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	variation: Option<i32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	switch_state: Option<bool>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	tags: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct ControlBehavior {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	circuit_enabled: Option<bool>, // Used by lamps
+	#[serde(skip_serializing_if = "Option::is_none")]
 	is_on: Option<bool>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	arithmetic_conditions: Option<ArithmeticCombinatorParameters>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	decider_conditions: Option<DeciderCombinatorParameters>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	circuit_condition: Option<DeciderCombinatorCondition>, // Used by lamps
-	sections: Option<LogisticSections>,                    // Used by costant combinators
-	use_color: Option<bool>,                               // Used by lamps
+	#[serde(skip_serializing_if = "Option::is_none")]
+	sections: Option<LogisticSections>, // Used by costant combinators
+	#[serde(skip_serializing_if = "Option::is_none")]
+	use_color: Option<bool>, // Used by lamps
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,9 +102,13 @@ struct LogisticSections {
 #[derive(Debug, Clone, Serialize)]
 struct LogisticSection {
 	index: u8,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	filters: Option<Vec<BlueprintLogisticFilter>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	group: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	multiplier: Option<f64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	active: Option<bool>,
 }
 
@@ -91,18 +116,25 @@ struct LogisticSection {
 struct BlueprintLogisticFilter {
 	index: u16,
 	#[serde(flatten)]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	comparator: Option<&'static str>,
 	count: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct ArithmeticCombinatorParameters {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	first_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	second_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	first_constant: Option<i32>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	second_constant: Option<i32>,
 	operation: &'static str,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	output_signal: Option<SignalID>,
 }
 
@@ -114,10 +146,14 @@ struct DeciderCombinatorParameters {
 
 #[derive(Debug, Clone, Serialize)]
 struct DeciderCombinatorCondition {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	first_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	second_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	constant: Option<i32>,
 	comparator: &'static str,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	compare_type: Option<&'static str>,
 }
 
@@ -139,8 +175,8 @@ struct Position {
 impl Into<Position> for (f64, f64) {
 	fn into(self) -> Position {
 		Position {
-			x: self.0 + 0.5,
-			y: self.1 + 0.5,
+			x: self.0,
+			y: self.1,
 		}
 	}
 }
@@ -148,14 +184,18 @@ impl Into<Position> for (f64, f64) {
 #[derive(Debug, Clone, Serialize)]
 struct Connections {
 	#[serde(rename = "1")]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	primary: Option<ConnectionPoint>,
 	#[serde(rename = "2")]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	secondary: Option<ConnectionPoint>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct ConnectionPoint {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	red: Option<Vec<ConnectionData>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	green: Option<Vec<ConnectionData>>,
 }
 
@@ -170,18 +210,21 @@ struct Color {
 	r: f64,
 	g: f64,
 	b: f64,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	a: Option<f64>,
 }
 
 impl SerializableDesign {
 	pub fn new() -> Self {
 		SerializableDesign {
-			item: "blueprint".to_owned(),
-			entities: vec![],
-			icons: vec![],
-			description: Some("v2f compile".to_owned()),
-			version: 562949954797573,
-			wires: vec![],
+			blueprint: BlueprintInterior {
+				item: "blueprint".to_owned(),
+				entities: vec![],
+				icons: vec![],
+				description: Some("v2f compile".to_owned()),
+				version: 562949954797573,
+				wires: vec![],
+			},
 		}
 	}
 
@@ -213,8 +256,8 @@ impl SerializableDesign {
 				target_wire_connector_id: wire.terminal2_id.0 as usize,
 			})
 		});
-		self.entities = entities;
-		self.wires = wires;
+		self.blueprint.entities = entities;
+		self.blueprint.wires = wires;
 	}
 }
 

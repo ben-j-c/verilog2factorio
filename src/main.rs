@@ -1,6 +1,5 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use base64::prelude::*;
 use clap::Parser;
 use logical_design::LogicalDesign;
 use mapped_design::MappedDesign;
@@ -34,14 +33,27 @@ fn main() {
 	let mut serializable_design = SerializableDesign::new();
 	serializable_design.build_from(&physical_design, &logical_design);
 	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
-	let compressed = deflate::deflate_bytes(blueprint_json.as_bytes());
-	let blueprint_string = BASE64_STANDARD.encode(compressed);
-	println!("0e{}", blueprint_string);
+	println!("{}", blueprint_json);
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use logical_design::ArithmeticOperator as Aop;
+	use logical_design::DeciderOperator as Dop;
+	use logical_design::Signal as Sig;
+
+	#[test]
+	fn make_single_combinator() {
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		let mut l = LogicalDesign::new();
+		l.add_lamp((Sig::None, Dop::Equal, Sig::Constant(0)));
+		p.build_from(&l);
+		s.build_from(&p, &l);
+		let json = serde_json::to_string(&s).unwrap();
+		println!("{}", json.as_str());
+	}
 
 	#[test]
 	fn make_simple_design() {
@@ -50,10 +62,7 @@ mod tests {
 		let l = logical_design::get_simple_logical_design();
 		p.build_from(&l);
 		s.build_from(&p, &l);
-		let blueprint_json = serde_json::to_string(&s).unwrap();
-		let compressed = deflate::deflate_bytes(blueprint_json.as_bytes());
-		let blueprint_string = BASE64_STANDARD.encode(compressed);
-		println!("{}", blueprint_json.as_str());
-		println!("0e{}", blueprint_string);
+		let json = serde_json::to_string(&s).unwrap();
+		println!("{}", json.as_str());
 	}
 }
