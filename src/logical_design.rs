@@ -64,6 +64,7 @@ pub enum NodeFunction {
 	},
 	Constant {
 		enabled: bool,
+		constants: Vec<i32>,
 	},
 	Lamp {
 		expression: (Signal, DeciderOperator, Signal),
@@ -227,8 +228,19 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn add_constant_comb(&mut self, output: Vec<Signal>) -> NodeId {
-		self.add_node(NodeFunction::Constant { enabled: true }, output)
+	pub fn add_constant_comb(&mut self, output: Vec<Signal>, counts: Vec<i32>) -> NodeId {
+		assert_eq!(
+			output.len(),
+			counts.len(),
+			"Tried to crea constant combinator with mismatched outputs and counts"
+		);
+		self.add_node(
+			NodeFunction::Constant {
+				enabled: true,
+				constants: counts,
+			},
+			output,
+		)
 	}
 
 	pub fn add_lamp(&mut self, expr: (Signal, DeciderOperator, Signal)) -> NodeId {

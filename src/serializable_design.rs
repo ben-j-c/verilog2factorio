@@ -62,11 +62,13 @@ struct Entity {
 
 #[derive(Debug, Clone, Serialize)]
 struct ControlBehavior {
+	circuit_enabled: Option<bool>, // Used by lamps
 	is_on: Option<bool>,
 	arithmetic_conditions: Option<ArithmeticCombinatorParameters>,
 	decider_conditions: Option<DeciderCombinatorParameters>,
-	sections: Option<LogisticSections>,
-	use_color: Option<bool>,
+	circuit_condition: Option<DeciderCombinatorCondition>, // Used by lamps
+	sections: Option<LogisticSections>,                    // Used by costant combinators
+	use_color: Option<bool>,                               // Used by lamps
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,7 +82,7 @@ struct LogisticSection {
 	filters: Option<Vec<BlueprintLogisticFilter>>,
 	group: Option<String>,
 	multiplier: Option<f64>,
-	active: bool,
+	active: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,7 +90,7 @@ struct BlueprintLogisticFilter {
 	index: u16,
 	#[serde(flatten)]
 	signal: Option<SignalID>,
-	comparator: Option<String>,
+	comparator: Option<&'static str>,
 	count: i32,
 }
 
@@ -135,8 +137,8 @@ struct Position {
 impl Into<Position> for (f64, f64) {
 	fn into(self) -> Position {
 		Position {
-			x: self.0,
-			y: self.1,
+			x: self.0 + 0.5,
+			y: self.1 + 0.5,
 		}
 	}
 }
@@ -192,9 +194,9 @@ impl SerializableDesign {
 				connections: None,
 				neighbours: None,
 				control_behavior: comb.resolve_control_behaviour(logical),
-				variation: todo!(),
-				switch_state: todo!(),
-				tags: todo!(),
+				variation: None,
+				switch_state: None,
+				tags: None,
 			})
 		});
 		physical.for_all_poles(|pole| {});
@@ -221,6 +223,7 @@ impl Combinator {
 				input_1,
 				input_2,
 			} => Some(ControlBehavior {
+				circuit_enabled: None,
 				is_on: None,
 				arithmetic_conditions: Some(ArithmeticCombinatorParameters {
 					first_signal: input_1.resolve_signal_id(),
@@ -231,6 +234,7 @@ impl Combinator {
 					output_signal: node.output[0].resolve_signal_id(),
 				}),
 				decider_conditions: None,
+				circuit_condition: None,
 				sections: None,
 				use_color: None,
 			}),
@@ -239,6 +243,7 @@ impl Combinator {
 				expression_conj_disj,
 				use_input_count,
 			} => Some(ControlBehavior {
+				circuit_enabled: None,
 				is_on: None,
 				arithmetic_conditions: None,
 				decider_conditions: Some(DeciderCombinatorParameters {
@@ -272,11 +277,55 @@ impl Combinator {
 						})
 						.collect(),
 				}),
+				circuit_condition: None,
 				sections: None,
 				use_color: None,
 			}),
-			logical_design::NodeFunction::Constant { enabled } => None,
-			logical_design::NodeFunction::Lamp { expression } => None,
+			logical_design::NodeFunction::Constant { enabled, constants } => {
+				Some(ControlBehavior {
+					circuit_enabled: None,
+					is_on: Some(*enabled),
+					arithmetic_conditions: None,
+					decider_conditions: None,
+					circuit_condition: None,
+					sections: Some(LogisticSections {
+						sections: vec![LogisticSection {
+							index: 1,
+							filters: Some(
+								node.output
+									.iter()
+									.enumerate()
+									.map(|(idx, signal)| BlueprintLogisticFilter {
+										index: idx as u16 + 1,
+										signal: signal.resolve_signal_id(),
+										comparator: Some("="),
+										count: constants[idx],
+									})
+									.collect(),
+							),
+							group: None,
+							multiplier: None,
+							active: None,
+						}],
+					}),
+					use_color: None,
+				})
+			}
+			logical_design::NodeFunction::Lamp { expression } => Some(ControlBehavior {
+				circuit_enabled: Some(true),
+				is_on: None,
+				arithmetic_conditions: None,
+				decider_conditions: None,
+				circuit_condition: Some(DeciderCombinatorCondition {
+					first_signal: expression.0.resolve_signal_id(),
+					second_signal: expression.2.resolve_signal_id(),
+					constant: expression.2.resolve_constant(),
+					comparator: expression.1.resolve_string(),
+					compare_type: None,
+				}),
+				sections: None,
+				use_color: None,
+			}),
 			logical_design::NodeFunction::WireSum => unreachable!(),
 		}
 	}

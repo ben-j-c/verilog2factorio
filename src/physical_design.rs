@@ -241,7 +241,7 @@ impl PhysicalDesign {
 		};
 		match sum {
 			Some((pos, count)) => {
-				let avg_pos = (pos.0 / count, (pos.1 / count / 2.0).round() * 2.0);
+				let avg_pos = ((pos.0 / count / 2.0).round() * 2.0, pos.1 / count - 0.5);
 				for offset in get_proposed_placements() {
 					let placement_pos = (avg_pos.0 + offset.0, avg_pos.1 + offset.1);
 					match self.place_comb_physical(placement_pos, id, logical) {
@@ -390,7 +390,7 @@ impl WireHopType {
 			WireHopType::Medium => WireHopSpec::new((1, 1), 9.0, 11),
 			WireHopType::Big => WireHopSpec::new((2, 2), 32.0, 4),
 			WireHopType::Substation => WireHopSpec::new((2, 2), 18.0, 18),
-			WireHopType::Combinator => WireHopSpec::new((1, 2), 9.0, 0),
+			WireHopType::Combinator => WireHopSpec::new((2, 1), 10.0, 0),
 			WireHopType::Lamp => WireHopSpec::new((1, 1), 9.0, 0),
 		}
 	}
@@ -423,7 +423,7 @@ fn heuristic(x: i32, y: i32) -> f64 {
 }
 
 fn get_proposed_placements() -> Vec<(f64, f64)> {
-	let max_distance = 7;
+	let max_distance = 10;
 	let max_distance_squared = max_distance * max_distance;
 	let mut points = Vec::new();
 
