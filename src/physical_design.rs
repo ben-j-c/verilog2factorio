@@ -417,9 +417,7 @@ fn euclidean_distance_squared_f64_pair(x: (f64, f64), y: (f64, f64)) -> f64 {
 }
 
 fn heuristic(x: i32, y: i32) -> f64 {
-	let x_abs = x.abs() as f64;
-	let y_abs = y.abs() as f64;
-	y_abs / (x_abs + 1.0) + 2.0 * x_abs - 0.6 * y_abs
+	euclidean_distance_squared(x, y) as f64
 }
 
 fn get_proposed_placements() -> Vec<(f64, f64)> {
