@@ -5,7 +5,10 @@ use std::{
 	hash::Hash,
 };
 
-use crate::mapped_design::{self, MappedDesign};
+use crate::{
+	checked_design::CheckedDesign,
+	mapped_design::{self, MappedDesign},
+};
 
 #[derive(Debug, Clone)]
 pub enum ArithmeticOperator {
@@ -139,7 +142,7 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn build_from(&mut self, mapped_design: &MappedDesign) {}
+	pub fn build_from(&mut self, checked_design: &CheckedDesign) {}
 
 	pub fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
 		self.cache.get_mut().valid = false;

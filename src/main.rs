@@ -1,11 +1,13 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
+use checked_design::CheckedDesign;
 use clap::Parser;
 use logical_design::LogicalDesign;
 use mapped_design::MappedDesign;
 use physical_design::PhysicalDesign;
 use serializable_design::SerializableDesign;
 
+mod checked_design;
 mod logical_design;
 mod mapped_design;
 mod physical_design;
@@ -26,11 +28,13 @@ fn main() {
 	let file = File::open(args.input_file).unwrap();
 	let reader = BufReader::new(file);
 	let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+	let mut checked_design = CheckedDesign::new();
 	let mut logical_design = LogicalDesign::new();
-	logical_design.build_from(&mapped_design);
 	let mut physical_design = PhysicalDesign::new();
-	physical_design.build_from(&logical_design);
 	let mut serializable_design = SerializableDesign::new();
+	checked_design.build_from(&mapped_design);
+	logical_design.build_from(&checked_design);
+	physical_design.build_from(&logical_design);
 	serializable_design.build_from(&physical_design, &logical_design);
 	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
 	println!("{}", blueprint_json);

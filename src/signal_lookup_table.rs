@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+
+pub const N_VIRTUAL_SIGNAL: i32 = 67;
+pub const N_ENTITY_SIGNAL: i32 = 267;
+pub const N_ANY_SIGNAL: i32 = N_VIRTUAL_SIGNAL + N_ENTITY_SIGNAL;
+
 pub fn virtual_signal(v: i32) -> &'static str {
 	match v {
 		0 => "signal-0",
@@ -344,4 +350,22 @@ pub fn entity_signal(v: i32) -> &'static str {
 		266 => "cargo-pod-container",
 		_ => unreachable!(),
 	}
+}
+
+pub fn any_signal(v: i32) -> &'static str {
+	match v {
+		i if i < N_VIRTUAL_SIGNAL => virtual_signal(i),
+		i if i < N_ANY_SIGNAL => entity_signal(i),
+		_ => unreachable!(),
+	}
+}
+
+pub fn lookup_id(mapped_name: &str) -> Option<i32> {
+	for i in 0..N_ANY_SIGNAL {
+		let language_safe_name = any_signal(i).replace("-", "_");
+		if language_safe_name == mapped_name {
+			return Some(i);
+		}
+	}
+	None
 }
