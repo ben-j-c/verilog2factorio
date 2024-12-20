@@ -5,13 +5,13 @@ use serde::{
 	Deserialize, Deserializer,
 };
 
-type CellType = String;
-type ModelName = String;
-type PortName = String;
-type Attribute = String;
-type Parameter = String;
-type AttributeName = String;
-type ParameterName = String;
+pub type CellType = String;
+pub type ModelName = String;
+pub type PortName = String;
+pub type Attribute = String;
+pub type Parameter = String;
+pub type AttributeName = String;
+pub type ParameterName = String;
 
 #[derive(Deserialize, Debug)]
 pub struct MappedDesign {
@@ -41,15 +41,15 @@ pub struct Module {
 
 #[derive(Deserialize, Debug)]
 pub struct Port {
-	direction: Direction,
+	pub direction: Direction,
 	#[serde(default)]
-	bits: Vec<Bit>,
+	pub bits: Vec<Bit>,
 	#[serde(default)]
-	offset: isize,
+	pub offset: isize,
 	#[serde(default)]
-	signed: i32,
+	pub signed: i32,
 	#[serde(default)]
-	upto: i32,
+	pub upto: i32,
 }
 
 #[derive(Debug)]
@@ -72,19 +72,19 @@ pub enum Direction {
 
 #[derive(Deserialize, Debug)]
 pub struct Cell {
-	hide_name: i32,
+	pub hide_name: i32,
 	#[serde(rename = "type")]
-	cell_type: CellType,
+	pub cell_type: CellType,
 	#[serde(default)]
-	model: ModelName,
+	pub model: ModelName,
 	#[serde(default)]
-	parameters: HashMap<ParameterName, Parameter>,
+	pub parameters: HashMap<ParameterName, Parameter>,
 	#[serde(default)]
-	attributes: HashMap<AttributeName, Attribute>,
+	pub attributes: HashMap<AttributeName, Attribute>,
 	#[serde(default)]
-	port_directions: HashMap<PortName, Direction>,
+	pub port_directions: HashMap<PortName, Direction>,
 	#[serde(default)]
-	connections: HashMap<PortName, Vec<Bit>>,
+	pub connections: HashMap<PortName, Vec<Bit>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -109,6 +109,60 @@ pub struct Net {
 	upto: i32,
 	#[serde(default)]
 	signed: i32,
+}
+
+trait FromBinStr {
+	fn from_bin_str(&self) -> Option<usize>;
+}
+
+impl FromBinStr for String {
+	fn from_bin_str(&self) -> Option<usize> {
+		let mut retval = 0;
+		for x in self.chars() {
+			retval <<= 1;
+			retval += if x == '1' { 1 } else { 0 };
+			if x != '1' && x != '0' {
+				return None;
+			}
+		}
+		Some(retval)
+	}
+}
+
+impl MappedDesign {
+	pub fn for_all_top_level_io<F>(&self, mut func: F)
+	where
+		F: FnMut(&Self, &str, &Port),
+	{
+		for (_name, module) in &self.modules {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					for (port_name, port) in &module.ports {
+						func(self, &port_name, port);
+					}
+					return;
+				}
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
+
+	pub fn for_all_cells<F>(&self, mut func: F)
+	where
+		F: FnMut(&Self, &Cell),
+	{
+		for (_name, module) in &self.modules {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					for (_cell_name, cell) in &module.cells {
+						func(self, cell)
+					}
+					return;
+				}
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
 }
 
 impl<'de> Deserialize<'de> for Bit {
@@ -154,24 +208,6 @@ impl<'de> Deserialize<'de> for Bit {
 		}
 
 		deserializer.deserialize_any(BitVisitor)
-	}
-}
-
-trait FromBinStr {
-	fn from_bin_str(&self) -> Option<usize>;
-}
-
-impl FromBinStr for String {
-	fn from_bin_str(&self) -> Option<usize> {
-		let mut retval = 0;
-		for x in self.chars() {
-			retval <<= 1;
-			retval += if x == '1' { 1 } else { 0 };
-			if x != '1' && x != '0' {
-				return None;
-			}
-		}
-		Some(retval)
 	}
 }
 

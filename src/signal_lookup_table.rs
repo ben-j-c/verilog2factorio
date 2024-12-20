@@ -363,7 +363,7 @@ pub fn any_signal(v: i32) -> &'static str {
 pub fn lookup_id(mapped_name: &str) -> Option<i32> {
 	for i in 0..N_ANY_SIGNAL {
 		let language_safe_name = any_signal(i).replace("-", "_");
-		if language_safe_name == mapped_name {
+		if mapped_name.starts_with(language_safe_name.as_str()) {
 			return Some(i);
 		}
 	}
