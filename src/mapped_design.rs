@@ -52,14 +52,14 @@ pub struct Port {
 	pub upto: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bit {
 	Zero,
 	One,
 	Id(BitId),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitId(pub u64);
 
 #[derive(Deserialize, Debug)]
@@ -111,7 +111,7 @@ pub struct Net {
 	signed: i32,
 }
 
-trait FromBinStr {
+pub(crate) trait FromBinStr {
 	fn from_bin_str(&self) -> Option<usize>;
 }
 
@@ -149,15 +149,26 @@ impl MappedDesign {
 
 	pub fn for_all_cells<F>(&self, mut func: F)
 	where
-		F: FnMut(&Self, &Cell),
+		F: FnMut(&Self, &str, &Cell),
 	{
-		for (_name, module) in &self.modules {
+		for (name, module) in &self.modules {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					for (_cell_name, cell) in &module.cells {
-						func(self, cell)
+						func(self, &name, cell)
 					}
 					return;
+				}
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
+
+	pub fn get_cell<'a>(&'a self, cell_name: &str) -> &'a Cell {
+		for (_name, module) in &self.modules {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					return module.cells.get(cell_name).unwrap();
 				}
 			}
 		}
