@@ -62,7 +62,7 @@ pub enum Bit {
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitId(pub u64);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
 	Input,
@@ -169,6 +169,17 @@ impl MappedDesign {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					return module.cells.get(cell_name).unwrap();
+				}
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
+
+	pub fn get_port<'a>(&'a self, port_name: &str) -> &'a Port {
+		for (_name, module) in &self.modules {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					return module.ports.get(port_name).unwrap();
 				}
 			}
 		}

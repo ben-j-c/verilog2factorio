@@ -142,7 +142,9 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn build_from(&mut self, checked_design: &CheckedDesign) {}
+	pub fn build_from(&mut self, checked_design: &CheckedDesign) {
+		checked_design.apply_onto(self); // lmfao
+	}
 
 	pub fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
 		self.cache.get_mut().valid = false;
