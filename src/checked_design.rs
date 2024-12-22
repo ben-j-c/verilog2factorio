@@ -1,8 +1,6 @@
 use std::{
-	any::Any,
-	cell::{self, RefCell},
-	collections::{BTreeMap, HashMap, HashSet},
-	process::{id, Output},
+	cell::RefCell,
+	collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList},
 	vec,
 };
 
@@ -27,16 +25,18 @@ macro_rules! IMPLEMENTABLE_OPS {
 type NodeId = usize;
 
 use crate::{
-	logical_design::LogicalDesign,
-	mapped_design::{CellType, Direction, FromBinStr, Port},
+	logical_design::{ArithmeticOperator, LogicalDesign},
+	mapped_design::Direction,
+	signal_lookup_table,
 };
 use crate::{
-	mapped_design::{self, Bit, MappedDesign, PortName},
+	mapped_design::{Bit, MappedDesign},
 	signal_lookup_table::lookup_id,
 };
 
 pub struct CheckedDesign {
 	nodes: Vec<Node>,
+	signals: Vec<Option<i32>>,
 	cache: RefCell<CheckedDesignCache>,
 }
 
@@ -50,6 +50,7 @@ enum NodeType {
 	PortOutput,
 	PortBody,
 	CellBody,
+	Nop,
 }
 
 #[derive(Debug, Clone)]
@@ -62,22 +63,55 @@ struct Node {
 	fanout: Vec<NodeId>,
 }
 
+fn get_arithmetic_op(op: &str) -> ArithmeticOperator {
+	match op {
+		AND => ArithmeticOperator::And,
+		OR => ArithmeticOperator::Or,
+		XOR => ArithmeticOperator::Xor,
+		SHL => ArithmeticOperator::Sll,
+		SHR => ArithmeticOperator::Srl,
+		MUL => ArithmeticOperator::Mult,
+		DIV => ArithmeticOperator::Div,
+		MOD => ArithmeticOperator::Mod,
+		POW => ArithmeticOperator::Exp,
+		ADD => ArithmeticOperator::Add,
+		SUB => ArithmeticOperator::Sub,
+		_ => panic!("Unsupported arithmetic op"),
+	}
+}
+
 impl CheckedDesign {
 	pub fn new() -> Self {
 		Self {
 			nodes: vec![],
+			signals: vec![],
 			cache: RefCell::new(CheckedDesignCache {}),
 		}
 	}
 
 	fn new_node(&mut self, mapped_id: &str, bits: Vec<Bit>, node_type: NodeType) -> NodeId {
-		todo!()
+		self.nodes.push(Node {
+			id: self.nodes.len(),
+			node_type,
+			bits,
+			mapped_id: mapped_id.to_owned(),
+			fanin: vec![],
+			fanout: vec![],
+		});
+		self.nodes.len() - 1
 	}
 
 	fn connect(&mut self, send: NodeId, recv: NodeId) {
 		if !self.nodes[send].fanout.contains(&recv) {
 			self.nodes[send].fanout.push(recv);
 			self.nodes[recv].fanin.push(send);
+		}
+	}
+
+	fn disconnect(&mut self, send: NodeId, recv: NodeId) {
+		if self.nodes[send].fanout.contains(&recv) {
+			self.nodes[send].fanout.remove(recv);
+			self.nodes[recv].fanin.remove(send);
 		}
 	}
 
@@ -92,7 +126,7 @@ impl CheckedDesign {
 				)
 			}
 		});
-		mapped_design.for_all_cells(|_, name, cell| {
+		mapped_design.for_all_cells(|_, name, _cell| {
 			self.new_node(name, vec![], NodeType::CellBody);
 		});
 		let mut max_bit: u64 = 0;
@@ -134,8 +168,9 @@ impl CheckedDesign {
 		let mut attached_map: Vec<Vec<Vec<NodeId>>> = vec![vec![vec![]; 3]; self.nodes.len()];
 		for node in &self.nodes {
 			match &node.node_type {
-				NodeType::CellInput { port } => panic!("Didn't expect to have these yet."),
-				NodeType::CellOutput { port } => panic!("Didn't expect to have these yet."),
+				NodeType::Nop => panic!("Didn't expect to have these yet."),
+				NodeType::CellInput { .. } => panic!("Didn't expect to have these yet."),
+				NodeType::CellOutput { .. } => panic!("Didn't expect to have these yet."),
 				NodeType::PortInput => panic!("Didn't expect to have these yet."),
 				NodeType::PortOutput => panic!("Didn't expect to have these yet."),
 				NodeType::PortBody => {
@@ -197,27 +232,13 @@ impl CheckedDesign {
 						}
 					}
 				}
-				NodeType::PortBody => {
-					let port = mapped_design.get_port(&node.mapped_id);
-					for bit in &port.bits {
-						if let Bit::Id(bitid) = bit {
-							for attached in &bit_map[bitid.0 as usize] {
-								if *attached != node.id
-									&& !attached_map[node.id][0].contains(attached)
-								{
-									attached_map[node.id][0].push(*attached);
-								}
-							}
-						}
-					}
-				}
 			}
 		}
 		let mut nodeid: usize = 0;
 		while nodeid < self.nodes.len() {
 			let node = &self.nodes[nodeid];
 			match &node.node_type {
-				NodeType::CellInput { port } => {
+				NodeType::CellInput { .. } => {
 					assert!(attached_map[nodeid][2].len() == 0);
 					assert!(
 						(attached_map[nodeid][0].len() == 1 && attached_map[nodeid][1].len() == 0)
@@ -231,7 +252,7 @@ impl CheckedDesign {
 					let to_connect_id = self.nodes[to_connect_body_id].fanout[0];
 					self.connect(to_connect_id, nodeid);
 				}
-				NodeType::CellOutput { port } => {
+				NodeType::CellOutput { .. } => {
 					assert!(attached_map[nodeid][0].len() == 0);
 					assert!(attached_map[nodeid][1].len() == 0);
 					assert!(attached_map[nodeid][2].len() > 0);
@@ -310,12 +331,312 @@ impl CheckedDesign {
 					attached_map.push(vec![vec![], attached_map[nodeid][1].clone(), vec![]]);
 					attached_map.push(vec![vec![], vec![], attached_map[nodeid][0].clone()]);
 				}
+				NodeType::Nop => {}
 			}
 			nodeid += 1;
 		}
+		let topo_order = self.get_topo_order();
+		// Insert Nop to partition signal networks
+		let signal_choices = self.get_signal_choices();
+		for nodeid in &topo_order {
+			let node = &self.nodes[*nodeid];
+			match &node.node_type {
+				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+					if signal_choices[node.id].len() < 2 {
+						continue;
+					}
+					let bits = node.bits.clone();
+					for foid in node.fanout.clone() {
+						self.disconnect(*nodeid, foid);
+						let nop = self.new_node("$nop", bits.clone(), NodeType::Nop);
+						self.connect(*nodeid, nop);
+						self.connect(nop, foid);
+					}
+				}
+				_ => {}
+			}
+		}
+		let topo_order = self.get_topo_order();
+		// Recalculate and insert Nop to partition signal networks
+		let signal_choices = self.get_signal_choices();
+		for nodeid in topo_order.iter().rev() {
+			let node = &self.nodes[*nodeid];
+			match &node.node_type {
+				NodeType::CellBody { .. } => {
+					for cell_input in node.fanin.clone() {
+						if signal_choices[cell_input].len() < 2 {
+							continue;
+						}
+						let node = &self.nodes[cell_input];
+						let bits = node.bits.clone();
+						let fiid = node.fanin[0];
+						self.disconnect(fiid, cell_input);
+						let nop = self.new_node("$nop", bits.clone(), NodeType::Nop);
+						self.connect(fiid, nop);
+						self.connect(nop, cell_input);
+					}
+				}
+				_ => {}
+			}
+		}
+		let topo_order = self.get_topo_order();
+		// Check that we now only have 0 or 1 option for a signal
+		let mut signal_choices: Vec<Option<i32>> = {
+			let signal_choices = self.get_signal_choices();
+			for x in &signal_choices {
+				assert!(x.len() < 2);
+			}
+			signal_choices
+				.into_iter()
+				.map(|x| x.get(0).map(|x| *x))
+				.collect()
+		};
+		// Final signal resolve
+		for nodeid in topo_order {
+			if signal_choices[nodeid].is_some() {
+				continue;
+			}
+			let node = &self.nodes[nodeid];
+			match node.node_type {
+				NodeType::CellInput { .. } | NodeType::CellOutput { .. } => {
+					let local_io = self.get_local_cell_io_network(nodeid);
+					let set_io = local_io
+						.iter()
+						.fold(HashSet::<i32>::new(), |mut set, ioid| {
+							if let Some(sig) = signal_choices[*ioid] {
+								set.insert(sig);
+							};
+							set
+						});
+					let mut sig = 0;
+					for id in local_io.iter() {
+						while set_io.contains(&sig) {
+							sig += 1;
+						}
+						self.set_signal(&mut signal_choices, *id, sig);
+						sig += 1;
+					}
+				}
+				NodeType::PortInput => { /* Already picked */ }
+				NodeType::PortOutput => { /* Already picked */ }
+				NodeType::PortBody => { /* N/A */ }
+				NodeType::CellBody => { /* N/A */ }
+				NodeType::Nop => { /* Let others pick */ }
+			}
+		}
+		// Final correctness check
+		for node in &self.nodes {
+			match node.node_type {
+				NodeType::CellInput { .. } | NodeType::PortInput => {
+					assert!(signal_choices[node.id].is_some());
+					for fiid in &node.fanin {
+						if self.nodes[*fiid].node_type != NodeType::Nop {
+							assert!(signal_choices[node.id] == signal_choices[*fiid]);
+						}
+					}
+				}
+				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+					assert!(signal_choices[node.id].is_some());
+					for foid in &node.fanout {
+						if self.nodes[*foid].node_type != NodeType::Nop {
+							assert!(signal_choices[node.id] == signal_choices[*foid]);
+						}
+					}
+				}
+				NodeType::PortBody => {
+					assert!(signal_choices[node.id].is_some());
+					for foid in &node.fanout {
+						assert!(signal_choices[node.id] == signal_choices[*foid]);
+					}
+					for fiid in &node.fanin {
+						assert!(signal_choices[node.id] == signal_choices[*fiid]);
+					}
+				}
+				NodeType::CellBody => assert!(signal_choices[node.id].is_none()),
+				NodeType::Nop => assert!(signal_choices[node.id].is_none()),
+			}
+		}
+		self.signals = signal_choices;
 	}
 
-	pub fn apply_onto(&self, logical_design: &mut LogicalDesign) {
-		for node in &self.nodes {}
+	fn set_signal(&self, signals: &mut Vec<Option<i32>>, nodeid: NodeId, mut signal: i32) {
+		let node = &self.nodes[nodeid];
+		match &node.node_type {
+			NodeType::CellInput { .. } | NodeType::PortInput => {
+				for fiid in &node.fanin {
+					if self.nodes[*fiid].node_type == NodeType::PortOutput
+						&& signals[*fiid].is_some()
+					{
+						signal = signals[*fiid].unwrap();
+						break;
+					}
+				}
+				if let Some(s) = signals[nodeid] {
+					signal = s;
+				}
+				signals[nodeid] = Some(signal);
+				for fiid in &node.fanin {
+					if self.nodes[*fiid].node_type == NodeType::PortOutput {
+						signals[*fiid] = Some(signal);
+					}
+				}
+			}
+			NodeType::CellOutput { .. } | NodeType::PortOutput => {
+				for fiid in &node.fanin {
+					if self.nodes[*fiid].node_type == NodeType::PortInput
+						&& signals[*fiid].is_some()
+					{
+						signal = signals[*fiid].unwrap();
+						break;
+					}
+				}
+				if let Some(s) = signals[nodeid] {
+					signal = s;
+				}
+				signals[nodeid] = Some(signal);
+				for foid in &node.fanout {
+					if self.nodes[*foid].node_type == NodeType::PortInput {
+						signals[*foid] = Some(signal);
+					}
+				}
+			}
+			NodeType::PortBody => {}
+			NodeType::CellBody => {}
+			NodeType::Nop => {}
+		}
 	}
+
+	fn get_other_input_nodes(&self, nodeid: NodeId) -> Vec<NodeId> {
+		match self.nodes[nodeid].node_type {
+			NodeType::CellInput { .. } => assert!(true),
+			_ => assert!(false),
+		};
+		self.nodes[self.nodes[nodeid].fanout[0]]
+			.fanin
+			.iter()
+			.filter(|id| **id != nodeid)
+			.map(|id| *id)
+			.collect()
+	}
+
+	fn get_local_cell_io_network(&self, nodeid: NodeId) -> Vec<NodeId> {
+		let mut retval = vec![];
+		let mut queue = BTreeSet::new();
+		let mut seen = HashSet::new();
+		queue.insert(nodeid);
+		while !queue.is_empty() {
+			let curid = queue.pop_first().unwrap();
+			if !seen.insert(curid) {
+				continue;
+			}
+			match &self.nodes[curid].node_type {
+				NodeType::PortInput => {
+					retval.push(curid);
+				}
+				NodeType::CellInput { .. } => {
+					retval.push(curid);
+					queue.extend(self.get_other_input_nodes(curid));
+				}
+				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+					retval.push(curid);
+					for foid in &self.nodes[curid].fanout {
+						queue.insert(*foid);
+					}
+				}
+				NodeType::PortBody | NodeType::CellBody => {
+					panic!("Implementer is a fucking moron.")
+				}
+				NodeType::Nop => {
+					// Do nothing
+				}
+			}
+		}
+		retval
+	}
+
+	fn get_signal_choices(&self) -> Vec<Vec<i32>> {
+		let topo_order = self.get_topo_order();
+		let mut signal_choices = vec![vec![]; topo_order.len()];
+		for node in &self.nodes {
+			if node.node_type == NodeType::PortBody {
+				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap();
+				signal_choices[node.id] = vec![choice];
+				if let Some(fiid) = node.fanin.get(0) {
+					signal_choices[*fiid] = vec![choice];
+				}
+				if let Some(foid) = node.fanout.get(0) {
+					signal_choices[*foid] = vec![choice];
+				}
+			}
+		}
+		for nodeid in &topo_order {
+			let node = &self.nodes[*nodeid];
+			match &node.node_type {
+				NodeType::CellInput { .. } => {
+					for fiid in &node.fanin {
+						if self.nodes[*fiid].node_type == NodeType::PortOutput {
+							let xx = signal_choices[*fiid].clone();
+							signal_choices[*nodeid].extend(xx);
+						}
+					}
+				}
+				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+					for foid in &node.fanout {
+						if self.nodes[*foid].node_type == NodeType::PortInput {
+							let xx = signal_choices[*foid].clone();
+							signal_choices[*nodeid].extend(xx)
+						}
+					}
+				}
+				_ => {}
+			};
+		}
+		signal_choices
+	}
+
+	fn get_topo_order(&self) -> Vec<NodeId> {
+		let mut topo_seen = HashSet::new();
+		let mut topological_order = vec![];
+		let mut root_nodes = vec![];
+		for node in &self.nodes {
+			if node.fanin.is_empty() {
+				root_nodes.push(node.id);
+			}
+		}
+		let mut queue = LinkedList::new();
+		for id in &root_nodes {
+			queue.push_back(*id);
+		}
+		while !queue.is_empty() {
+			let id = queue.pop_front().unwrap();
+			topo_seen.insert(id);
+			topological_order.push(id);
+			for foid in &self.nodes[id].fanout {
+				if self.nodes[*foid]
+					.fanin
+					.iter()
+					.all(|fiid| topo_seen.contains(fiid))
+				{
+					queue.push_back(*foid);
+				}
+			}
+		}
+		return topological_order;
+	}
+
+	fn get_depth(&self) -> Vec<i32> {
+		let topo = self.get_topo_order();
+		let mut depth = vec![0; self.nodes.len()];
+		for nodeid in &topo {
+			depth[*nodeid] = self.nodes[*nodeid]
+				.fanin
+				.iter()
+				.map(|fiid| depth[*fiid])
+				.max()
+				.unwrap_or(-1) + 1
+		}
+		depth
+	}
+
+	pub fn apply_onto(&self, logical_design: &mut LogicalDesign, mapped_design: &MappedDesign) {}
 }

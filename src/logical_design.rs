@@ -44,8 +44,7 @@ pub enum DeciderRowConjDisj {
 
 #[derive(Debug, Clone)]
 pub enum Signal {
-	Virtual(i32),
-	Physical(i32),
+	Id(i32),
 	Everything,
 	Anything,
 	Each,
@@ -142,8 +141,8 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn build_from(&mut self, checked_design: &CheckedDesign) {
-		checked_design.apply_onto(self); // lmfao
+	pub fn build_from(&mut self, checked_design: &CheckedDesign, mapped_design: &MappedDesign) {
+		checked_design.apply_onto(self, mapped_design); // lmfao
 	}
 
 	pub fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
@@ -458,13 +457,10 @@ pub fn get_simple_logical_design() -> LogicalDesign {
 	use DeciderOperator as Dop;
 	use Signal as Sig;
 	let mut d = LogicalDesign::new();
-	let constant1 = d.add_constant_comb(vec![Sig::Virtual(0)], vec![100]);
-	let constant2 = d.add_constant_comb(vec![Sig::Virtual(1)], vec![4]);
-	let mult = d.add_arithmetic_comb(
-		(Sig::Virtual(1), Aop::Mult, Sig::Virtual(0)),
-		Sig::Virtual(10),
-	);
-	let lamp = d.add_lamp((Sig::Virtual(10), Dop::Equal, Sig::Constant(400)));
+	let constant1 = d.add_constant_comb(vec![Sig::Id(0)], vec![100]);
+	let constant2 = d.add_constant_comb(vec![Sig::Id(1)], vec![4]);
+	let mult = d.add_arithmetic_comb((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10));
+	let lamp = d.add_lamp((Sig::Id(10), Dop::Equal, Sig::Constant(400)));
 	let _wire_pre_mult = d.add_wire(vec![constant1, constant2], vec![mult]);
 	let _wire_post_mult = d.add_wire(vec![mult], vec![lamp]);
 	d
@@ -478,19 +474,19 @@ pub fn get_complex_40_logical_design() -> LogicalDesign {
 	let mut d = LogicalDesign::new();
 	let mut constants = vec![];
 	for i in 0..20 {
-		constants.push(d.add_constant_comb(vec![(Sig::Virtual(i))], vec![i + 1]));
+		constants.push(d.add_constant_comb(vec![(Sig::Id(i))], vec![i + 1]));
 	}
 	let mut mults = vec![];
 	for i in 0..10 {
 		mults.push(d.add_arithmetic_comb(
-			(Sig::Virtual(i * 2), Aop::Mult, Sig::Virtual(i * 2 + 1)),
-			Sig::Virtual(20 + i),
+			(Sig::Id(i * 2), Aop::Mult, Sig::Id(i * 2 + 1)),
+			Sig::Id(20 + i),
 		));
 	}
 	let mut lamps = vec![];
 	for i in 0..10 {
 		lamps.push(d.add_lamp((
-			Sig::Virtual(20 + i),
+			Sig::Id(20 + i),
 			Dop::Equal,
 			Sig::Constant((i * 2 + 1) * (i * 2 + 2)),
 		)));
@@ -518,7 +514,7 @@ mod test {
 	#[test]
 	fn single_combinator() {
 		let mut d = LogicalDesign::new();
-		let lamp = d.add_lamp((Sig::Virtual(0), Dop::Equal, Sig::Virtual(1)));
+		let lamp = d.add_lamp((Sig::Id(0), Dop::Equal, Sig::Id(1)));
 		assert_eq!(d.nodes.len(), 1);
 		assert_eq!(lamp.0, 0);
 		assert_eq!(d.nodes[lamp.0].id, lamp);
@@ -527,8 +523,8 @@ mod test {
 	#[test]
 	fn output_to_input() {
 		let mut d = LogicalDesign::new();
-		let constant = d.add_constant_comb(vec![Sig::Virtual(2)], vec![100]);
-		let lamp = d.add_lamp((Sig::Virtual(2), Dop::Equal, Sig::Constant(100)));
+		let constant = d.add_constant_comb(vec![Sig::Id(2)], vec![100]);
+		let lamp = d.add_lamp((Sig::Id(2), Dop::Equal, Sig::Constant(100)));
 		d.connect(constant, lamp);
 		assert_eq!(d.nodes.len(), 2);
 
