@@ -33,7 +33,7 @@ fn main() {
 	let mut physical_design = PhysicalDesign::new();
 	let mut serializable_design = SerializableDesign::new();
 	checked_design.build_from(&mapped_design);
-	logical_design.build_from(&checked_design);
+	logical_design.build_from(&checked_design, &mapped_design);
 	physical_design.build_from(&logical_design);
 	serializable_design.build_from(&physical_design, &logical_design);
 	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
