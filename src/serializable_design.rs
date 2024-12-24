@@ -164,6 +164,7 @@ struct DeciderCombinatorOutput {
 	copy_count_from_input: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 struct ProgrammableSpeakerCircuitParameters {}
 
@@ -206,6 +207,7 @@ struct ConnectionData {
 	circuit_id: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 struct Color {
 	r: f64,
@@ -247,7 +249,7 @@ impl SerializableDesign {
 			});
 			idx_entities.insert(comb.id, entities.len());
 		});
-		physical.for_all_poles(|pole| {});
+		physical.for_all_poles(|_pole| {});
 		let mut wires = vec![];
 		physical.for_all_wires(|wire| {
 			wires.push(BlueprintWire {

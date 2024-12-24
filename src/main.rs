@@ -43,6 +43,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[allow(unused)]
 	use logical_design::ArithmeticOperator as Aop;
 	use logical_design::DeciderOperator as Dop;
 	use logical_design::Signal as Sig;

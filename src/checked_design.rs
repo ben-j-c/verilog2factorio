@@ -1,6 +1,6 @@
 use std::{
 	cell::RefCell,
-	collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList},
+	collections::{BTreeSet, HashSet, LinkedList},
 	vec,
 };
 
@@ -25,7 +25,7 @@ macro_rules! IMPLEMENTABLE_OPS {
 type NodeId = usize;
 
 use crate::{
-	logical_design::{ArithmeticOperator, LogicalDesign},
+	logical_design::{self, ArithmeticOperator, LogicalDesign},
 	mapped_design::Direction,
 	signal_lookup_table,
 };
@@ -37,6 +37,7 @@ use crate::{
 pub struct CheckedDesign {
 	nodes: Vec<Node>,
 	signals: Vec<Option<i32>>,
+	#[allow(dead_code)]
 	cache: RefCell<CheckedDesignCache>,
 }
 
@@ -624,6 +625,7 @@ impl CheckedDesign {
 		return topological_order;
 	}
 
+	#[allow(dead_code)]
 	fn get_depth(&self) -> Vec<i32> {
 		let topo = self.get_topo_order();
 		let mut depth = vec![0; self.nodes.len()];
@@ -638,5 +640,68 @@ impl CheckedDesign {
 		depth
 	}
 
-	pub fn apply_onto(&self, logical_design: &mut LogicalDesign, mapped_design: &MappedDesign) {}
+	pub fn apply_onto(&self, logical_design: &mut LogicalDesign, mapped_design: &MappedDesign) {
+		type LID = logical_design::NodeId;
+		use logical_design::Signal;
+		let topo_order = self.get_topo_order();
+		let mut logic_map: Vec<Option<LID>> = vec![None; topo_order.len()];
+		for nodeid_ref in topo_order.iter() {
+			let nodeid = *nodeid_ref;
+			let node = &self.nodes[nodeid];
+			match &node.node_type {
+				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+					logic_map[nodeid] = logic_map[node.fanin[0]];
+				}
+				NodeType::PortInput | NodeType::CellInput { .. } => {
+					logic_map[nodeid] = Some(logical_design.add_wire_floating());
+				}
+				NodeType::PortBody => {
+					if node.fanout.len() > 0 {
+						logic_map[nodeid] = Some(logical_design.add_constant_comb(
+							vec![Signal::Id(self.signals[nodeid].unwrap())],
+							vec![1],
+						));
+					} else if node.fanin.len() > 0 {
+						logic_map[nodeid] = Some(logical_design.add_lamp((
+							Signal::Id(self.signals[nodeid].unwrap()),
+							logical_design::DeciderOperator::NotEqual,
+							Signal::Constant(0),
+						)));
+					}
+				}
+				NodeType::CellBody => {
+					let sig_left = self.signals[node.fanin[0]].unwrap();
+					let sig_right = self.signals[node.fanin[1]].unwrap();
+					let sig_out = self.signals[node.fanout[0]].unwrap();
+					let op = get_arithmetic_op(&mapped_design.get_cell(&node.mapped_id).cell_type);
+					logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
+						(Signal::Id(sig_left), op, Signal::Id(sig_right)),
+						Signal::Id(sig_out),
+					))
+				}
+				NodeType::Nop => {
+					let sig_in = self.signals[node.fanin[0]].unwrap();
+					let sig_out = self.signals[node.fanout[0]].unwrap();
+					logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
+						(
+							Signal::Id(sig_in),
+							logical_design::ArithmeticOperator::Add,
+							Signal::Constant(0),
+						),
+						Signal::Id(sig_out),
+					))
+				}
+			}
+		}
+		for nodeid_ref in topo_order.iter() {
+			let nodeid = *nodeid_ref;
+			let node = &self.nodes[nodeid];
+			if node.node_type == NodeType::CellBody || node.node_type == NodeType::PortBody {
+				continue;
+			}
+			for foid in node.fanout.iter() {
+				logical_design.connect(logic_map[nodeid].unwrap(), logic_map[*foid].unwrap());
+			}
+		}
+	}
 }
