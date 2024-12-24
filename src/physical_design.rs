@@ -1,7 +1,6 @@
 use std::{
 	cmp::Ordering,
 	collections::{HashMap, HashSet},
-	mem::offset_of,
 	vec,
 };
 
@@ -28,6 +27,7 @@ pub struct Combinator {
 	pub orientation: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Wire {
 	pub id: WireId,
@@ -38,6 +38,7 @@ pub struct Wire {
 	pub terminal2_id: TerminalId,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum WireHopType {
 	Small,
@@ -48,6 +49,7 @@ pub enum WireHopType {
 	Lamp,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Pole {
 	pub id: PoleId,
@@ -55,6 +57,7 @@ pub struct Pole {
 	pub position: (f64, f64),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PhysicalDesign {
 	combs: Vec<Combinator>,
@@ -67,6 +70,7 @@ pub struct PhysicalDesign {
 	space: HashMap<(i32, i32), SpaceNode>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum SpaceNode {
 	Combinator {
@@ -80,21 +84,18 @@ enum SpaceNode {
 	},
 }
 
+#[allow(dead_code)]
 impl PhysicalDesign {
 	pub fn new() -> Self {
-		let mut combs = vec![];
-		let mut idx_combs = HashMap::new();
-
-		let ret = PhysicalDesign {
-			combs,
+		PhysicalDesign {
+			combs: vec![],
 			wires: vec![],
 			poles: vec![],
-			idx_combs,
+			idx_combs: HashMap::new(),
 			idx_wires: HashMap::new(),
 			idx_poles: HashMap::new(),
 			space: HashMap::new(),
-		};
-		ret
+		}
 	}
 
 	pub fn build_from(&mut self, logical: &LogicalDesign) {
@@ -402,6 +403,7 @@ impl PhysicalDesign {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct WireHopSpec {
 	dim: (i32, i32),

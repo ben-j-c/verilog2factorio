@@ -5,10 +5,7 @@ use std::{
 	hash::Hash,
 };
 
-use crate::{
-	checked_design::CheckedDesign,
-	mapped_design::{self, MappedDesign},
-};
+use crate::{checked_design::CheckedDesign, mapped_design::MappedDesign};
 
 #[derive(Debug, Clone)]
 pub enum ArithmeticOperator {
@@ -25,6 +22,7 @@ pub enum ArithmeticOperator {
 	Xor,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum DeciderOperator {
 	LessThan,
@@ -35,6 +33,7 @@ pub enum DeciderOperator {
 	LessThanEqual,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum DeciderRowConjDisj {
 	And,
@@ -42,6 +41,7 @@ pub enum DeciderRowConjDisj {
 	FirstRow,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Signal {
 	Id(i32),
@@ -98,6 +98,7 @@ pub struct Node {
 	pub output: Vec<Signal>,
 }
 
+#[allow(dead_code)]
 struct LogicalDesignCache {
 	topological_order: Vec<NodeId>,
 	root_nodes: Vec<NodeId>,
@@ -123,6 +124,7 @@ impl std::fmt::Debug for LogicalDesign {
 	}
 }
 
+#[allow(dead_code)]
 impl LogicalDesign {
 	pub fn new() -> Self {
 		LogicalDesign {
@@ -388,7 +390,7 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn for_all_depth<F>(&self, depth: i32, mut func: F)
+	pub fn for_all_depth<F>(&self, depth: i32, func: F)
 	where
 		F: Fn(&Node),
 	{
@@ -398,7 +400,7 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn for_all_rev_depth<F>(&self, depth: i32, mut func: F)
+	pub fn for_all_rev_depth<F>(&self, depth: i32, func: F)
 	where
 		F: Fn(&Node),
 	{
@@ -501,6 +503,7 @@ pub fn get_complex_40_logical_design() -> LogicalDesign {
 #[cfg(test)]
 mod test {
 	use super::*;
+	#[allow(unused)]
 	use ArithmeticOperator as Aop;
 	use DeciderOperator as Dop;
 	use Signal as Sig;

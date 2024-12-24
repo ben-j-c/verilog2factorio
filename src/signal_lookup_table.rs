@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 pub const N_VIRTUAL_SIGNAL: i32 = 67;
 pub const N_ENTITY_SIGNAL: i32 = 267;
 pub const N_ANY_SIGNAL: i32 = N_VIRTUAL_SIGNAL + N_ENTITY_SIGNAL;

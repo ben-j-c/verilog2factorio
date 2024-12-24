@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use serde::{
 	de::{self, Visitor},
@@ -13,6 +13,7 @@ pub type Parameter = String;
 pub type AttributeName = String;
 pub type ParameterName = String;
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct MappedDesign {
 	creator: String,
@@ -25,6 +26,7 @@ pub struct MappedDesign {
 #[derive(Deserialize, Debug)]
 pub struct Model {}
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Module {
 	#[serde(default)]
@@ -39,6 +41,7 @@ pub struct Module {
 	netnames: HashMap<String, Net>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Port {
 	pub direction: Direction,
@@ -70,6 +73,7 @@ pub enum Direction {
 	Inout,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Cell {
 	pub hide_name: i32,
@@ -87,6 +91,7 @@ pub struct Cell {
 	pub connections: HashMap<PortName, Vec<Bit>>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Memory {
 	hide_name: i32,
@@ -97,6 +102,7 @@ pub struct Memory {
 	size: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Net {
 	hide_name: i32,
