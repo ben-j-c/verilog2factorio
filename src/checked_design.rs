@@ -166,6 +166,17 @@ impl CheckedDesign {
 					}
 				})
 		}
+		for node in &mut self.nodes {
+			if node.node_type != NodeType::PortBody {
+				continue;
+			}
+			let port = mapped_design.get_port(&node.mapped_id);
+			port.bits.iter().for_each(|b| {
+				if let Bit::Id(bitid) = b {
+					bit_map[bitid.0 as usize].push(node.id);
+				}
+			})
+		}
 		let mut attached_map: Vec<Vec<Vec<NodeId>>> = vec![vec![vec![]; 3]; self.nodes.len()];
 		for node in &self.nodes {
 			match &node.node_type {
@@ -189,7 +200,7 @@ impl CheckedDesign {
 								if *attached != node.id
 									&& !attached_map[node.id][2].contains(attached)
 									&& (port.direction == Direction::Output
-										|| port.direction == Direction::Input)
+										|| port.direction == Direction::Inout)
 								{
 									attached_map[node.id][2].push(*attached);
 								}
@@ -287,7 +298,7 @@ impl CheckedDesign {
 					let mapped_id = node.mapped_id.clone();
 					if port.direction == Direction::Input || port.direction == Direction::Inout {
 						let id = self.new_node(&mapped_id, port.bits.clone(), NodeType::PortOutput);
-						self.connect(id, nodeid);
+						self.connect(nodeid, id);
 						attached_map.push(attached_map[nodeid].clone());
 					}
 					if port.direction == Direction::Output || port.direction == Direction::Inout {
@@ -703,5 +714,31 @@ impl CheckedDesign {
 				logical_design.connect(logic_map[nodeid].unwrap(), logic_map[*foid].unwrap());
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::{fs::File, io::BufReader};
+
+	use crate::{physical_design::PhysicalDesign, serializable_design::SerializableDesign};
+
+	use super::*;
+
+	#[test]
+	fn design_test1() {
+		let file = File::open("./test_designs/output/test1.json").unwrap();
+		let reader = BufReader::new(file);
+		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+		let mut checked_design = CheckedDesign::new();
+		let mut logical_design = LogicalDesign::new();
+		let mut physical_design = PhysicalDesign::new();
+		let mut serializable_design = SerializableDesign::new();
+		checked_design.build_from(&mapped_design);
+		logical_design.build_from(&checked_design, &mapped_design);
+		physical_design.build_from(&logical_design);
+		serializable_design.build_from(&physical_design, &logical_design);
+		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+		println!("{}", blueprint_json);
 	}
 }

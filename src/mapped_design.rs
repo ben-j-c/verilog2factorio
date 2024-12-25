@@ -157,11 +157,11 @@ impl MappedDesign {
 	where
 		F: FnMut(&Self, &str, &Cell),
 	{
-		for (name, module) in &self.modules {
+		for (_name, module) in &self.modules {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
-					for (_cell_name, cell) in &module.cells {
-						func(self, &name, cell)
+					for (cell_name, cell) in &module.cells {
+						func(self, &cell_name, cell)
 					}
 					return;
 				}
