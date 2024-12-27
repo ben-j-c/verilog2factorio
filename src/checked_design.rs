@@ -130,7 +130,7 @@ impl CheckedDesign {
 		}
 	}
 
-	pub fn build_from(&mut self, mapped_design: &MappedDesign) {
+	fn initialize_body_nodes(&mut self, mapped_design: &MappedDesign) {
 		mapped_design.for_all_top_level_io(|_, name, port| {
 			if let Some(_) = lookup_id(name) {
 				self.new_node(name, port.bits.clone(), NodeType::PortBody);
@@ -144,6 +144,9 @@ impl CheckedDesign {
 		mapped_design.for_all_cells(|_, name, _cell| {
 			self.new_node(name, vec![], NodeType::CellBody);
 		});
+	}
+
+	fn get_max_bit(&mut self, mapped_design: &MappedDesign) -> u64 {
 		let mut max_bit: u64 = 0;
 		for node in &mut self.nodes {
 			if node.node_type != NodeType::CellBody {
@@ -164,6 +167,11 @@ impl CheckedDesign {
 					}
 				})
 		}
+		max_bit
+	}
+
+	fn update_bits(&mut self, mapped_design: &MappedDesign) -> Vec<Vec<NodeId>> {
+		let max_bit = self.get_max_bit(mapped_design);
 		let mut bit_map: Vec<Vec<NodeId>> = vec![vec![]; max_bit as usize + 1];
 		for node in &mut self.nodes {
 			if node.node_type != NodeType::CellBody {
@@ -191,7 +199,15 @@ impl CheckedDesign {
 				}
 			})
 		}
-		let mut attached_map: Vec<Vec<Vec<NodeId>>> = vec![vec![vec![]; 3]; self.nodes.len()];
+		bit_map
+	}
+
+	fn fill_out_body_nodes(
+		&mut self,
+		bit_map: &Vec<Vec<NodeId>>,
+		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
+		mapped_design: &MappedDesign,
+	) {
 		for node in &self.nodes {
 			match &node.node_type {
 				NodeType::Nop => panic!("Didn't expect to have these yet."),
@@ -260,6 +276,13 @@ impl CheckedDesign {
 				}
 			}
 		}
+	}
+
+	fn elaborate_attached_map_post_fill_out(
+		&mut self,
+		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
+		mapped_design: &MappedDesign,
+	) {
 		let mut nodeid: usize = 0;
 		while nodeid < self.nodes.len() {
 			let node = &self.nodes[nodeid];
@@ -353,6 +376,9 @@ impl CheckedDesign {
 			}
 			nodeid += 1;
 		}
+	}
+
+	pub fn insert_nop_to_sanitize_ports(&mut self) {
 		let topo_order = self.get_topo_order();
 		// Insert Nop to partition signal networks
 		let signal_choices = self.get_signal_choices();
@@ -406,52 +432,59 @@ impl CheckedDesign {
 				_ => {}
 			}
 		}
-		let topo_order = self.get_topo_order();
-		// Check that we now only have 0 or 1 option for a signal
-		let mut signal_choices: Vec<Option<i32>> = {
-			let mut signal_choices = self.get_signal_choices();
-			for x in 0..self.nodes.len() {
-				match &self.nodes[x].node_type {
-					NodeType::CellInput { port } => {
-						if signal_choices[x].len() < 2 {
-							continue;
-						}
-						match port.as_str() {
-							"A" => {
-								assert!(attached_map[x][0].len() == 1);
-								signal_choices[x] = signal_choices[attached_map[x][0][0]].clone();
-							}
-							"B" => {
-								assert!(attached_map[x][1].len() == 1);
-								signal_choices[x] = signal_choices[attached_map[x][1][0]].clone();
-							}
-							_ => assert!(false),
-						}
+	}
+
+	fn calculate_and_validate_signal_choices(
+		&mut self,
+		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
+	) -> Vec<Option<i32>> {
+		let mut signal_choices = self.get_signal_choices();
+		for x in 0..self.nodes.len() {
+			match &self.nodes[x].node_type {
+				NodeType::CellInput { port } => {
+					if signal_choices[x].len() < 2 {
+						continue;
 					}
-					NodeType::CellOutput { port } => {
-						if signal_choices[x].len() < 2 {
-							continue;
+					match port.as_str() {
+						"A" => {
+							assert!(attached_map[x][0].len() == 1);
+							signal_choices[x] = signal_choices[attached_map[x][0][0]].clone();
 						}
-						match port.as_str() {
-							"Y" => {
-								assert!(attached_map[x][0].len() == 1);
-								signal_choices[x] = signal_choices[attached_map[x][2][0]].clone();
-							}
-							_ => assert!(false),
+						"B" => {
+							assert!(attached_map[x][1].len() == 1);
+							signal_choices[x] = signal_choices[attached_map[x][1][0]].clone();
 						}
+						_ => assert!(false),
 					}
-					NodeType::PortInput => assert!(signal_choices[x].len() < 2),
-					NodeType::PortOutput => {}
-					NodeType::PortBody => {}
-					NodeType::CellBody => {}
-					NodeType::Nop => {}
 				}
+				NodeType::CellOutput { port } => {
+					if signal_choices[x].len() < 2 {
+						continue;
+					}
+					match port.as_str() {
+						"Y" => {
+							assert!(attached_map[x][0].len() == 1);
+							signal_choices[x] = signal_choices[attached_map[x][2][0]].clone();
+						}
+						_ => assert!(false),
+					}
+				}
+				NodeType::PortInput => assert!(signal_choices[x].len() < 2),
+				NodeType::PortOutput => {}
+				NodeType::PortBody => {}
+				NodeType::CellBody => {}
+				NodeType::Nop => {}
 			}
-			signal_choices
-				.into_iter()
-				.map(|x| x.get(0).map(|x| *x))
-				.collect()
-		};
+		}
+		signal_choices
+			.into_iter()
+			.map(|x| x.get(0).map(|x| *x))
+			.collect()
+	}
+
+	fn elaborate_signal_choices(&mut self, signal_choices: &mut Vec<Option<i32>>) {
+		// Check that we now only have 0 or 1 option for a signal
+		let topo_order = self.get_topo_order();
 		topo_order
 			.iter()
 			.map(|x| {
@@ -486,7 +519,7 @@ impl CheckedDesign {
 						while set_io.contains(&sig) {
 							sig += 1;
 						}
-						self.set_signal(&mut signal_choices, *id, sig);
+						self.set_signal(signal_choices, *id, sig);
 						sig += 1;
 					}
 				}
@@ -497,6 +530,9 @@ impl CheckedDesign {
 				NodeType::Nop => { /* Let others pick */ }
 			}
 		}
+	}
+
+	fn signals_correctness_check(&mut self, signal_choices: &Vec<Option<i32>>) {
 		// Final correctness check
 		let topo_order = self.get_topo_order();
 		for nodeid in topo_order {
@@ -532,6 +568,18 @@ impl CheckedDesign {
 				NodeType::Nop => assert!(signal_choices[node.id].is_none()),
 			}
 		}
+	}
+
+	pub fn build_from(&mut self, mapped_design: &MappedDesign) {
+		self.initialize_body_nodes(mapped_design);
+		let bit_map = self.update_bits(mapped_design);
+		let mut attached_map: Vec<Vec<Vec<NodeId>>> = vec![vec![vec![]; 3]; self.nodes.len()];
+		self.fill_out_body_nodes(&bit_map, &mut attached_map, mapped_design);
+		self.elaborate_attached_map_post_fill_out(&mut attached_map, mapped_design);
+		self.insert_nop_to_sanitize_ports();
+		let mut signal_choices = self.calculate_and_validate_signal_choices(&mut attached_map);
+		self.elaborate_signal_choices(&mut signal_choices);
+		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
 	}
 
