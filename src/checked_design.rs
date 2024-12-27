@@ -24,8 +24,6 @@ macro_rules! IMPLEMENTABLE_OPS {
 
 type NodeId = usize;
 
-use itertools::Itertools;
-
 use crate::{
 	logical_design::{self, ArithmeticOperator, LogicalDesign},
 	mapped_design::Direction,
