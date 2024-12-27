@@ -24,6 +24,8 @@ macro_rules! IMPLEMENTABLE_OPS {
 
 type NodeId = usize;
 
+use itertools::Itertools;
+
 use crate::{
 	logical_design::{self, ArithmeticOperator, LogicalDesign},
 	mapped_design::Direction,
@@ -111,8 +113,22 @@ impl CheckedDesign {
 
 	fn disconnect(&mut self, send: NodeId, recv: NodeId) {
 		if self.nodes[send].fanout.contains(&recv) {
-			self.nodes[send].fanout.remove(recv);
-			self.nodes[recv].fanin.remove(send);
+			let idx1 = self.nodes[send]
+				.fanout
+				.iter()
+				.enumerate()
+				.find(|(_idx, val)| **val == recv)
+				.unwrap()
+				.0;
+			let idx2 = self.nodes[recv]
+				.fanin
+				.iter()
+				.enumerate()
+				.find(|(_idx, val)| **val == send)
+				.unwrap()
+				.0;
+			self.nodes[send].fanout.remove(idx1);
+			self.nodes[recv].fanin.remove(idx2);
 		}
 	}
 
@@ -199,7 +215,7 @@ impl CheckedDesign {
 								}
 								if *attached != node.id
 									&& !attached_map[node.id][2].contains(attached)
-									&& (port.direction == Direction::Output
+									&& (port.direction == Direction::Input
 										|| port.direction == Direction::Inout)
 								{
 									attached_map[node.id][2].push(*attached);
@@ -268,10 +284,6 @@ impl CheckedDesign {
 					assert!(attached_map[nodeid][0].len() == 0);
 					assert!(attached_map[nodeid][1].len() == 0);
 					assert!(attached_map[nodeid][2].len() > 0);
-					for to_connect_body_id in attached_map[nodeid][2].iter() {
-						let to_connect_id = self.nodes[*to_connect_body_id].fanin[0];
-						self.connect(nodeid, to_connect_id);
-					}
 				}
 				NodeType::PortInput => {
 					assert!(attached_map[nodeid][0].len() == 1);
@@ -288,10 +300,6 @@ impl CheckedDesign {
 					assert!(attached_map[nodeid][0].len() == 0);
 					assert!(attached_map[nodeid][1].len() == 0);
 					assert!(attached_map[nodeid][2].len() > 0);
-					for to_connect_body_id in attached_map[nodeid][2].iter() {
-						let to_connect_id = self.nodes[*to_connect_body_id].fanin[0];
-						self.connect(nodeid, to_connect_id);
-					}
 				}
 				NodeType::PortBody => {
 					let port = mapped_design.get_port(&node.mapped_id);
@@ -322,7 +330,7 @@ impl CheckedDesign {
 							port: "A".to_owned(),
 						},
 					);
-					let b = self.new_node(
+					let b: usize = self.new_node(
 						&mapped_id,
 						bits_b,
 						NodeType::CellInput {
@@ -341,7 +349,7 @@ impl CheckedDesign {
 					self.connect(nodeid, y);
 					attached_map.push(vec![attached_map[nodeid][0].clone(), vec![], vec![]]);
 					attached_map.push(vec![vec![], attached_map[nodeid][1].clone(), vec![]]);
-					attached_map.push(vec![vec![], vec![], attached_map[nodeid][0].clone()]);
+					attached_map.push(vec![vec![], vec![], attached_map[nodeid][2].clone()]);
 				}
 				NodeType::Nop => {}
 			}
@@ -353,16 +361,16 @@ impl CheckedDesign {
 		for nodeid in &topo_order {
 			let node = &self.nodes[*nodeid];
 			match &node.node_type {
-				NodeType::CellOutput { .. } | NodeType::PortOutput => {
+				NodeType::PortInput => {
 					if signal_choices[node.id].len() < 2 {
 						continue;
 					}
 					let bits = node.bits.clone();
-					for foid in node.fanout.clone() {
-						self.disconnect(*nodeid, foid);
+					for fiid in node.fanin.clone() {
+						self.disconnect(fiid, *nodeid);
 						let nop = self.new_node("$nop", bits.clone(), NodeType::Nop);
-						self.connect(*nodeid, nop);
-						self.connect(nop, foid);
+						self.connect(fiid, nop);
+						self.connect(nop, *nodeid);
 					}
 				}
 				_ => {}
@@ -376,7 +384,16 @@ impl CheckedDesign {
 			match &node.node_type {
 				NodeType::CellBody { .. } => {
 					for cell_input in node.fanin.clone() {
-						if signal_choices[cell_input].len() < 2 {
+						let mut signals = signal_choices[cell_input].clone();
+						signals.sort();
+						let mut found = false;
+						for i in 0..signals.len() - 1 {
+							if signals[i] == signals[i + 1] {
+								found = true;
+								break;
+							}
+						}
+						if !found {
 							continue;
 						}
 						let node = &self.nodes[cell_input];
@@ -394,15 +411,61 @@ impl CheckedDesign {
 		let topo_order = self.get_topo_order();
 		// Check that we now only have 0 or 1 option for a signal
 		let mut signal_choices: Vec<Option<i32>> = {
-			let signal_choices = self.get_signal_choices();
-			for x in &signal_choices {
-				assert!(x.len() < 2);
+			let mut signal_choices = self.get_signal_choices();
+			for x in 0..self.nodes.len() {
+				match &self.nodes[x].node_type {
+					NodeType::CellInput { port } => {
+						if signal_choices[x].len() < 2 {
+							continue;
+						}
+						match port.as_str() {
+							"A" => {
+								assert!(attached_map[x][0].len() == 1);
+								signal_choices[x] = signal_choices[attached_map[x][0][0]].clone();
+							}
+							"B" => {
+								assert!(attached_map[x][1].len() == 1);
+								signal_choices[x] = signal_choices[attached_map[x][1][0]].clone();
+							}
+							_ => assert!(false),
+						}
+					}
+					NodeType::CellOutput { port } => {
+						if signal_choices[x].len() < 2 {
+							continue;
+						}
+						match port.as_str() {
+							"Y" => {
+								assert!(attached_map[x][0].len() == 1);
+								signal_choices[x] = signal_choices[attached_map[x][2][0]].clone();
+							}
+							_ => assert!(false),
+						}
+					}
+					NodeType::PortInput => assert!(signal_choices[x].len() < 2),
+					NodeType::PortOutput => {}
+					NodeType::PortBody => {}
+					NodeType::CellBody => {}
+					NodeType::Nop => {}
+				}
 			}
 			signal_choices
 				.into_iter()
 				.map(|x| x.get(0).map(|x| *x))
 				.collect()
 		};
+		topo_order
+			.iter()
+			.map(|x| {
+				(
+					*x,
+					self.nodes[*x].node_type.clone(),
+					signal_choices[*x],
+					self.nodes[*x].fanin.clone(),
+					self.nodes[*x].fanout.clone(),
+				)
+			})
+			.for_each(|tpl| println!("{:?}", tpl));
 		// Final signal resolve
 		for nodeid in topo_order {
 			if signal_choices[nodeid].is_some() {
@@ -437,7 +500,10 @@ impl CheckedDesign {
 			}
 		}
 		// Final correctness check
-		for node in &self.nodes {
+		let topo_order = self.get_topo_order();
+		for nodeid in topo_order {
+			let node = &self.nodes[nodeid];
+			println!("{:?}", nodeid);
 			match node.node_type {
 				NodeType::CellInput { .. } | NodeType::PortInput => {
 					assert!(signal_choices[node.id].is_some());
@@ -451,17 +517,17 @@ impl CheckedDesign {
 					assert!(signal_choices[node.id].is_some());
 					for foid in &node.fanout {
 						if self.nodes[*foid].node_type != NodeType::Nop {
-							assert!(signal_choices[node.id] == signal_choices[*foid]);
+							assert_eq!(signal_choices[node.id], signal_choices[*foid]);
 						}
 					}
 				}
 				NodeType::PortBody => {
 					assert!(signal_choices[node.id].is_some());
 					for foid in &node.fanout {
-						assert!(signal_choices[node.id] == signal_choices[*foid]);
+						assert_eq!(signal_choices[node.id], signal_choices[*foid]);
 					}
 					for fiid in &node.fanin {
-						assert!(signal_choices[node.id] == signal_choices[*fiid]);
+						assert_eq!(signal_choices[node.id], signal_choices[*fiid]);
 					}
 				}
 				NodeType::CellBody => assert!(signal_choices[node.id].is_none()),
@@ -646,7 +712,8 @@ impl CheckedDesign {
 				.iter()
 				.map(|fiid| depth[*fiid])
 				.max()
-				.unwrap_or(-1) + 1
+				.unwrap_or(-1)
+				+ 1
 		}
 		depth
 	}
@@ -659,6 +726,7 @@ impl CheckedDesign {
 		for nodeid_ref in topo_order.iter() {
 			let nodeid = *nodeid_ref;
 			let node = &self.nodes[nodeid];
+			println!("Node: {:?}", node.node_type);
 			match &node.node_type {
 				NodeType::CellOutput { .. } | NodeType::PortOutput => {
 					logic_map[nodeid] = logic_map[node.fanin[0]];
@@ -736,6 +804,7 @@ mod test {
 		let mut serializable_design = SerializableDesign::new();
 		checked_design.build_from(&mapped_design);
 		logical_design.build_from(&checked_design, &mapped_design);
+		println!("{:?}", logical_design);
 		physical_design.build_from(&logical_design);
 		serializable_design.build_from(&physical_design, &logical_design);
 		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();

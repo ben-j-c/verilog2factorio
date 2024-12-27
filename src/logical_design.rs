@@ -161,6 +161,7 @@ impl LogicalDesign {
 	}
 
 	pub fn connect(&mut self, out_node: NodeId, in_node: NodeId) {
+		println!("{:?} -> {:?}", out_node, in_node);
 		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout.push(in_node);
 		self.nodes[in_node.0].fanin.push(out_node);
@@ -171,14 +172,16 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
-		self.add_node(
+		let ret = self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
 				input_1: expr.0,
 				input_2: expr.2,
 			},
 			vec![output],
-		)
+		);
+		println!("new arithmetic {:?}", ret);
+		ret
 	}
 
 	pub fn add_decider_comb(&mut self) -> NodeId {
@@ -240,17 +243,21 @@ impl LogicalDesign {
 			counts.len(),
 			"Tried to crea constant combinator with mismatched outputs and counts"
 		);
-		self.add_node(
+		let ret = self.add_node(
 			NodeFunction::Constant {
 				enabled: true,
 				constants: counts,
 			},
 			output,
-		)
+		);
+		println!("new constant {:?}", ret);
+		ret
 	}
 
 	pub fn add_lamp(&mut self, expr: (Signal, DeciderOperator, Signal)) -> NodeId {
-		self.add_node(NodeFunction::Lamp { expression: expr }, vec![])
+		let ret = self.add_node(NodeFunction::Lamp { expression: expr }, vec![]);
+		println!("new lamp {:?}", ret);
+		ret
 	}
 
 	pub fn add_wire(&mut self, fanin: Vec<NodeId>, fanout: Vec<NodeId>) -> NodeId {
@@ -265,7 +272,9 @@ impl LogicalDesign {
 	}
 
 	pub fn add_wire_floating(&mut self) -> NodeId {
-		self.add_node(NodeFunction::WireSum, vec![Signal::Everything])
+		let new_wire = self.add_node(NodeFunction::WireSum, vec![Signal::Everything]);
+		println!("new wire {:?}", new_wire);
+		new_wire
 	}
 
 	pub fn for_all<F>(&self, mut func: F)
