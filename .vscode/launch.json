@@ -1,0 +1,62 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Cargo test",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--lib",
+					"--",
+					"--show-output"
+				]
+			},
+			"args": []
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug executable 'v2f'",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=v2f",
+					"--package=v2f"
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in executable 'v2f'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--bin=v2f",
+					"--package=v2f",
+					"--",
+					"--show-output"
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		}
+	]
+}
