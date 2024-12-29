@@ -1,5 +1,6 @@
+use core::slice;
 use std::{
-	cell::RefCell,
+	cell::{self, RefCell},
 	collections::{BTreeSet, HashSet, LinkedList},
 	vec,
 };
@@ -26,7 +27,7 @@ type NodeId = usize;
 
 use crate::{
 	logical_design::{self, ArithmeticOperator, LogicalDesign},
-	mapped_design::Direction,
+	mapped_design::{BitId, BitSliceOps, Cell, Direction},
 	signal_lookup_table,
 };
 use crate::{
@@ -50,15 +51,45 @@ enum NodeType {
 	PortInput,
 	PortOutput,
 	PortBody,
-	CellBody,
+	CellBody { cell_type: CellType },
 	Nop,
+}
+
+impl NodeType {
+	fn is_cell_body(&self) -> bool {
+		match self {
+			NodeType::CellBody { .. } => true,
+			_ => false,
+		}
+	}
+
+	fn is_port_body(&self) -> bool {
+		match self {
+			NodeType::PortBody => true,
+			_ => false,
+		}
+	}
+
+	fn is_output(&self) -> bool {
+		match self {
+			NodeType::CellOutput { port } => true,
+			NodeType::PortOutput => true,
+			NodeType::Nop => true,
+			_ => false,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CellType {
+	ABY,
+	Constant { value: i32 },
 }
 
 #[derive(Debug, Clone)]
 struct Node {
 	id: NodeId,
 	node_type: NodeType,
-	bits: Vec<Bit>,
 	mapped_id: String,
 	fanin: Vec<NodeId>,
 	fanout: Vec<NodeId>,
@@ -90,11 +121,14 @@ impl CheckedDesign {
 		}
 	}
 
-	fn new_node(&mut self, mapped_id: &str, bits: Vec<Bit>, node_type: NodeType) -> NodeId {
+	pub fn node_type(&self, nodeid: usize) -> &NodeType {
+		&self.nodes[nodeid].node_type
+	}
+
+	fn new_node(&mut self, mapped_id: &str, node_type: NodeType) -> NodeId {
 		self.nodes.push(Node {
 			id: self.nodes.len(),
 			node_type,
-			bits,
 			mapped_id: mapped_id.to_owned(),
 			fanin: vec![],
 			fanout: vec![],
@@ -133,7 +167,7 @@ impl CheckedDesign {
 	fn initialize_body_nodes(&mut self, mapped_design: &MappedDesign) {
 		mapped_design.for_all_top_level_io(|_, name, port| {
 			if let Some(_) = lookup_id(name) {
-				self.new_node(name, port.bits.clone(), NodeType::PortBody);
+				self.new_node(name, NodeType::PortBody);
 			} else {
 				panic!(
 					"{:?} on top level design doesn't match a named game signal",
@@ -142,30 +176,42 @@ impl CheckedDesign {
 			}
 		});
 		mapped_design.for_all_cells(|_, name, _cell| {
-			self.new_node(name, vec![], NodeType::CellBody);
+			self.new_node(
+				name,
+				NodeType::CellBody {
+					cell_type: CellType::ABY,
+				},
+			);
 		});
 	}
 
 	fn get_max_bit(&mut self, mapped_design: &MappedDesign) -> u64 {
 		let mut max_bit: u64 = 0;
 		for node in &mut self.nodes {
-			if node.node_type != NodeType::CellBody {
+			let cell_type = if let NodeType::CellBody { cell_type } = &node.node_type {
+				cell_type
+			} else {
 				continue;
-			}
-			let cell = mapped_design.get_cell(&node.mapped_id);
-			match cell.cell_type.as_str() {
-				IMPLEMENTABLE_OPS!() => {}
-				_ => panic!("{:?} can't be implemented", cell),
 			};
-			cell.connections["A"]
-				.iter()
-				.chain(cell.connections["B"].iter())
-				.chain(cell.connections["Y"].iter())
-				.for_each(|b| {
-					if let Bit::Id(bitid) = b {
-						max_bit = max_bit.max(bitid.0);
-					}
-				})
+			match cell_type {
+				CellType::ABY => {
+					let cell = mapped_design.get_cell(&node.mapped_id);
+					match cell.cell_type.as_str() {
+						IMPLEMENTABLE_OPS!() => {}
+						_ => panic!("{:?} can't be implemented", cell),
+					};
+					cell.connections["A"]
+						.iter()
+						.chain(cell.connections["B"].iter())
+						.chain(cell.connections["Y"].iter())
+						.for_each(|b| {
+							if let Bit::Id(bitid) = b {
+								max_bit = max_bit.max(bitid.0);
+							}
+						})
+				}
+				CellType::Constant { value } => {}
+			}
 		}
 		max_bit
 	}
@@ -174,19 +220,26 @@ impl CheckedDesign {
 		let max_bit = self.get_max_bit(mapped_design);
 		let mut bit_map: Vec<Vec<NodeId>> = vec![vec![]; max_bit as usize + 1];
 		for node in &mut self.nodes {
-			if node.node_type != NodeType::CellBody {
+			let cell_type = if let NodeType::CellBody { cell_type } = &node.node_type {
+				cell_type
+			} else {
 				continue;
+			};
+			match cell_type {
+				CellType::ABY => {
+					let cell = mapped_design.get_cell(&node.mapped_id);
+					cell.connections["A"]
+						.iter()
+						.chain(cell.connections["B"].iter())
+						.chain(cell.connections["Y"].iter())
+						.for_each(|b| {
+							if let Bit::Id(bitid) = b {
+								bit_map[bitid.0 as usize].push(node.id);
+							}
+						})
+				}
+				CellType::Constant { .. } => {}
 			}
-			let cell = mapped_design.get_cell(&node.mapped_id);
-			cell.connections["A"]
-				.iter()
-				.chain(cell.connections["B"].iter())
-				.chain(cell.connections["Y"].iter())
-				.for_each(|b| {
-					if let Bit::Id(bitid) = b {
-						bit_map[bitid.0 as usize].push(node.id);
-					}
-				})
 		}
 		for node in &mut self.nodes {
 			if node.node_type != NodeType::PortBody {
@@ -202,21 +255,50 @@ impl CheckedDesign {
 		bit_map
 	}
 
+	fn insert_constant_on_input(
+		&mut self,
+		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
+		nodeid: NodeId,
+		terminal_id: usize,
+		bits: Vec<Bit>,
+	) {
+		let new_constant = self.new_node(
+			"$constant",
+			NodeType::CellBody {
+				cell_type: CellType::Constant {
+					value: bits.get_constant(),
+				},
+			},
+		);
+		attached_map[nodeid][terminal_id] = vec![new_constant];
+		attached_map.push(vec![vec![], vec![], vec![nodeid]]);
+	}
+
 	fn fill_out_body_nodes(
 		&mut self,
 		bit_map: &Vec<Vec<NodeId>>,
 		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
 		mapped_design: &MappedDesign,
 	) {
-		for node in &self.nodes {
+		for nodeid in 0..self.nodes.len() {
+			let node = &self.nodes[nodeid];
 			match &node.node_type {
-				NodeType::Nop => panic!("Didn't expect to have these yet."),
-				NodeType::CellInput { .. } => panic!("Didn't expect to have these yet."),
-				NodeType::CellOutput { .. } => panic!("Didn't expect to have these yet."),
-				NodeType::PortInput => panic!("Didn't expect to have these yet."),
-				NodeType::PortOutput => panic!("Didn't expect to have these yet."),
+				NodeType::Nop
+				| NodeType::CellInput { .. }
+				| NodeType::CellOutput { .. }
+				| NodeType::PortInput
+				| NodeType::PortOutput => panic!("Didn't expect to have these yet."),
 				NodeType::PortBody => {
 					let port = mapped_design.get_port(&node.mapped_id);
+					if port.bits.is_all_constants() {
+						assert!(port.direction == Direction::Output);
+						self.insert_constant_on_input(attached_map, nodeid, 0, port.bits.clone());
+						continue;
+					}
+					assert!(
+						port.bits.is_all_connections(),
+						"Currently doesn't support mixed bits and constants on a port"
+					);
 					for bit in &port.bits {
 						if let Bit::Id(bitid) = bit {
 							for attached in &bit_map[bitid.0 as usize] {
@@ -235,11 +317,26 @@ impl CheckedDesign {
 									attached_map[node.id][2].push(*attached);
 								}
 							}
+						} else {
 						}
 					}
 				}
-				NodeType::CellBody => {
+				NodeType::CellBody { cell_type } => {
+					assert!(*cell_type == CellType::ABY);
 					let cell = mapped_design.get_cell(&node.mapped_id);
+					if cell.connections["A"].is_all_constants() {
+						self.insert_constant_on_input(
+							attached_map,
+							nodeid,
+							0,
+							cell.connections["A"].clone(),
+						);
+						continue;
+					}
+					assert!(
+						cell.connections["A"].is_all_connections(),
+						"Currently doesn't support mixed bits and constants on a port"
+					);
 					for bit in &cell.connections["A"] {
 						if let Bit::Id(bitid) = bit {
 							for attached in &bit_map[bitid.0 as usize] {
@@ -251,6 +348,19 @@ impl CheckedDesign {
 							}
 						}
 					}
+					if cell.connections["B"].is_all_constants() {
+						self.insert_constant_on_input(
+							attached_map,
+							nodeid,
+							0,
+							cell.connections["B"].clone(),
+						);
+						continue;
+					}
+					assert!(
+						cell.connections["B"].is_all_connections(),
+						"Currently doesn't support mixed bits and constants on a port"
+					);
 					for bit in &cell.connections["B"] {
 						if let Bit::Id(bitid) = bit {
 							for attached in &bit_map[bitid.0 as usize] {
@@ -278,7 +388,8 @@ impl CheckedDesign {
 		}
 	}
 
-	fn elaborate_attached_map_post_fill_out(
+	/** Map all the body nodes into their appropriate structure.  */
+	fn elaborate_body_nodes_wire_design(
 		&mut self,
 		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
 		mapped_design: &MappedDesign,
@@ -326,52 +437,57 @@ impl CheckedDesign {
 					let port = mapped_design.get_port(&node.mapped_id);
 					let mapped_id = node.mapped_id.clone();
 					if port.direction == Direction::Input || port.direction == Direction::Inout {
-						let id = self.new_node(&mapped_id, port.bits.clone(), NodeType::PortOutput);
+						let id = self.new_node(&mapped_id, NodeType::PortOutput);
 						self.connect(nodeid, id);
 						attached_map.push(attached_map[nodeid].clone());
 					}
 					if port.direction == Direction::Output || port.direction == Direction::Inout {
-						let id = self.new_node(&mapped_id, port.bits.clone(), NodeType::PortInput);
+						let id = self.new_node(&mapped_id, NodeType::PortInput);
 						self.connect(id, nodeid);
 						attached_map.push(attached_map[nodeid].clone());
 					}
 				}
-				NodeType::CellBody => {
-					let cell = mapped_design.get_cell(&node.mapped_id);
-					let mapped_id = node.mapped_id.clone();
-					let bits_a = cell.connections["A"].clone();
-					let bits_b = cell.connections["B"].clone();
-					let bits_y = cell.connections["Y"].clone();
-					assert_eq!(attached_map[nodeid][0].len(), 1);
-					assert_eq!(attached_map[nodeid][1].len(), 1);
-					let a = self.new_node(
-						&mapped_id,
-						bits_a,
-						NodeType::CellInput {
-							port: "A".to_owned(),
-						},
-					);
-					let b: usize = self.new_node(
-						&mapped_id,
-						bits_b,
-						NodeType::CellInput {
-							port: "B".to_owned(),
-						},
-					);
-					let y = self.new_node(
-						&mapped_id,
-						bits_y,
-						NodeType::CellOutput {
-							port: "Y".to_owned(),
-						},
-					);
-					self.connect(a, nodeid);
-					self.connect(b, nodeid);
-					self.connect(nodeid, y);
-					attached_map.push(vec![attached_map[nodeid][0].clone(), vec![], vec![]]);
-					attached_map.push(vec![vec![], attached_map[nodeid][1].clone(), vec![]]);
-					attached_map.push(vec![vec![], vec![], attached_map[nodeid][2].clone()]);
-				}
+				NodeType::CellBody { cell_type } => match cell_type {
+					CellType::ABY => {
+						let mapped_id = node.mapped_id.clone();
+						assert_eq!(attached_map[nodeid][0].len(), 1);
+						assert_eq!(attached_map[nodeid][1].len(), 1);
+						let a = self.new_node(
+							&mapped_id,
+							NodeType::CellInput {
+								port: "A".to_owned(),
+							},
+						);
+						let b: usize = self.new_node(
+							&mapped_id,
+							NodeType::CellInput {
+								port: "B".to_owned(),
+							},
+						);
+						let y = self.new_node(
+							&mapped_id,
+							NodeType::CellOutput {
+								port: "Y".to_owned(),
+							},
+						);
+						self.connect(a, nodeid);
+						self.connect(b, nodeid);
+						self.connect(nodeid, y);
+						attached_map.push(vec![attached_map[nodeid][0].clone(), vec![], vec![]]);
+						attached_map.push(vec![vec![], attached_map[nodeid][1].clone(), vec![]]);
+						attached_map.push(vec![vec![], vec![], attached_map[nodeid][2].clone()]);
+					}
+					CellType::Constant { .. } => {
+						let id = self.new_node(
+							"$constant",
+							NodeType::CellOutput {
+								port: "Y".to_owned(),
+							},
+						);
+						self.connect(nodeid, id);
+						attached_map.push(attached_map[nodeid].clone());
+					}
+				},
 				NodeType::Nop => {}
 			}
 			nodeid += 1;
@@ -389,10 +505,9 @@ impl CheckedDesign {
 					if signal_choices[node.id].len() < 2 {
 						continue;
 					}
-					let bits = node.bits.clone();
 					for fiid in node.fanin.clone() {
 						self.disconnect(fiid, *nodeid);
-						let nop = self.new_node("$nop", bits.clone(), NodeType::Nop);
+						let nop = self.new_node("$nop", NodeType::Nop);
 						self.connect(fiid, nop);
 						self.connect(nop, *nodeid);
 					}
@@ -421,10 +536,9 @@ impl CheckedDesign {
 							continue;
 						}
 						let node = &self.nodes[cell_input];
-						let bits = node.bits.clone();
 						let fiid = node.fanin[0];
 						self.disconnect(fiid, cell_input);
-						let nop = self.new_node("$nop", bits.clone(), NodeType::Nop);
+						let nop = self.new_node("$nop", NodeType::Nop);
 						self.connect(fiid, nop);
 						self.connect(nop, cell_input);
 					}
@@ -439,40 +553,43 @@ impl CheckedDesign {
 		attached_map: &mut Vec<Vec<Vec<NodeId>>>,
 	) -> Vec<Option<i32>> {
 		let mut signal_choices = self.get_signal_choices();
-		for x in 0..self.nodes.len() {
-			match &self.nodes[x].node_type {
+		for nodeid in 0..self.nodes.len() {
+			match &self.nodes[nodeid].node_type {
 				NodeType::CellInput { port } => {
-					if signal_choices[x].len() < 2 {
+					if signal_choices[nodeid].len() < 2 {
 						continue;
 					}
 					match port.as_str() {
 						"A" => {
-							assert!(attached_map[x][0].len() == 1);
-							signal_choices[x] = signal_choices[attached_map[x][0][0]].clone();
+							assert!(attached_map[nodeid][0].len() == 1);
+							signal_choices[nodeid] =
+								signal_choices[attached_map[nodeid][0][0]].clone();
 						}
 						"B" => {
-							assert!(attached_map[x][1].len() == 1);
-							signal_choices[x] = signal_choices[attached_map[x][1][0]].clone();
+							assert!(attached_map[nodeid][1].len() == 1);
+							signal_choices[nodeid] =
+								signal_choices[attached_map[nodeid][1][0]].clone();
 						}
 						_ => assert!(false),
 					}
 				}
 				NodeType::CellOutput { port } => {
-					if signal_choices[x].len() < 2 {
+					if signal_choices[nodeid].len() < 2 {
 						continue;
 					}
 					match port.as_str() {
 						"Y" => {
-							assert!(attached_map[x][0].len() == 1);
-							signal_choices[x] = signal_choices[attached_map[x][2][0]].clone();
+							assert!(attached_map[nodeid][0].len() == 1);
+							signal_choices[nodeid] =
+								signal_choices[attached_map[nodeid][2][0]].clone();
 						}
 						_ => assert!(false),
 					}
 				}
-				NodeType::PortInput => assert!(signal_choices[x].len() < 2),
+				NodeType::PortInput => assert!(signal_choices[nodeid].len() < 2),
 				NodeType::PortOutput => {}
 				NodeType::PortBody => {}
-				NodeType::CellBody => {}
+				NodeType::CellBody { .. } => {}
 				NodeType::Nop => {}
 			}
 		}
@@ -526,7 +643,7 @@ impl CheckedDesign {
 				NodeType::PortInput => { /* Already picked */ }
 				NodeType::PortOutput => { /* Already picked */ }
 				NodeType::PortBody => { /* N/A */ }
-				NodeType::CellBody => { /* N/A */ }
+				NodeType::CellBody { .. } => { /* N/A */ }
 				NodeType::Nop => { /* Let others pick */ }
 			}
 		}
@@ -564,7 +681,7 @@ impl CheckedDesign {
 						assert_eq!(signal_choices[node.id], signal_choices[*fiid]);
 					}
 				}
-				NodeType::CellBody => assert!(signal_choices[node.id].is_none()),
+				NodeType::CellBody { .. } => assert!(signal_choices[node.id].is_none()),
 				NodeType::Nop => assert!(signal_choices[node.id].is_none()),
 			}
 		}
@@ -575,7 +692,7 @@ impl CheckedDesign {
 		let bit_map = self.update_bits(mapped_design);
 		let mut attached_map: Vec<Vec<Vec<NodeId>>> = vec![vec![vec![]; 3]; self.nodes.len()];
 		self.fill_out_body_nodes(&bit_map, &mut attached_map, mapped_design);
-		self.elaborate_attached_map_post_fill_out(&mut attached_map, mapped_design);
+		self.elaborate_body_nodes_wire_design(&mut attached_map, mapped_design);
 		self.insert_nop_to_sanitize_ports();
 		let mut signal_choices = self.calculate_and_validate_signal_choices(&mut attached_map);
 		self.elaborate_signal_choices(&mut signal_choices);
@@ -625,7 +742,7 @@ impl CheckedDesign {
 				}
 			}
 			NodeType::PortBody => {}
-			NodeType::CellBody => {}
+			NodeType::CellBody { .. } => {}
 			NodeType::Nop => {}
 		}
 	}
@@ -667,7 +784,7 @@ impl CheckedDesign {
 						queue.insert(*foid);
 					}
 				}
-				NodeType::PortBody | NodeType::CellBody => {
+				NodeType::PortBody | NodeType::CellBody { .. } => {
 					panic!("Implementer is a fucking moron.")
 				}
 				NodeType::Nop => {
@@ -758,8 +875,7 @@ impl CheckedDesign {
 				.iter()
 				.map(|fiid| depth[*fiid])
 				.max()
-				.unwrap_or(-1)
-				+ 1
+				.unwrap_or(-1) + 1
 		}
 		depth
 	}
@@ -794,16 +910,25 @@ impl CheckedDesign {
 						)));
 					}
 				}
-				NodeType::CellBody => {
-					let sig_left = self.signals[node.fanin[0]].unwrap();
-					let sig_right = self.signals[node.fanin[1]].unwrap();
-					let sig_out = self.signals[node.fanout[0]].unwrap();
-					let op = get_arithmetic_op(&mapped_design.get_cell(&node.mapped_id).cell_type);
-					logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
-						(Signal::Id(sig_left), op, Signal::Id(sig_right)),
-						Signal::Id(sig_out),
-					))
-				}
+				NodeType::CellBody { cell_type } => match cell_type {
+					CellType::ABY => {
+						let sig_left = self.signals[node.fanin[0]].unwrap();
+						let sig_right = self.signals[node.fanin[1]].unwrap();
+						let sig_out = self.signals[node.fanout[0]].unwrap();
+						let op =
+							get_arithmetic_op(&mapped_design.get_cell(&node.mapped_id).cell_type);
+						logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
+							(Signal::Id(sig_left), op, Signal::Id(sig_right)),
+							Signal::Id(sig_out),
+						))
+					}
+					CellType::Constant { value } => {
+						logic_map[nodeid] = Some(logical_design.add_constant_comb(
+							vec![Signal::Id(self.signals[node.fanout[0]].unwrap())],
+							vec![*value],
+						));
+					}
+				},
 				NodeType::Nop => {
 					let sig_in = self.signals[node.fanin[0]].unwrap();
 					let sig_out = self.signals[node.fanout[0]].unwrap();
@@ -821,7 +946,7 @@ impl CheckedDesign {
 		for nodeid_ref in topo_order.iter() {
 			let nodeid = *nodeid_ref;
 			let node = &self.nodes[nodeid];
-			if node.node_type == NodeType::CellBody || node.node_type == NodeType::PortBody {
+			if node.node_type.is_cell_body() || node.node_type.is_port_body() {
 				continue;
 			}
 			for foid in node.fanout.iter() {
@@ -850,7 +975,40 @@ mod test {
 		let mut serializable_design = SerializableDesign::new();
 		checked_design.build_from(&mapped_design);
 		logical_design.build_from(&checked_design, &mapped_design);
-		println!("{:?}", logical_design);
+		physical_design.build_from(&logical_design);
+		serializable_design.build_from(&physical_design, &logical_design);
+		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+		println!("{}", blueprint_json);
+	}
+
+	#[test]
+	fn design_test2() {
+		let file = File::open("./test_designs/output/test2.json").unwrap();
+		let reader = BufReader::new(file);
+		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+		let mut checked_design = CheckedDesign::new();
+		let mut logical_design = LogicalDesign::new();
+		let mut physical_design = PhysicalDesign::new();
+		let mut serializable_design = SerializableDesign::new();
+		checked_design.build_from(&mapped_design);
+		logical_design.build_from(&checked_design, &mapped_design);
+		physical_design.build_from(&logical_design);
+		serializable_design.build_from(&physical_design, &logical_design);
+		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+		println!("{}", blueprint_json);
+	}
+
+	#[test]
+	fn design_test3() {
+		let file = File::open("./test_designs/output/test3.json").unwrap();
+		let reader = BufReader::new(file);
+		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+		let mut checked_design = CheckedDesign::new();
+		let mut logical_design = LogicalDesign::new();
+		let mut physical_design = PhysicalDesign::new();
+		let mut serializable_design = SerializableDesign::new();
+		checked_design.build_from(&mapped_design);
+		logical_design.build_from(&checked_design, &mapped_design);
 		physical_design.build_from(&logical_design);
 		serializable_design.build_from(&physical_design, &logical_design);
 		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();

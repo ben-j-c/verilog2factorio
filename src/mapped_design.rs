@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use serde::{
 	de::{self, Visitor},
 	Deserialize, Deserializer,
@@ -60,6 +61,103 @@ pub enum Bit {
 	Zero,
 	One,
 	Id(BitId),
+}
+
+impl Bit {
+	pub fn is_constant(&self) -> bool {
+		match self {
+			Bit::Zero => true,
+			Bit::One => true,
+			Bit::Id(bit_id) => false,
+		}
+	}
+
+	pub fn is_connection(&self) -> bool {
+		!self.is_constant()
+	}
+}
+
+pub trait Integer: Copy + PartialOrd + Sized {
+	fn zero() -> Self;
+	fn one() -> Self;
+	fn sll(self) -> Self;
+	fn inc(self) -> Self;
+}
+
+macro_rules! impl_integer {
+	($($t:ty)*) => {
+		$(impl Integer for $t {
+			fn zero() -> Self { 0 }
+			fn one() -> Self { 1 }
+			fn sll(self) -> Self { self << 1 }
+			fn inc(self) -> Self { self +  1}
+		})*
+	};
+}
+
+impl_integer!(i8 u8 i16 u16 i32 u32 i64 u64 i128 u128 isize usize);
+
+pub trait BitSliceOps {
+	fn is_all_constants(&self) -> bool;
+	fn is_all_connections(&self) -> bool;
+	fn get_sections(&self) -> Vec<Vec<Bit>>;
+	fn get_constant<T>(&self) -> T
+	where
+		T: Integer;
+}
+
+impl BitSliceOps for Vec<Bit> {
+	fn is_all_constants(&self) -> bool {
+		self.iter().all(|x| x.is_constant())
+	}
+
+	fn is_all_connections(&self) -> bool {
+		self.iter().all(|x| x.is_connection())
+	}
+
+	fn get_sections(&self) -> Vec<Vec<Bit>> {
+		let mut retval = vec![];
+		let mut section_start = 0;
+		for i in 1..self.len() {
+			if self[section_start].is_constant() == self[i].is_constant() {
+				continue;
+			} else {
+				retval.push(
+					self[section_start..i]
+						.iter()
+						.map(|bit| bit.clone())
+						.collect_vec(),
+				);
+				section_start = i;
+			}
+		}
+		retval.push(
+			self[section_start..self.len()]
+				.iter()
+				.map(|bit| bit.clone())
+				.collect_vec(),
+		);
+		retval
+	}
+
+	fn get_constant<T>(&self) -> T
+	where
+		T: Integer,
+	{
+		assert!(
+			self.is_all_constants(),
+			"Can't get constant value from a bit vector that represents connections between nodes."
+		);
+		let mut retval = T::zero();
+		for bit in self.iter().rev() {
+			match bit {
+				Bit::Zero => retval = retval.sll(),
+				Bit::One => retval = retval.sll().inc(),
+				Bit::Id(_) => unreachable!(),
+			}
+		}
+		retval
+	}
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
