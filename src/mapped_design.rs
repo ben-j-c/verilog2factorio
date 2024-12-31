@@ -131,12 +131,7 @@ impl BitSliceOps for Vec<Bit> {
 				section_start = i;
 			}
 		}
-		retval.push(
-			self[section_start..self.len()]
-				.iter()
-				.map(|bit| bit.clone())
-				.collect_vec(),
-		);
+		retval.push(self[section_start..self.len()].to_vec());
 		retval
 	}
 
@@ -238,11 +233,11 @@ impl MappedDesign {
 	where
 		F: FnMut(&Self, &str, &Port),
 	{
-		for (_name, module) in &self.modules {
+		for module in self.modules.values() {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					for (port_name, port) in &module.ports {
-						func(self, &port_name, port);
+						func(self, port_name, port);
 					}
 					return;
 				}
@@ -255,11 +250,11 @@ impl MappedDesign {
 	where
 		F: FnMut(&Self, &str, &Cell),
 	{
-		for (_name, module) in &self.modules {
+		for module in self.modules.values() {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					for (cell_name, cell) in &module.cells {
-						func(self, &cell_name, cell)
+						func(self, cell_name, cell)
 					}
 					return;
 				}
@@ -269,7 +264,7 @@ impl MappedDesign {
 	}
 
 	pub fn get_cell<'a>(&'a self, cell_name: &str) -> &'a Cell {
-		for (_name, module) in &self.modules {
+		for module in self.modules.values() {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					return module.cells.get(cell_name).unwrap();
@@ -280,7 +275,7 @@ impl MappedDesign {
 	}
 
 	pub fn get_port<'a>(&'a self, port_name: &str) -> &'a Port {
-		for (_name, module) in &self.modules {
+		for module in self.modules.values() {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					return module.ports.get(port_name).unwrap();

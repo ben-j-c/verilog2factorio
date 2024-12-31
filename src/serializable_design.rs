@@ -174,11 +174,11 @@ struct Position {
 	y: f64,
 }
 
-impl Into<Position> for (f64, f64) {
-	fn into(self) -> Position {
+impl From<(f64, f64)> for Position {
+	fn from(val: (f64, f64)) -> Self {
 		Position {
-			x: self.0 + 0.5,
-			y: self.1 + 0.5,
+			x: val.0 + 0.5,
+			y: val.1 + 0.5,
 		}
 	}
 }
