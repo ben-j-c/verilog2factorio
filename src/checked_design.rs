@@ -842,8 +842,7 @@ impl CheckedDesign {
 		self.nodes[self.nodes[nodeid].fanout[0]]
 			.fanin
 			.iter()
-			.filter(|id| **id != nodeid)
-			.map(|id| *id)
+			.filter(|id| **id != nodeid).copied()
 			.collect()
 	}
 
@@ -1023,7 +1022,7 @@ impl CheckedDesign {
 				}
 			}
 		}
-		return topological_order;
+		topological_order
 	}
 
 	#[allow(dead_code)]
@@ -1061,12 +1060,12 @@ impl CheckedDesign {
 					logic_map[nodeid] = Some(logical_design.add_wire_floating());
 				}
 				NodeType::PortBody => {
-					if node.fanout.len() > 0 {
+					if !node.fanout.is_empty() {
 						logic_map[nodeid] = Some(logical_design.add_constant_comb(
 							vec![Signal::Id(self.signals[nodeid].unwrap())],
 							vec![1],
 						));
-					} else if node.fanin.len() > 0 {
+					} else if !node.fanin.is_empty() {
 						logic_map[nodeid] = Some(logical_design.add_lamp((
 							Signal::Id(self.signals[nodeid].unwrap()),
 							logical_design::DeciderOperator::NotEqual,

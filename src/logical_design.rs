@@ -5,7 +5,6 @@ use std::{
 	hash::Hash,
 };
 
-use itertools::rev;
 
 use crate::{checked_design::CheckedDesign, mapped_design::MappedDesign};
 
@@ -173,15 +172,15 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
-		let ret = self.add_node(
+		
+		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
 				input_1: expr.0,
 				input_2: expr.2,
 			},
 			vec![output],
-		);
-		ret
+		)
 	}
 
 	pub fn add_decider_comb(&mut self) -> NodeId {
@@ -243,19 +242,19 @@ impl LogicalDesign {
 			counts.len(),
 			"Tried to crea constant combinator with mismatched outputs and counts"
 		);
-		let ret = self.add_node(
+		
+		self.add_node(
 			NodeFunction::Constant {
 				enabled: true,
 				constants: counts,
 			},
 			output,
-		);
-		ret
+		)
 	}
 
 	pub fn add_lamp(&mut self, expr: (Signal, DeciderOperator, Signal)) -> NodeId {
-		let ret = self.add_node(NodeFunction::Lamp { expression: expr }, vec![]);
-		ret
+		
+		self.add_node(NodeFunction::Lamp { expression: expr }, vec![])
 	}
 
 	pub fn add_wire(&mut self, fanin: Vec<NodeId>, fanout: Vec<NodeId>) -> NodeId {
@@ -270,8 +269,8 @@ impl LogicalDesign {
 	}
 
 	pub fn add_wire_floating(&mut self) -> NodeId {
-		let new_wire = self.add_node(NodeFunction::WireSum, vec![Signal::Everything]);
-		new_wire
+		
+		self.add_node(NodeFunction::WireSum, vec![Signal::Everything])
 	}
 
 	pub fn for_all<F>(&self, mut func: F)
@@ -493,10 +492,7 @@ impl LogicalDesign {
 	}
 
 	pub fn assert_is_not_wire_sum(&self, id: NodeId) {
-		match self.get_node(id).function {
-			NodeFunction::WireSum => assert!(false, "Expected anything but a wire sum node."),
-			_ => {}
-		}
+		if let NodeFunction::WireSum = self.get_node(id).function { assert!(false, "Expected anything but a wire sum node.") }
 	}
 }
 

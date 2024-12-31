@@ -217,8 +217,7 @@ impl PhysicalDesign {
 		let sum = {
 			let ld_comb = self.get_logical(id, logical);
 			let ld_in_wire_fanin_iter = ld_comb
-				.fanin
-				.get(0) // Option<NodeId>
+				.fanin.first() // Option<NodeId>
 				.map(|id| {
 					logical.assert_is_wire_sum(*id);
 					logical.get_node(*id).fanin.iter()
@@ -226,8 +225,7 @@ impl PhysicalDesign {
 				.into_iter()
 				.flatten();
 			let ld_out_wire_fanout_iter = ld_comb
-				.fanout
-				.get(0) // Option<NodeId>
+				.fanout.first() // Option<NodeId>
 				.map(|id| {
 					logical.assert_is_wire_sum(*id);
 					logical.get_node(*id).fanout.iter()
@@ -257,13 +255,10 @@ impl PhysicalDesign {
 						((avg_pos.0 + offset.0).floor() / 2.0).floor() * 2.0,
 						(avg_pos.1 + offset.1).floor(),
 					);
-					match self.place_comb_physical(placement_pos, id, logical) {
-						Ok(_) => {
-							good = true;
-							break;
-						}
-						Err(_) => {}
-					}
+					if self.place_comb_physical(placement_pos, id, logical).is_ok() {
+     							good = true;
+     							break;
+     						}
 				}
 				if !good {
 					assert!(false, "Placement failed");
@@ -274,17 +269,14 @@ impl PhysicalDesign {
 				let mut offset_factor = 1.0;
 				while !good {
 					for offset in get_proposed_placements() {
-						match self.place_comb_physical(
+						if self.place_comb_physical(
 							(offset.0 * offset_factor, offset.1 * offset_factor),
 							id,
 							logical,
-						) {
-							Ok(_) => {
-								good = true;
-								break;
-							}
-							Err(_) => {}
-						};
+						).is_ok() {
+      								good = true;
+      								break;
+      							};
 					}
 					if offset_factor > 100.0 {
 						assert!(false, "Placement failed");
@@ -299,7 +291,7 @@ impl PhysicalDesign {
 				ld::NodeFunction::WireSum => {
 					for fanout_combinator in &fo_node.fanout {
 						self.recurse_place_comb(
-							*self.idx_combs.get(&fanout_combinator).unwrap(),
+							*self.idx_combs.get(fanout_combinator).unwrap(),
 							logical,
 						)
 					}
@@ -316,7 +308,7 @@ impl PhysicalDesign {
 				ld::NodeFunction::WireSum => {
 					for fanin_combinator in &fo_node.fanin {
 						self.recurse_place_comb(
-							*self.idx_combs.get(&fanin_combinator).unwrap(),
+							*self.idx_combs.get(fanin_combinator).unwrap(),
 							logical,
 						)
 					}
@@ -337,8 +329,8 @@ impl PhysicalDesign {
 					let mut edges = vec![];
 					for id_i in ld_node.fanout.iter() {
 						for id_j in ld_node.fanin.iter() {
-							let comb_i = &self.combs[self.idx_combs.get(&id_i).unwrap().0];
-							let comb_j = &self.combs[self.idx_combs.get(&id_j).unwrap().0];
+							let comb_i = &self.combs[self.idx_combs.get(id_i).unwrap().0];
+							let comb_j = &self.combs[self.idx_combs.get(id_j).unwrap().0];
 							let ld_node_i = logical.get_node(comb_i.logic);
 							let ld_node_j = logical.get_node(comb_j.logic);
 							let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();

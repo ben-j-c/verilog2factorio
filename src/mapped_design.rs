@@ -124,8 +124,7 @@ impl BitSliceOps for Vec<Bit> {
 			} else {
 				retval.push(
 					self[section_start..i]
-						.iter()
-						.map(|bit| bit.clone())
+						.iter().copied()
 						.collect_vec(),
 				);
 				section_start = i;
