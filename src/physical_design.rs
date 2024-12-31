@@ -332,7 +332,7 @@ impl PhysicalDesign {
 	fn connect_combs(&mut self, logical: &LogicalDesign) {
 		let mut global_edges: Vec<(ld::NodeId, Vec<(ld::NodeId, ld::NodeId)>)> = vec![];
 		logical.for_all(|_, ld_node| {
-			match ld_node.function {
+			match &ld_node.function {
 				ld::NodeFunction::WireSum => {
 					let mut edges = vec![];
 					for id_i in ld_node.fanout.iter() {
@@ -384,9 +384,11 @@ impl PhysicalDesign {
 		let comb_b = &self.combs[id_comb_b.0];
 		let ld_comb_a = logical.get_node(comb_a.logic);
 		let ld_comb_b = logical.get_node(comb_b.logic);
-		assert!(ld_comb_a.fanout.contains(&ld_id_wire));
-		assert!(ld_comb_b.fanin.contains(&ld_id_wire));
-		let term_a = match ld_comb_a.function {
+		assert!(
+			ld_comb_a.fanout.contains(&ld_id_wire) && ld_comb_b.fanin.contains(&ld_id_wire)
+				|| ld_comb_a.fanin.contains(&ld_id_wire) && ld_comb_b.fanout.contains(&ld_id_wire)
+		);
+		let term_a = match &ld_comb_a.function {
 			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => TerminalId(3),
 			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => TerminalId(1),
 			ld::NodeFunction::WireSum => unreachable!(),

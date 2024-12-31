@@ -1,32 +1,15 @@
-use core::slice;
 use std::{
-	cell::{self, RefCell},
+	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
 	vec,
 };
 
-const AND: &str = "$and";
-const OR: &str = "$or";
-const XOR: &str = "$xor";
-const SHL: &str = "$shl";
-const SHR: &str = "$shr";
-const MUL: &str = "$mul";
-const DIV: &str = "$div";
-const MOD: &str = "$mod";
-const POW: &str = "$pow";
-const ADD: &str = "$add";
-const SUB: &str = "$sub";
-
-macro_rules! IMPLEMENTABLE_OPS {
-	() => {
-		AND | OR | XOR | SHL | SHR | MUL | DIV | MOD | POW | ADD | SUB
-	};
-}
-
 type NodeId = usize;
 
+use strum::IntoEnumIterator;
+
 use crate::{
-	logical_design::{self, ArithmeticOperator, LogicalDesign},
+	logical_design::{self, ArithmeticOperator, DeciderOperator, LogicalDesign, Signal},
 	mapped_design::{BitSliceOps, Direction},
 	signal_lookup_table,
 };
@@ -34,6 +17,120 @@ use crate::{
 	mapped_design::{Bit, MappedDesign},
 	signal_lookup_table::lookup_id,
 };
+
+#[derive(strum::EnumIter, PartialEq, Eq)]
+enum ImplementableOp {
+	AndBitwise,
+	OrBitwise,
+	XorBitwisze,
+	Shl,
+	Shr,
+	Mul,
+	Div,
+	Mod,
+	Pow,
+	Add,
+	Sub,
+	LessThan,
+	GreaterThan,
+	Equal,
+	NotEqual,
+	GreaterThanEqual,
+	LessThanEqual,
+	V2FRollingAccumulate,
+}
+
+impl ImplementableOp {
+	fn get_cell_str(&self) -> &'static str {
+		match self {
+			ImplementableOp::AndBitwise => "$and",
+			ImplementableOp::OrBitwise => "$or",
+			ImplementableOp::XorBitwisze => "$xor",
+			ImplementableOp::Shl => "$shl",
+			ImplementableOp::Shr => "$shr",
+			ImplementableOp::Mul => "$mul",
+			ImplementableOp::Div => "$div",
+			ImplementableOp::Mod => "$mod",
+			ImplementableOp::Pow => "$pow",
+			ImplementableOp::Add => "$add",
+			ImplementableOp::Sub => "$sub",
+			ImplementableOp::GreaterThan => "$gt",
+			ImplementableOp::LessThan => "$lt",
+			ImplementableOp::Equal => "$eq",
+			ImplementableOp::NotEqual => "$neq",
+			ImplementableOp::GreaterThanEqual => "$gt",
+			ImplementableOp::LessThanEqual => "$",
+			ImplementableOp::V2FRollingAccumulate => "v2f_rolling_accumulate",
+		}
+	}
+
+	fn get_cell_type(&self) -> CellType {
+		match self {
+			ImplementableOp::AndBitwise => CellType::ABY,
+			ImplementableOp::OrBitwise => CellType::ABY,
+			ImplementableOp::XorBitwisze => CellType::ABY,
+			ImplementableOp::Shl => CellType::ABY,
+			ImplementableOp::Shr => CellType::ABY,
+			ImplementableOp::Mul => CellType::ABY,
+			ImplementableOp::Div => CellType::ABY,
+			ImplementableOp::Mod => CellType::ABY,
+			ImplementableOp::Pow => CellType::ABY,
+			ImplementableOp::Add => CellType::ABY,
+			ImplementableOp::Sub => CellType::ABY,
+			ImplementableOp::GreaterThan => CellType::ABY,
+			ImplementableOp::LessThan => CellType::ABY,
+			ImplementableOp::Equal => CellType::ABY,
+			ImplementableOp::NotEqual => CellType::ABY,
+			ImplementableOp::GreaterThanEqual => CellType::ABY,
+			ImplementableOp::LessThanEqual => CellType::ABY,
+			ImplementableOp::V2FRollingAccumulate => CellType::AY,
+		}
+	}
+
+	fn get_arithmetic_op(&self) -> Option<ArithmeticOperator> {
+		match self {
+			ImplementableOp::AndBitwise => Some(ArithmeticOperator::And),
+			ImplementableOp::OrBitwise => Some(ArithmeticOperator::Or),
+			ImplementableOp::XorBitwisze => Some(ArithmeticOperator::Xor),
+			ImplementableOp::Shl => Some(ArithmeticOperator::Sll),
+			ImplementableOp::Shr => Some(ArithmeticOperator::Srl),
+			ImplementableOp::Mul => Some(ArithmeticOperator::Mult),
+			ImplementableOp::Div => Some(ArithmeticOperator::Div),
+			ImplementableOp::Mod => Some(ArithmeticOperator::Mod),
+			ImplementableOp::Pow => Some(ArithmeticOperator::Exp),
+			ImplementableOp::Add => Some(ArithmeticOperator::Add),
+			ImplementableOp::Sub => Some(ArithmeticOperator::Sub),
+			_ => None,
+		}
+	}
+
+	fn get_decider_op(&self) -> Option<DeciderOperator> {
+		match self {
+			ImplementableOp::LessThan => Some(DeciderOperator::LessThan),
+			ImplementableOp::GreaterThan => Some(DeciderOperator::GreaterThan),
+			ImplementableOp::Equal => Some(DeciderOperator::Equal),
+			ImplementableOp::NotEqual => Some(DeciderOperator::NotEqual),
+			ImplementableOp::GreaterThanEqual => Some(DeciderOperator::GreaterThanEqual),
+			ImplementableOp::LessThanEqual => Some(DeciderOperator::LessThanEqual),
+			_ => None,
+		}
+	}
+}
+
+trait StrToImplementableOp {
+	fn get_implementable_op(&self) -> ImplementableOp;
+}
+
+impl StrToImplementableOp for str {
+	fn get_implementable_op(&self) -> ImplementableOp {
+		for x in ImplementableOp::iter() {
+			if x.get_cell_str() == self {
+				return x;
+			}
+		}
+		panic!("Can't implement this cell")
+	}
+}
 
 pub struct CheckedDesign {
 	nodes: Vec<Node>,
@@ -81,6 +178,7 @@ impl NodeType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CellType {
 	ABY,
+	AY,
 	Constant { value: i32 },
 	Nop,
 }
@@ -92,23 +190,6 @@ struct Node {
 	mapped_id: String,
 	fanin: Vec<NodeId>,
 	fanout: Vec<NodeId>,
-}
-
-fn get_arithmetic_op(op: &str) -> ArithmeticOperator {
-	match op {
-		AND => ArithmeticOperator::And,
-		OR => ArithmeticOperator::Or,
-		XOR => ArithmeticOperator::Xor,
-		SHL => ArithmeticOperator::Sll,
-		SHR => ArithmeticOperator::Srl,
-		MUL => ArithmeticOperator::Mult,
-		DIV => ArithmeticOperator::Div,
-		MOD => ArithmeticOperator::Mod,
-		POW => ArithmeticOperator::Exp,
-		ADD => ArithmeticOperator::Add,
-		SUB => ArithmeticOperator::Sub,
-		_ => panic!("Unsupported arithmetic op"),
-	}
 }
 
 impl CheckedDesign {
@@ -184,11 +265,11 @@ impl CheckedDesign {
 				)
 			}
 		});
-		mapped_design.for_all_cells(|_, name, _cell| {
+		mapped_design.for_all_cells(|_, name, cell| {
 			self.new_node(
 				name,
 				NodeType::CellBody {
-					cell_type: CellType::ABY,
+					cell_type: cell.cell_type.get_implementable_op().get_cell_type(),
 				},
 			);
 		});
@@ -205,10 +286,6 @@ impl CheckedDesign {
 			match cell_type {
 				CellType::ABY => {
 					let cell = mapped_design.get_cell(&node.mapped_id);
-					match cell.cell_type.as_str() {
-						IMPLEMENTABLE_OPS!() => {}
-						_ => panic!("{:?} can't be implemented", cell),
-					};
 					cell.connections["A"]
 						.iter()
 						.chain(cell.connections["B"].iter())
@@ -219,13 +296,14 @@ impl CheckedDesign {
 							}
 						})
 				}
-				CellType::Constant { .. } => {}
+				CellType::Constant { .. } => {
+					unreachable!()
+				}
 				CellType::Nop => {
+					unreachable!()
+				}
+				CellType::AY => {
 					let cell = mapped_design.get_cell(&node.mapped_id);
-					match cell.cell_type.as_str() {
-						IMPLEMENTABLE_OPS!() => {}
-						_ => panic!("{:?} can't be implemented", cell),
-					};
 					cell.connections["A"]
 						.iter()
 						.chain(cell.connections["Y"].iter())
@@ -272,8 +350,13 @@ impl CheckedDesign {
 						break;
 					}
 				}
-				CellType::Constant { .. } => {}
+				CellType::Constant { .. } => {
+					unreachable!()
+				}
 				CellType::Nop => {
+					unreachable!()
+				}
+				CellType::AY => {
 					let cell = mapped_design.get_cell(&node.mapped_id);
 					for b in cell.connections["A"].iter() {
 						if let Bit::Id(bitid) = b {
@@ -374,36 +457,54 @@ impl CheckedDesign {
 						"Currently doesn't support mixed bits and constants on a port"
 					);
 				}
-				NodeType::CellBody { cell_type } => {
-					assert!(*cell_type == CellType::ABY);
-					let cell = mapped_design.get_cell(&node.mapped_id);
-					if cell.connections["A"].is_all_constants() {
-						self.insert_constant_on_input(
-							attached_map,
-							nodeid,
-							0,
-							cell.connections["A"].clone(),
+				NodeType::CellBody { cell_type } => match cell_type {
+					CellType::ABY => {
+						let cell = mapped_design.get_cell(&node.mapped_id);
+						if cell.connections["A"].is_all_constants() {
+							self.insert_constant_on_input(
+								attached_map,
+								nodeid,
+								0,
+								cell.connections["A"].clone(),
+							);
+							continue;
+						}
+						assert!(
+							cell.connections["A"].is_all_connections(),
+							"Currently doesn't support mixed bits and constants on a port"
 						);
-						continue;
-					}
-					assert!(
-						cell.connections["A"].is_all_connections(),
-						"Currently doesn't support mixed bits and constants on a port"
-					);
-					if cell.connections["B"].is_all_constants() {
-						self.insert_constant_on_input(
-							attached_map,
-							nodeid,
-							0,
-							cell.connections["B"].clone(),
+						if cell.connections["B"].is_all_constants() {
+							self.insert_constant_on_input(
+								attached_map,
+								nodeid,
+								1,
+								cell.connections["B"].clone(),
+							);
+							continue;
+						}
+						assert!(
+							cell.connections["B"].is_all_connections(),
+							"Currently doesn't support mixed bits and constants on a port"
 						);
-						continue;
 					}
-					assert!(
-						cell.connections["B"].is_all_connections(),
-						"Currently doesn't support mixed bits and constants on a port"
-					);
-				}
+					CellType::AY => {
+						let cell = mapped_design.get_cell(&node.mapped_id);
+						if cell.connections["A"].is_all_constants() {
+							self.insert_constant_on_input(
+								attached_map,
+								nodeid,
+								0,
+								cell.connections["A"].clone(),
+							);
+							continue;
+						}
+						assert!(
+							cell.connections["A"].is_all_connections(),
+							"Currently doesn't support mixed bits and constants on a port"
+						);
+					}
+					_ => unreachable!(),
+				},
 			}
 		}
 	}
@@ -489,6 +590,9 @@ impl CheckedDesign {
 						attached_map.push(attached_map[nodeid].clone());
 					}
 					CellType::Nop => {
+						unreachable!()
+					}
+					CellType::AY => {
 						let mapped_id = node.mapped_id.clone();
 						let a = self.new_node(
 							&mapped_id,
@@ -717,15 +821,6 @@ impl CheckedDesign {
 		self.insert_nop_to_sanitize_ports();
 		let mut signal_choices = self.calculate_and_validate_signal_choices();
 		self.elaborate_signal_choices(&mut signal_choices);
-		println!("--------------1");
-		for x in signal_choices.iter().enumerate() {
-			println!("{:?}", x)
-		}
-		println!("--------------2");
-		for x in &self.nodes {
-			println!("{:?}", x);
-		}
-		println!("--------------3");
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
 	}
@@ -971,12 +1066,16 @@ impl CheckedDesign {
 		use logical_design::Signal;
 		let topo_order = self.get_topo_order();
 		let mut logic_map: Vec<Option<LID>> = vec![None; topo_order.len()];
+		println!();
 		for nodeid_ref in topo_order.iter() {
 			let nodeid = *nodeid_ref;
 			let node = &self.nodes[nodeid];
+			println!("{:?}", node);
 			match &node.node_type {
 				NodeType::CellOutput { .. } | NodeType::PortOutput => {
-					logic_map[nodeid] = logic_map[node.fanin[0]];
+					if logic_map[nodeid].is_none() {
+						logic_map[nodeid] = logic_map[node.fanin[0]];
+					}
 				}
 				NodeType::PortInput | NodeType::CellInput { .. } => {
 					logic_map[nodeid] = Some(logical_design.add_wire_floating());
@@ -1000,12 +1099,18 @@ impl CheckedDesign {
 						let sig_left = self.signals[node.fanin[0]].unwrap();
 						let sig_right = self.signals[node.fanin[1]].unwrap();
 						let sig_out = self.signals[node.fanout[0]].unwrap();
-						let op =
-							get_arithmetic_op(&mapped_design.get_cell(&node.mapped_id).cell_type);
-						logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
-							(Signal::Id(sig_left), op, Signal::Id(sig_right)),
+						let (input, output) = self.apply_binary_op(
+							logical_design,
+							mapped_design
+								.get_cell(&node.mapped_id)
+								.cell_type
+								.get_implementable_op(),
+							Signal::Id(sig_left),
+							Signal::Id(sig_right),
 							Signal::Id(sig_out),
-						))
+						);
+						logic_map[nodeid] = Some(input);
+						logic_map[node.fanout[0]] = Some(output)
 					}
 					CellType::Constant { value } => {
 						logic_map[nodeid] = Some(logical_design.add_constant_comb(
@@ -1019,25 +1124,106 @@ impl CheckedDesign {
 						logic_map[nodeid] = Some(logical_design.add_arithmetic_comb(
 							(
 								Signal::Id(sig_in),
-								logical_design::ArithmeticOperator::Add,
+								ArithmeticOperator::Add,
 								Signal::Constant(0),
 							),
 							Signal::Id(sig_out),
 						))
 					}
+					CellType::AY => {
+						let sig_in = self.signals[node.fanin[0]].unwrap();
+						let sig_out = self.signals[node.fanout[0]].unwrap();
+						let (input, output) = self.apply_unary_op(
+							logical_design,
+							mapped_design
+								.get_cell(&node.mapped_id)
+								.cell_type
+								.get_implementable_op(),
+							Signal::Id(sig_in),
+							Signal::Id(sig_out),
+						);
+						logic_map[nodeid] = Some(input);
+						logic_map[node.fanout[0]] = Some(output)
+					}
 				},
 			}
+			println!("logical_node: {:?}\n", logic_map[nodeid]);
 		}
 		for nodeid_ref in topo_order.iter() {
 			let nodeid = *nodeid_ref;
+			print!("\n{:?} ->", nodeid);
 			let node = &self.nodes[nodeid];
 			if node.node_type.is_cell_body() || node.node_type.is_port_body() {
 				continue;
 			}
 			for foid in node.fanout.iter() {
+				print!(" {:?}", *foid);
 				logical_design.connect(logic_map[nodeid].unwrap(), logic_map[*foid].unwrap());
 			}
 		}
+		println!();
+	}
+
+	fn apply_unary_op(
+		&self,
+		logical_design: &mut LogicalDesign,
+		op: ImplementableOp,
+		sig_in: Signal,
+		sig_out: Signal,
+	) -> (logical_design::NodeId, logical_design::NodeId) {
+		match op {
+			ImplementableOp::V2FRollingAccumulate => {
+				let acc = logical_design.add_arithmetic_comb(
+					(sig_in.clone(), ArithmeticOperator::Add, Signal::Constant(0)),
+					sig_in.clone(),
+				);
+				let pre_filter = logical_design.add_arithmetic_comb(
+					(
+						sig_in.clone(),
+						ArithmeticOperator::Mult,
+						Signal::Constant(1),
+					),
+					sig_in.clone(),
+				);
+				let post_filter = logical_design.add_arithmetic_comb(
+					(
+						sig_in.clone(),
+						ArithmeticOperator::Mult,
+						Signal::Constant(1),
+					),
+					sig_out,
+				);
+				logical_design.add_wire(vec![acc, pre_filter], vec![acc, post_filter]);
+				(pre_filter, post_filter)
+			}
+			_ => {
+				unreachable!()
+			}
+		}
+	}
+
+	fn apply_binary_op(
+		&self,
+		logical_design: &mut LogicalDesign,
+		op: ImplementableOp,
+		sig_left: Signal,
+		sig_right: Signal,
+		sig_out: Signal,
+	) -> (logical_design::NodeId, logical_design::NodeId) {
+		if let Some(op) = op.get_arithmetic_op() {
+			let ld_node = logical_design.add_arithmetic_comb((sig_left, op, sig_right), sig_out);
+			return (ld_node, ld_node);
+		}
+		if let Some(op) = op.get_decider_op() {
+			let id = logical_design.add_decider_comb();
+			logical_design.add_decider_comb_input(
+				id,
+				(sig_left, op, sig_right),
+				logical_design::DeciderRowConjDisj::Or,
+			);
+			return (id, id);
+		}
+		unreachable!()
 	}
 }
 
@@ -1111,6 +1297,29 @@ mod test {
 		let mut serializable_design = SerializableDesign::new();
 		checked_design.build_from(&mapped_design);
 		logical_design.build_from(&checked_design, &mapped_design);
+		physical_design.build_from(&logical_design);
+		serializable_design.build_from(&physical_design, &logical_design);
+		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+		println!("{}", blueprint_json);
+	}
+
+	#[test]
+	fn design_balancer() {
+		let file = File::open("./test_designs/output/test4.json").unwrap();
+		let reader = BufReader::new(file);
+		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+		let mut checked_design = CheckedDesign::new();
+		let mut logical_design = LogicalDesign::new();
+		let mut physical_design = PhysicalDesign::new();
+		let mut serializable_design = SerializableDesign::new();
+		checked_design.build_from(&mapped_design);
+		for n in &checked_design.nodes {
+			println!("{:?}", n);
+		}
+		println!("-------------------");
+		logical_design.build_from(&checked_design, &mapped_design);
+		logical_design.for_all(|_, node| println!("{:?}", node));
+		println!("-------------------");
 		physical_design.build_from(&logical_design);
 		serializable_design.build_from(&physical_design, &logical_design);
 		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();

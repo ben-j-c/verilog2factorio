@@ -5,6 +5,8 @@ use std::{
 	hash::Hash,
 };
 
+use itertools::rev;
+
 use crate::{checked_design::CheckedDesign, mapped_design::MappedDesign};
 
 #[derive(Debug, Clone)]
@@ -42,7 +44,7 @@ pub enum DeciderRowConjDisj {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signal {
 	Id(i32),
 	Everything,
@@ -103,9 +105,9 @@ struct LogicalDesignCache {
 	topological_order: Vec<NodeId>,
 	root_nodes: Vec<NodeId>,
 	leaf_nodes: Vec<NodeId>,
-	depth: HashMap<NodeId, i32>,
+	depth: Vec<i32>,
 	max_depth: i32,
-	rev_depth: HashMap<NodeId, i32>,
+	rev_depth: Vec<i32>,
 	idx_depth: HashMap<i32, Vec<NodeId>>,
 	idx_rev_depth: HashMap<i32, Vec<NodeId>>,
 	valid: bool,
@@ -133,9 +135,9 @@ impl LogicalDesign {
 				topological_order: vec![],
 				root_nodes: vec![],
 				leaf_nodes: vec![],
-				depth: HashMap::new(),
+				depth: vec![],
 				max_depth: 0,
-				rev_depth: HashMap::new(),
+				rev_depth: vec![],
 				idx_depth: HashMap::new(),
 				idx_rev_depth: HashMap::new(),
 				valid: true,
@@ -161,7 +163,6 @@ impl LogicalDesign {
 	}
 
 	pub fn connect(&mut self, out_node: NodeId, in_node: NodeId) {
-		println!("{:?} -> {:?}", out_node, in_node);
 		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout.push(in_node);
 		self.nodes[in_node.0].fanin.push(out_node);
@@ -180,7 +181,6 @@ impl LogicalDesign {
 			},
 			vec![output],
 		);
-		println!("new arithmetic {:?}", ret);
 		ret
 	}
 
@@ -250,13 +250,11 @@ impl LogicalDesign {
 			},
 			output,
 		);
-		println!("new constant {:?}", ret);
 		ret
 	}
 
 	pub fn add_lamp(&mut self, expr: (Signal, DeciderOperator, Signal)) -> NodeId {
 		let ret = self.add_node(NodeFunction::Lamp { expression: expr }, vec![]);
-		println!("new lamp {:?}", ret);
 		ret
 	}
 
@@ -273,7 +271,6 @@ impl LogicalDesign {
 
 	pub fn add_wire_floating(&mut self) -> NodeId {
 		let new_wire = self.add_node(NodeFunction::WireSum, vec![Signal::Everything]);
-		println!("new wire {:?}", new_wire);
 		new_wire
 	}
 
@@ -294,10 +291,64 @@ impl LogicalDesign {
 		let mut topological_order = vec![];
 		let mut root_nodes = vec![];
 		let mut leaf_nodes = vec![];
-		let mut depth = HashMap::new();
+		let mut depth = vec![0; self.nodes.len()];
 		let mut global_max_depth = -1;
 		let mut idx_depth = HashMap::<i32, Vec<NodeId>>::new();
 
+		for node in &self.nodes {
+			if node.fanin.is_empty() {
+				root_nodes.push(node.id);
+			}
+		}
+		while topo_seen.len() != self.nodes.len() {
+			let mut queue = LinkedList::new();
+			for id in &root_nodes {
+				queue.push_back(*id);
+			}
+			while !queue.is_empty() {
+				let id = queue.pop_front().unwrap();
+				if topo_seen.contains(&id) {
+					continue;
+				}
+				topo_seen.insert(id);
+				topological_order.push(id);
+				let mut max_depth = -1;
+				for fiid in &self.nodes[id.0].fanin {
+					max_depth = max(max_depth, depth[fiid.0]);
+				}
+				depth[id.0] = max_depth + 1;
+				global_max_depth = max(max_depth + 1, global_max_depth);
+				match idx_depth.entry(max_depth + 1) {
+					std::collections::hash_map::Entry::Occupied(mut e) => {
+						e.get_mut().push(id);
+					}
+					std::collections::hash_map::Entry::Vacant(e) => {
+						e.insert(vec![id]);
+					}
+				};
+				for foid in &self.nodes[id.0].fanout {
+					if self.nodes[foid.0]
+						.fanin
+						.iter()
+						.all(|fiid| (topo_seen.contains(fiid)))
+					{
+						queue.push_back(*foid);
+					}
+				}
+			}
+			root_nodes.clear();
+			for id in &topo_seen {
+				for foid in &self.nodes[id.0].fanout {
+					if !topo_seen.contains(foid) {
+						root_nodes.push(*foid);
+					}
+				}
+			}
+		}
+		assert_eq!(topo_seen.len(), self.nodes.len());
+
+		root_nodes.clear();
+		leaf_nodes.clear();
 		for node in &self.nodes {
 			if node.fanin.is_empty() {
 				root_nodes.push(node.id);
@@ -306,75 +357,62 @@ impl LogicalDesign {
 				leaf_nodes.push(node.id);
 			}
 		}
-		let mut queue = LinkedList::new();
-		for id in &root_nodes {
-			queue.push_back(*id);
-		}
-		while !queue.is_empty() {
-			let id = queue.pop_front().unwrap();
-			topo_seen.insert(id);
-			topological_order.push(id);
-			let mut max_depth = -1;
-			for fiid in &self.nodes[id.0].fanin {
-				if let Some(d) = depth.get(fiid) {
-					max_depth = max(max_depth, *d);
+		let mut rev_depth = vec![0; self.nodes.len()];
+		let mut idx_rev_depth = HashMap::<i32, Vec<NodeId>>::new();
+		topo_seen.clear();
+		while topo_seen.len() != self.nodes.len() {
+			let mut queue = LinkedList::new();
+			for id in &leaf_nodes {
+				queue.push_back(*id);
+			}
+			while !queue.is_empty() {
+				let id = queue.pop_front().unwrap();
+				if topo_seen.contains(&id) {
+					continue;
+				}
+				topo_seen.insert(id);
+				let mut max_depth = -1;
+				for foid in &self.nodes[id.0].fanout {
+					max_depth = max(max_depth, rev_depth[foid.0]);
+				}
+				rev_depth[id.0] = max_depth + 1;
+				match idx_rev_depth.entry(max_depth + 1) {
+					std::collections::hash_map::Entry::Occupied(mut e) => {
+						e.get_mut().push(id);
+					}
+					std::collections::hash_map::Entry::Vacant(e) => {
+						e.insert(vec![id]);
+					}
+				};
+				for fiid in &self.nodes[id.0].fanin {
+					if self.nodes[fiid.0]
+						.fanout
+						.iter()
+						.all(|foid| topo_seen.contains(foid))
+					{
+						queue.push_back(*fiid);
+					}
 				}
 			}
-			depth.insert(id, max_depth + 1);
-			global_max_depth = max(max_depth + 1, global_max_depth);
-			match idx_depth.entry(max_depth + 1) {
-				std::collections::hash_map::Entry::Occupied(mut e) => {
-					e.get_mut().push(id);
-				}
-				std::collections::hash_map::Entry::Vacant(e) => {
-					e.insert(vec![id]);
-				}
-			};
-			for foid in &self.nodes[id.0].fanout {
-				if self.nodes[foid.0]
-					.fanin
-					.iter()
-					.all(|fiid| topo_seen.contains(fiid))
-				{
-					queue.push_back(*foid);
+			leaf_nodes.clear();
+			for id in &topo_seen {
+				for fiid in &self.nodes[id.0].fanin {
+					if !topo_seen.contains(fiid) {
+						leaf_nodes.push(*fiid);
+					}
 				}
 			}
 		}
 
-		let mut rev_depth = HashMap::new();
-		let mut idx_rev_depth = HashMap::<i32, Vec<NodeId>>::new();
-		topo_seen.clear();
-		for id in &leaf_nodes {
-			queue.push_back(*id);
-		}
-		while !queue.is_empty() {
-			let id = queue.pop_front().unwrap();
-			topo_seen.insert(id);
-			let mut max_depth = -1;
-			for foid in &self.nodes[id.0].fanout {
-				if let Some(d) = rev_depth.get(foid) {
-					max_depth = max(max_depth, *d);
-				}
-			}
-			rev_depth.insert(id, max_depth + 1);
-			match idx_rev_depth.entry(max_depth + 1) {
-				std::collections::hash_map::Entry::Occupied(mut e) => {
-					e.get_mut().push(id);
-				}
-				std::collections::hash_map::Entry::Vacant(e) => {
-					e.insert(vec![id]);
-				}
-			};
-			for fiid in &self.nodes[id.0].fanin {
-				if self.nodes[fiid.0]
-					.fanout
-					.iter()
-					.all(|foid| topo_seen.contains(foid))
-				{
-					queue.push_back(*fiid);
-				}
+		assert_eq!(topo_seen.len(), self.nodes.len());
+
+		for node in &self.nodes {
+			if node.fanout.is_empty() {
+				leaf_nodes.push(node.id);
 			}
 		}
+
+		println!("{:?}", topological_order);
 
 		self.cache.replace(LogicalDesignCache {
 			topological_order,
@@ -435,7 +473,7 @@ impl LogicalDesign {
 	}
 
 	pub fn get_rev_depth(&self, id: NodeId) -> i32 {
-		*self.cache.borrow().rev_depth.get(&id).unwrap()
+		self.cache.borrow().rev_depth[id.0]
 	}
 
 	pub fn get_node(&self, id: NodeId) -> &Node {
@@ -511,6 +549,8 @@ pub fn get_complex_40_logical_design() -> LogicalDesign {
 
 #[cfg(test)]
 mod test {
+	use crate::{physical_design::PhysicalDesign, serializable_design::SerializableDesign};
+
 	use super::*;
 	#[allow(unused)]
 	use ArithmeticOperator as Aop;
@@ -579,5 +619,37 @@ mod test {
 		});
 
 		assert_eq!(d.get_node(constant).output.len(), 1);
+	}
+
+	#[test]
+	fn loopback() {
+		let mut d = LogicalDesign::new();
+		let counter = d.add_arithmetic_comb((Sig::Id(0), Aop::Add, Sig::Constant(0)), Sig::Id(0));
+		let filter_pre =
+			d.add_arithmetic_comb((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
+		let filter_post =
+			d.add_arithmetic_comb((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
+		d.add_wire(vec![counter, filter_pre], vec![counter, filter_post]);
+		d.for_all(|_, x| println!("{:?}", x));
+		d.for_all_topological_order(|x| println!("{:?}", x));
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d);
+		s.build_from(&p, &d)
+	}
+
+	#[test]
+	fn two_wire_sum() {
+		let mut d = LogicalDesign::new();
+		let a = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let b = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let c = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		d.add_wire(vec![a], vec![c]);
+		d.add_wire(vec![b], vec![c]);
+
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d);
+		s.build_from(&p, &d)
 	}
 }
