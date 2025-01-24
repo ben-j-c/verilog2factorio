@@ -1065,4 +1065,14 @@ mod test {
 		let l = ld::get_complex_40_logical_design();
 		p.build_from(&l, PlacementStrategy::ILPCoarse8);
 	}
+
+	#[test]
+	fn n_combs_ilp_coarse15() {
+		let mut p = PhysicalDesign::new();
+		let mut l = LogicalDesign::new();
+		for _ in 0..1000 {
+			l.add_nop(ld::Signal::Id(0), ld::Signal::Id(0));
+		}
+		p.build_from(&l, PlacementStrategy::ILPCoarse15);
+	}
 }
