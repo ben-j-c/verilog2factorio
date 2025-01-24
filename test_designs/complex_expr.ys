@@ -1,0 +1,9 @@
+
+read_verilog complex_expr.v
+hierarchy -check -top top
+flatten
+proc
+opt
+techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH=8
+write_json ./output/complex_expr.json
+show

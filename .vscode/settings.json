@@ -1,0 +1,6 @@
+{
+	"editor.formatOnSave": true,
+	"rust-analyzer.runnables.extraTestBinaryArgs": [
+		"--nocapture"
+	]
+}

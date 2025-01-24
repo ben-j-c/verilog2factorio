@@ -1,0 +1,9 @@
+
+read_verilog test1.v
+hierarchy -check -top top
+flatten
+proc
+opt
+techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH=8
+write_json ./output/test1.json
+show
