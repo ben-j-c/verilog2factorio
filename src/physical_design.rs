@@ -18,7 +18,8 @@ pub enum PlacementStrategy {
 	#[default]
 	ConnectivityAveraging,
 	ILP,
-	ILPCoarse,
+	ILPCoarse15,
+	ILPCoarse8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -218,7 +219,6 @@ impl PhysicalDesign {
 							continue;
 						}
 					};
-					println!("{:?}", comb_positions);
 					for (idx, (x, y)) in comb_positions.iter().enumerate() {
 						self.place_comb_physical((x * 2.0, *y), CombinatorId(idx), logical)
 							.unwrap();
@@ -227,7 +227,74 @@ impl PhysicalDesign {
 				}
 				panic!("Well we tried a very large area and it didn't work.");
 			}
-			PlacementStrategy::ILPCoarse => todo!(),
+			PlacementStrategy::ILPCoarse15 => {
+				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
+				for scale in scale_factors {
+					let comb_positions = match self.solve_as_ilp_coarse15(logical, scale) {
+						Ok(pos) => pos,
+						Err(e) => {
+							println!("WARN: ILP failed to place with scale {scale}");
+							println!("WARN: {e}");
+							continue;
+						}
+					};
+					let mut coarse_cells: HashMap<(usize, usize), usize> = HashMap::new();
+					for (idx, (x, y)) in comb_positions.iter().enumerate() {
+						let allocated_resources = match coarse_cells.get(&(*x, *y)) {
+							Some(&allocated) => {
+								coarse_cells.insert((*x, *y), allocated + 1);
+								allocated
+							}
+							None => {
+								coarse_cells.insert((*x, *y), 1);
+								0
+							}
+						};
+						let p = (
+							(*x * 3 + (allocated_resources % 3)) as f64 * 2.0,
+							(*y * 5 + allocated_resources / 3) as f64,
+						);
+						self.place_comb_physical(p, CombinatorId(idx), logical)
+							.unwrap();
+					}
+					return;
+				}
+				panic!("Well we tried a very large area and it didn't work.");
+			}
+			PlacementStrategy::ILPCoarse8 => {
+				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
+				for scale in scale_factors {
+					let comb_positions = match self.solve_as_ilp_coarse8(logical, scale) {
+						Ok(pos) => pos,
+						Err(e) => {
+							println!("WARN: ILP failed to place with scale {scale}");
+							println!("WARN: {e}");
+							continue;
+						}
+					};
+					let mut coarse_cells: HashMap<(usize, usize), usize> = HashMap::new();
+					for (idx, (x, y)) in comb_positions.iter().enumerate() {
+						let allocated_resources = match coarse_cells.get(&(*x, *y)) {
+							Some(&allocated) => {
+								coarse_cells.insert((*x, *y), allocated + 1);
+								allocated
+							}
+							None => {
+								coarse_cells.insert((*x, *y), 1);
+								0
+							}
+						};
+						let p = (
+							(*x * 2 + (allocated_resources % 2)) as f64 * 2.0,
+							(*y * 4 + allocated_resources / 2) as f64,
+						);
+						self.place_comb_physical(p, CombinatorId(idx), logical)
+							.unwrap();
+					}
+					return;
+				}
+				panic!("Well we tried a very large area and it didn't work.");
+			}
 		}
 	}
 
@@ -238,8 +305,6 @@ impl PhysicalDesign {
 		scale_factor: f64,
 	) -> Result<Vec<(f64, f64)>, ResolutionError> {
 		let side_length = (2.0 * self.combs.len() as f64 * scale_factor).sqrt().ceil() as i32;
-		println!("{}", self.combs.len());
-		println!("{side_length}");
 		use good_lp as ilp;
 		let mut problem = ilp::ProblemVariables::new();
 		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
@@ -317,6 +382,186 @@ impl PhysicalDesign {
 						for y in 0..vars[i][x].len() {
 							if solution.value(vars[i][x][y]) == 1.0 {
 								pos_vec.push((x as f64, y as f64));
+							}
+						}
+					}
+				}
+				assert_eq!(pos_vec.len(), self.combs.len());
+				Ok(pos_vec)
+			}
+			Err(e) => Err(e),
+		}
+	}
+
+	fn solve_as_ilp_coarse15(
+		&self,
+		ld: &LogicalDesign,
+		scale_factor: f64,
+	) -> Result<Vec<(usize, usize)>, ResolutionError> {
+		let side_length = (self.combs.len() as f64 * scale_factor / 15.0)
+			.sqrt()
+			.ceil() as i32;
+		use good_lp as ilp;
+		let mut problem = ilp::ProblemVariables::new();
+		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
+		let mut vars = vec![];
+		for (i, comb_i) in self.combs.iter().enumerate() {
+			for (j, comb_j) in self.combs.iter().enumerate() {
+				if j >= i {
+					break;
+				}
+				if ld.have_shared_wire(comb_i.logic, comb_j.logic) {
+					connections[i][j] = true;
+				}
+			}
+		}
+		for _comb_i in self.combs.iter().enumerate() {
+			let mut vars_plane = vec![vec![]; (side_length) as usize];
+			for x in 0..side_length {
+				for _y in 0..side_length {
+					vars_plane[x as usize].push(problem.add(variable().binary()));
+				}
+			}
+			vars.push(vars_plane);
+		}
+		let mut problem = ilp::default_solver(problem.minimise(0));
+		for i in 0..vars.len() {
+			let mut expr = ilp::Expression::with_capacity((side_length * side_length) as usize);
+			for x in 0..vars[i].len() {
+				for y in 0..vars[i][x].len() {
+					expr.add_mul(1, vars[i][x][y]);
+				}
+			}
+			problem.add_constraint(ilp::constraint!(expr == 1));
+		}
+		for x in 0..side_length as usize {
+			for y in 0..side_length as usize {
+				let mut expr = ilp::Expression::with_capacity(self.combs.len());
+				for i in 0..self.combs.len() {
+					expr.add_mul(1, vars[i][x][y]);
+				}
+				problem.add_constraint(ilp::constraint!(expr <= 15));
+			}
+		}
+		for i in 0..vars.len() {
+			for j in 0..i {
+				if connections[i][j] {
+					for x1 in 0..vars[i].len() {
+						for y1 in 0..vars[i][x1].len() {
+							for x2 in 0..vars[j].len() {
+								for y2 in 0..vars[j][x2].len() {
+									let dist = (x1 as i32 - 2 * x2 as i32).abs()
+										+ (y1 as i32 - y2 as i32).abs();
+									if dist > 1 {
+										problem.add_constraint(constraint!(
+											vars[i][x1][y1] + vars[j][x2][y2] <= 1
+										));
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		match problem.solve() {
+			Ok(solution) => {
+				let mut pos_vec = vec![];
+				for i in 0..vars.len() {
+					for x in 0..vars[i].len() {
+						for y in 0..vars[i][x].len() {
+							if solution.value(vars[i][x][y]) == 1.0 {
+								pos_vec.push((x, y));
+							}
+						}
+					}
+				}
+				assert_eq!(pos_vec.len(), self.combs.len());
+				Ok(pos_vec)
+			}
+			Err(e) => Err(e),
+		}
+	}
+
+	fn solve_as_ilp_coarse8(
+		&self,
+		ld: &LogicalDesign,
+		scale_factor: f64,
+	) -> Result<Vec<(usize, usize)>, ResolutionError> {
+		let side_length = (self.combs.len() as f64 * scale_factor / 8.0).sqrt().ceil() as i32;
+		use good_lp as ilp;
+		let mut problem = ilp::ProblemVariables::new();
+		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
+		let mut vars = vec![];
+		for (i, comb_i) in self.combs.iter().enumerate() {
+			for (j, comb_j) in self.combs.iter().enumerate() {
+				if j >= i {
+					break;
+				}
+				if ld.have_shared_wire(comb_i.logic, comb_j.logic) {
+					connections[i][j] = true;
+				}
+			}
+		}
+		for _comb_i in self.combs.iter().enumerate() {
+			let mut vars_plane = vec![vec![]; (side_length) as usize];
+			for x in 0..side_length {
+				for _y in 0..side_length {
+					vars_plane[x as usize].push(problem.add(variable().binary()));
+				}
+			}
+			vars.push(vars_plane);
+		}
+		let mut problem = ilp::default_solver(problem.minimise(0));
+		for i in 0..vars.len() {
+			let mut expr = ilp::Expression::with_capacity((side_length * side_length) as usize);
+			for x in 0..vars[i].len() {
+				for y in 0..vars[i][x].len() {
+					expr.add_mul(1, vars[i][x][y]);
+				}
+			}
+			problem.add_constraint(ilp::constraint!(expr == 1));
+		}
+		for x in 0..side_length as usize {
+			for y in 0..side_length as usize {
+				let mut expr = ilp::Expression::with_capacity(self.combs.len());
+				for i in 0..self.combs.len() {
+					expr.add_mul(1, vars[i][x][y]);
+				}
+				problem.add_constraint(ilp::constraint!(expr <= 8));
+			}
+		}
+		for i in 0..vars.len() {
+			for j in 0..i {
+				if connections[i][j] {
+					for x1 in 0..vars[i].len() {
+						for y1 in 0..vars[i][x1].len() {
+							for x2 in 0..vars[j].len() {
+								for y2 in 0..vars[j][x2].len() {
+									let dx = (x1 as i32 - 2 * x2 as i32).abs();
+									let dy = (y1 as i32 - 2 * y2 as i32).abs();
+									if dx > 1 || dy > 1 {
+										problem.add_constraint(constraint!(
+											vars[i][x1][y1] + vars[j][x2][y2] <= 1
+										));
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		match problem.solve() {
+			Ok(solution) => {
+				let mut pos_vec = vec![];
+				for i in 0..vars.len() {
+					for x in 0..vars[i].len() {
+						for y in 0..vars[i][x].len() {
+							if solution.value(vars[i][x][y]) == 1.0 {
+								pos_vec.push((x, y));
 							}
 						}
 					}
@@ -805,5 +1050,19 @@ mod test {
 			l.add_nop(ld::Signal::Id(0), ld::Signal::Id(0));
 		}
 		p.build_from(&l, PlacementStrategy::ILP);
+	}
+
+	#[test]
+	fn complex_40_ilp_coarse15() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_complex_40_logical_design();
+		p.build_from(&l, PlacementStrategy::ILPCoarse15);
+	}
+
+	#[test]
+	fn complex_40_ilp_coarse8() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_complex_40_logical_design();
+		p.build_from(&l, PlacementStrategy::ILPCoarse8);
 	}
 }
