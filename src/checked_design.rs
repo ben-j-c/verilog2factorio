@@ -458,7 +458,16 @@ impl CheckedDesign {
 				);
 				self.connect(new_constant, new_constant_output);
 				self.connect(new_constant_output, nodeid);
-			} else if let CoarseExpr::DriverChunk { driver_ioid, .. } = &exprs[0] {
+			} else if let CoarseExpr::DriverChunk {
+				driver_ioid,
+				shift,
+				bit_start,
+				bit_end,
+			} = &exprs[0]
+			{
+				if *shift == 0 && *bit_start == 0 && *bit_end == 32 {
+					continue;
+				}
 				let fiid = self.connected_id_map[*driver_ioid];
 				assert_eq!(node.fanin.len(), 1);
 				assert_eq!(fiid, node.fanin[0]);
@@ -930,7 +939,8 @@ impl CheckedDesign {
 				.iter()
 				.map(|fiid| depth[*fiid])
 				.max()
-				.unwrap_or(-1) + 1
+				.unwrap_or(-1)
+				+ 1
 		}
 		depth
 	}
@@ -1266,7 +1276,7 @@ mod test {
 		physical_design.build_from(&logical_design, PlacementStrategy::default());
 		serializable_design.build_from(&physical_design, &logical_design);
 		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
-		println!("{}", blueprint_json);
+		println!("\n{}\n", blueprint_json);
 	}
 
 	#[test]
