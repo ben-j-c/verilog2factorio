@@ -1,13 +1,20 @@
+ram block $__v2f_rom {
+	abits 8;
+	width 32;
+	cost 1;
+	init no_undef;
+	port ar "A" { }
+}
+
 ram block $__v2f_ram {
 	abits 32;
 	width 32;
-	byte 32;
 	cost 1;
 	init zero;
-	port ar "A00" "A01" "A02" "A03" "A04" "A05" "A06" "A07" "A08" "A09" {
+	port ar "A" {
 		optional;
 	}
-	port sr "AW00" "AW01" "AW02" "AW03" "AW04" "AW05" "AW06" "AW07" "AW08" "AW09" {
+	port sw "AW" {
 		clock anyedge;
 		clken;
 	}

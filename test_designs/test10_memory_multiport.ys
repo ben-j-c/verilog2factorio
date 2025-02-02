@@ -1,4 +1,4 @@
-read_verilog test8_memory.v
+read_verilog test10_memory_multiport.v
 hierarchy -libdir ../v2flib -check -top top
 
 #coarse
@@ -47,5 +47,5 @@ abc -fast -lut 8
 opt -fast
 
 #final
-write_json ./output/test8.json
+write_json ./output/test10.json
 show top

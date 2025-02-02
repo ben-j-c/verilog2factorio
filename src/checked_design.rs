@@ -37,6 +37,7 @@ pub enum ImplementableOp {
 	V2FRollingAccumulate,
 	DFF,
 	LUT(usize),
+	Memory,
 
 	Swizzle, // Imaginary cell
 }
@@ -65,6 +66,7 @@ impl ImplementableOp {
 			ImplementableOp::DFF => BodyType::MultiPart,
 			ImplementableOp::Swizzle => BodyType::MultiPart,
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
+			ImplementableOp::Memory => BodyType::MultiPart,
 		}
 	}
 
@@ -939,8 +941,7 @@ impl CheckedDesign {
 				.iter()
 				.map(|fiid| depth[*fiid])
 				.max()
-				.unwrap_or(-1)
-				+ 1
+				.unwrap_or(-1) + 1
 		}
 		depth
 	}
