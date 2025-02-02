@@ -28,7 +28,7 @@ use std::{
 	collections::{BTreeSet, HashMap, HashSet, LinkedList},
 	hash::Hash,
 	slice::Iter,
-	usize,
+	usize, vec,
 };
 
 use crate::{
@@ -128,11 +128,16 @@ pub enum NodeFunction {
 		op: ArithmeticOperator,
 		input_1: Signal,
 		input_2: Signal,
+		input_left_network: (bool, bool),
+		input_right_network: (bool, bool),
 	},
 	/// Game entity.
 	Decider {
 		expressions: Vec<(Signal, DeciderOperator, Signal)>,
 		expression_conj_disj: Vec<DeciderRowConjDisj>,
+		input_left_networks: Vec<(bool, bool)>,
+		input_right_networks: Vec<(bool, bool)>,
+		output_network: Vec<(bool, bool)>,
 		use_input_count: Vec<bool>,
 	},
 	/// Game entity.
@@ -320,6 +325,8 @@ impl LogicalDesign {
 				op: expr.1,
 				input_1: expr.0,
 				input_2: expr.2,
+				input_left_network: (true, true),
+				input_right_network: (true, true),
 			},
 			vec![output],
 		)
@@ -334,6 +341,8 @@ impl LogicalDesign {
 				op: ArithmeticOperator::Add,
 				input_1: input,
 				input_2: Signal::Constant(0),
+				input_left_network: (true, true),
+				input_right_network: (true, true),
 			},
 			vec![output],
 		)
@@ -348,8 +357,10 @@ impl LogicalDesign {
 			ret,
 			(input, DeciderOperator::Equal, Signal::Constant(0)),
 			DeciderRowConjDisj::FirstRow,
+			(true, true),
+			(true, true),
 		);
-		self.add_decider_comb_output(ret, output, false);
+		self.add_decider_comb_output(ret, output, false, (true, true));
 		ret
 	}
 
@@ -363,8 +374,10 @@ impl LogicalDesign {
 				ic,
 				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
+				(true, true),
+				(true, true),
 			);
-			self.add_decider_comb_output(ic, data, true);
+			self.add_decider_comb_output(ic, data, true, (true, true));
 			ic
 		};
 
@@ -374,8 +387,10 @@ impl LogicalDesign {
 				mc,
 				(clk, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
+				(true, true),
+				(true, true),
 			);
-			self.add_decider_comb_output(mc, data, true);
+			self.add_decider_comb_output(mc, data, true, (true, true));
 			mc
 		};
 
@@ -476,6 +491,9 @@ impl LogicalDesign {
 				expressions: vec![],
 				expression_conj_disj: vec![],
 				use_input_count: vec![],
+				input_left_networks: vec![],
+				input_right_networks: vec![],
+				output_network: vec![],
 			},
 			vec![],
 		)
@@ -489,15 +507,21 @@ impl LogicalDesign {
 		id: NodeId,
 		expr: (Signal, DeciderOperator, Signal),
 		conj_disj: DeciderRowConjDisj,
+		left_network: (bool, bool),
+		right_network: (bool, bool),
 	) {
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
 				expressions,
 				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
 				..
 			} => {
 				expressions.push(expr);
-				expression_conj_disj.push(conj_disj)
+				expression_conj_disj.push(conj_disj);
+				input_left_networks.push(left_network);
+				input_right_networks.push(right_network);
 			}
 			_ => assert!(
 				false,
@@ -514,12 +538,16 @@ impl LogicalDesign {
 		id: NodeId,
 		output: Signal,
 		use_input_count_for_output: bool,
+		network: (bool, bool),
 	) {
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
-				use_input_count, ..
+				use_input_count,
+				output_network,
+				..
 			} => {
 				use_input_count.push(use_input_count_for_output);
+				output_network.push(network);
 				self.nodes[id.0].output.push(output);
 			}
 			_ => assert!(
@@ -849,7 +877,7 @@ impl LogicalDesign {
 		let mut counter = vec![false; width];
 
 		let lut_comb = self.add_decider_comb();
-		self.add_decider_comb_output(lut_comb, sig_out, false);
+		self.add_decider_comb_output(lut_comb, sig_out, false, (true, true));
 		let retwire = self.add_wire_red(vec![], vec![lut_comb]);
 
 		let mut first = true;
@@ -875,6 +903,8 @@ impl LogicalDesign {
 						lut_comb,
 						(sig_left, DeciderOperator::Equal, sig_right),
 						conj_disj,
+						(true, true),
+						(true, true),
 					);
 					first_condition = false;
 					first = false;

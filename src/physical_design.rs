@@ -5,11 +5,7 @@ use std::{
 	vec,
 };
 
-use good_lp::{
-	constraint, solvers::coin_cbc::CoinCbcSolution, variable, Constraint, ResolutionError,
-	Solution, SolverModel, Variable,
-};
-use itertools::Itertools;
+use good_lp::{constraint, variable, ResolutionError, Solution, SolverModel};
 
 use crate::logical_design::{self as ld, LogicalDesign, WireColour};
 

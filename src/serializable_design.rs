@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::izip;
 use serde::Serialize;
 
 use crate::logical_design::{
@@ -139,6 +140,10 @@ struct ArithmeticCombinatorParameters {
 	operation: &'static str,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	output_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	first_signal_networks: Option<HashMap<String, bool>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	second_signal_networks: Option<HashMap<String, bool>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -158,12 +163,17 @@ struct DeciderCombinatorCondition {
 	comparator: &'static str,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	compare_type: Option<&'static str>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	first_signal_networks: Option<HashMap<String, bool>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	second_signal_networks: Option<HashMap<String, bool>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct DeciderCombinatorOutput {
 	signal: SignalID,
 	copy_count_from_input: bool,
+	networks: Option<HashMap<String, bool>>,
 }
 
 #[allow(dead_code)]
@@ -294,6 +304,8 @@ impl Combinator {
 				op,
 				input_1,
 				input_2,
+				input_left_network,
+				input_right_network,
 			} => Some(ControlBehavior {
 				circuit_enabled: None,
 				is_on: None,
@@ -304,6 +316,8 @@ impl Combinator {
 					second_constant: input_2.resolve_constant(),
 					operation: op.resolve_string(),
 					output_signal: node.output[0].resolve_signal_id(),
+					first_signal_networks: resolve_network(*input_left_network),
+					second_signal_networks: resolve_network(*input_right_network),
 				}),
 				decider_conditions: None,
 				circuit_condition: None,
@@ -314,38 +328,56 @@ impl Combinator {
 				expressions,
 				expression_conj_disj,
 				use_input_count,
+				input_left_networks: input_left_network,
+				input_right_networks: input_right_network,
+				output_network,
 			} => Some(ControlBehavior {
 				circuit_enabled: None,
 				is_on: None,
 				arithmetic_conditions: None,
 				decider_conditions: Some(DeciderCombinatorParameters {
-					conditions: expressions
-						.iter()
-						.zip(expression_conj_disj.iter())
-						.enumerate()
-						.map(
-							|(idx, ((left_signal, operator, right_signal), row_operator))| {
-								DeciderCombinatorCondition {
-									first_signal: left_signal.resolve_signal_id(),
-									second_signal: right_signal.resolve_signal_id(),
-									constant: right_signal.resolve_constant(),
-									comparator: operator.resolve_string(),
-									compare_type: if idx == 0 {
-										None
-									} else {
-										row_operator.resolve_string()
-									},
-								}
-							},
-						)
-						.collect(),
+					conditions: izip!(
+						expressions.iter(),
+						expression_conj_disj.iter(),
+						input_left_network.iter(),
+						input_right_network.iter(),
+					)
+					.enumerate()
+					.map(
+						|(
+							idx,
+							(
+								(left_signal, operator, right_signal),
+								row_operator,
+								left_network,
+								right_network,
+							),
+						)| {
+							DeciderCombinatorCondition {
+								first_signal: left_signal.resolve_signal_id(),
+								second_signal: right_signal.resolve_signal_id(),
+								constant: right_signal.resolve_constant(),
+								comparator: operator.resolve_string(),
+								compare_type: if idx == 0 {
+									None
+								} else {
+									row_operator.resolve_string()
+								},
+								first_signal_networks: resolve_network(*left_network),
+								second_signal_networks: resolve_network(*right_network),
+							}
+						},
+					)
+					.collect(),
 					outputs: node
 						.output
 						.iter()
+						.zip(output_network.iter())
 						.enumerate()
-						.map(|(idx, signal)| DeciderCombinatorOutput {
+						.map(|(idx, (signal, network))| DeciderCombinatorOutput {
 							signal: signal.resolve_signal_id().unwrap(),
 							copy_count_from_input: use_input_count[idx],
+							networks: resolve_network(*network),
 						})
 						.collect(),
 				}),
@@ -395,6 +427,8 @@ impl Combinator {
 					constant: expression.2.resolve_constant(),
 					comparator: expression.1.resolve_string(),
 					compare_type: None,
+					first_signal_networks: None,
+					second_signal_networks: None,
 				}),
 				sections: None,
 				use_color: None,
@@ -483,6 +517,16 @@ impl ArithmeticOperator {
 			ArithmeticOperator::Xor => "XOR",
 		}
 	}
+}
+
+fn resolve_network(val: (bool, bool)) -> Option<HashMap<String, bool>> {
+	let mut ret = HashMap::new();
+	if val.0 == true && val.1 == true {
+		return None;
+	}
+	ret.insert("red".to_owned(), val.0);
+	ret.insert("green".to_owned(), val.1);
+	return Some(ret);
 }
 
 #[cfg(test)]

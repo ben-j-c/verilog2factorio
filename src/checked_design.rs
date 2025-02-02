@@ -1190,6 +1190,8 @@ impl CheckedDesign {
 				id,
 				(sig_left, op, sig_right),
 				logical_design::DeciderRowConjDisj::Or,
+				(true, true),
+				(true, true),
 			);
 			return (id, id);
 		}

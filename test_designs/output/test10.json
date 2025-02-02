@@ -52,7 +52,8 @@
             "WR_WIDE_CONTINUATION": "0"
           },
           "attributes": {
-            "src": "test10_memory_multiport.v:8.13-8.19"
+            "speed": "00000000000000000000000000000001",
+            "src": "test10_memory_multiport.v:8.25-8.31"
           },
           "port_directions": {
             "RD_ADDR": "input",
