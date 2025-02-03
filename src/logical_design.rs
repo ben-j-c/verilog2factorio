@@ -152,7 +152,7 @@ pub enum NodeFunction {
 
 /// An id that is unique in a design. Can be used to uniquely identify a node in a design. Use this id to make connections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NodeId(usize);
+pub struct NodeId(pub(crate) usize);
 
 impl From<NodeId> for usize {
 	fn from(v: NodeId) -> Self {
@@ -926,6 +926,22 @@ impl LogicalDesign {
 
 	pub(crate) fn have_shared_wire(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
 		let node = &self.nodes[ldid_1.0];
+		for wire in node.iter_fanin_both().chain(node.iter_fanout_both()) {
+			if self
+				.get_node(*wire)
+				.iter_fanin_both()
+				.chain(self.get_node(*wire).iter_fanout_both())
+				.any(|id| *id == ldid_2)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// To be used by model checker
+	pub(crate) fn have_shared_network(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
+		let node = &self.nodes[ldid_1.0];
 		for wire in node.iter_fanin_both() {
 			if self.get_local_cell_io_network(*wire).contains(&ldid_2) {
 				return true;
@@ -992,6 +1008,10 @@ impl LogicalDesign {
 		}
 		retval
 	}
+
+	pub fn set_description_node(&mut self, id: NodeId, desc: String) {
+		self.nodes[id.0].description = Some(desc);
+	}
 }
 
 #[cfg(test)]
@@ -1039,6 +1059,40 @@ pub fn get_complex_40_logical_design() -> LogicalDesign {
 		d.add_wire_red(vec![mults[i]], vec![lamps[i]]);
 	}
 	d
+}
+
+#[cfg(test)]
+pub(crate) fn get_large_logical_design(n: usize) -> LogicalDesign {
+	use crate::logical_design;
+
+	let mut l = LogicalDesign::new();
+	for _ in 0..n {
+		let id = l.add_nop(logical_design::Signal::Id(0), logical_design::Signal::Id(0));
+		l.set_description_node(id, format!("{}", id.0));
+	}
+	for i in 0..20 {
+		for j in (20..n).step_by(20) {
+			let left = NodeId(j + i - 20);
+			let right = NodeId(j + i);
+			l.add_wire_green(vec![left], vec![right]);
+		}
+	}
+	for i in (1..n).step_by(2) {
+		let left = NodeId(i - 1);
+		let right = NodeId(i);
+		l.add_wire_red(vec![left], vec![right]);
+	}
+	for i in (6..n).step_by(7) {
+		let left = NodeId(i - 3);
+		let right = NodeId(i);
+		l.add_wire_red(vec![left], vec![right]);
+	}
+	for i in (10..n).step_by(11) {
+		let left = NodeId(i - 7);
+		let right = NodeId(i);
+		l.add_wire_red(vec![left], vec![right]);
+	}
+	l
 }
 
 #[cfg(test)]

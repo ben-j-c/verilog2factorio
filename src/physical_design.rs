@@ -7,7 +7,10 @@ use std::{
 
 use good_lp::{constraint, variable, ResolutionError, Solution, SolverModel};
 
-use crate::logical_design::{self as ld, LogicalDesign, WireColour};
+use crate::{
+	logical_design::{self as ld, LogicalDesign, WireColour},
+	svg::SVG,
+};
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum PlacementStrategy {
@@ -203,6 +206,24 @@ impl PhysicalDesign {
 						ld::NodeFunction::WireSum(..) => {}
 					};
 				});
+				let min_x = self
+					.combs
+					.iter()
+					.map(|c| c.position.0)
+					.min_by(|a, b| a.total_cmp(b))
+					.unwrap()
+					.floor();
+				let min_y = self
+					.combs
+					.iter()
+					.map(|c| c.position.1)
+					.min_by(|a, b| a.total_cmp(b))
+					.unwrap()
+					.floor();
+				for c in &mut self.combs {
+					c.position.0 -= min_x - 1.0;
+					c.position.1 -= min_y - 1.0;
+				}
 			}
 			PlacementStrategy::ILP => {
 				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
@@ -926,6 +947,69 @@ impl PhysicalDesign {
 			terminal2_id: term_b,
 		})
 	}
+
+	fn save_svg(&self, ld: &LogicalDesign, filename: &str) {
+		const SCALE: f64 = 20.0;
+		const GREY: (u8, u8, u8) = (230, 230, 230);
+		let mut svg = SVG::new();
+		let mut rects = vec![];
+		for c in &self.combs {
+			let node = ld.get_node(c.logic);
+			let mut x = (c.position.0 * (SCALE + 2.0)) as i32;
+			let y = (c.position.1 * (SCALE + 2.0)) as i32;
+			let (w, h, label, hover) = match &node.function {
+				ld::NodeFunction::Arithmetic { op, .. } => {
+					x -= SCALE as i32 / 2;
+					(
+						SCALE * 2.0,
+						SCALE,
+						Some(op.resolve_string()),
+						node.description.clone(),
+					)
+				}
+				ld::NodeFunction::Decider { expressions, .. } => {
+					x -= SCALE as i32 / 2;
+					if let Some(e) = expressions.first() {
+						(
+							SCALE * 2.0,
+							SCALE,
+							Some(e.1.resolve_string()),
+							node.description.clone(),
+						)
+					} else {
+						(SCALE * 2.0, SCALE, Some("D"), node.description.clone())
+					}
+				}
+				ld::NodeFunction::Constant { .. } => {
+					(SCALE, SCALE, Some("C"), node.description.clone())
+				}
+				ld::NodeFunction::Lamp { .. } => {
+					(SCALE, SCALE, Some("L"), node.description.clone())
+				}
+				_ => {
+					unreachable!()
+				}
+			};
+			rects.push(svg.add_rect(
+				x,
+				y,
+				w as i32,
+				h as i32,
+				GREY,
+				label.map(|x| x.to_owned()),
+				hover,
+			));
+		}
+		for wire in &self.wires {
+			svg.add_wire(
+				wire.node1_id.0,
+				wire.node2_id.0,
+				wire.terminal1_id.0 - 1,
+				wire.terminal2_id.0 - 1,
+			);
+		}
+		svg.save(filename).unwrap()
+	}
 }
 
 #[allow(dead_code)]
@@ -1016,6 +1100,8 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 
 #[cfg(test)]
 mod test {
+	use crate::logical_design::{get_large_logical_design, NodeId};
+
 	use super::*;
 	#[test]
 	fn new() {
@@ -1053,6 +1139,7 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_complex_40_logical_design();
 		p.build_from(&l, PlacementStrategy::ILPCoarse15);
+		p.save_svg(&l, "svg/n_combs_ilp_coarse15.svg");
 	}
 
 	#[test]
@@ -1063,12 +1150,10 @@ mod test {
 	}
 
 	#[test]
-	fn n_combs_ilp_coarse15() {
+	fn n_combs() {
 		let mut p = PhysicalDesign::new();
-		let mut l = LogicalDesign::new();
-		for _ in 0..1000 {
-			l.add_nop(ld::Signal::Id(0), ld::Signal::Id(0));
-		}
-		p.build_from(&l, PlacementStrategy::ILPCoarse15);
+		let l = get_large_logical_design(200);
+		p.build_from(&l, PlacementStrategy::ConnectivityAveraging);
+		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg");
 	}
 }

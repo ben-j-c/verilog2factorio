@@ -479,7 +479,7 @@ impl Signal {
 }
 
 impl DeciderRowConjDisj {
-	fn resolve_string(&self) -> Option<&'static str> {
+	pub fn resolve_string(&self) -> Option<&'static str> {
 		match self {
 			logical_design::DeciderRowConjDisj::And => Some("and"),
 			logical_design::DeciderRowConjDisj::Or => Some("or"),
@@ -489,7 +489,7 @@ impl DeciderRowConjDisj {
 }
 
 impl DeciderOperator {
-	fn resolve_string(&self) -> &'static str {
+	pub fn resolve_string(&self) -> &'static str {
 		match self {
 			DeciderOperator::LessThan => "<",
 			DeciderOperator::GreaterThan => ">",
@@ -502,7 +502,7 @@ impl DeciderOperator {
 }
 
 impl ArithmeticOperator {
-	fn resolve_string(&self) -> &'static str {
+	pub fn resolve_string(&self) -> &'static str {
 		match self {
 			ArithmeticOperator::Mult => "*",
 			ArithmeticOperator::Div => "/",
