@@ -1,14 +1,15 @@
 use core::panic;
 use std::{
 	cmp::Ordering,
-	collections::{HashMap, HashSet},
+	collections::{BTreeSet, HashMap, HashSet},
+	hash::Hash,
 	vec,
 };
 
 use good_lp::{constraint, variable, ResolutionError, Solution, SolverModel};
 
 use crate::{
-	logical_design::{self as ld, LogicalDesign, WireColour},
+	logical_design::{self as ld, LogicalDesign, NodeId, WireColour},
 	svg::SVG,
 };
 
@@ -103,6 +104,8 @@ pub struct PhysicalDesign {
 	idx_wires: HashMap<ld::NodeId, WireId>,
 	idx_poles: HashMap<ld::NodeId, PoleId>,
 	space: HashMap<(i32, i32), SpaceNode>,
+
+	connected_wires: Vec<Vec<WireId>>,
 }
 
 #[allow(dead_code)]
@@ -130,6 +133,7 @@ impl PhysicalDesign {
 			idx_wires: HashMap::new(),
 			idx_poles: HashMap::new(),
 			space: HashMap::new(),
+			connected_wires: vec![],
 		}
 	}
 
@@ -137,6 +141,7 @@ impl PhysicalDesign {
 		self.extract_combs(logical);
 		self.place_combs(logical, placement_strategy);
 		self.connect_combs(logical);
+		self.validate_against(logical);
 	}
 
 	pub fn for_all_combinators<F>(&self, mut func: F)
@@ -181,6 +186,7 @@ impl PhysicalDesign {
 					orientation: 4,
 				});
 				self.idx_combs.insert(ld_node.id, id);
+				self.connected_wires.push(vec![]);
 			}
 			ld::NodeFunction::WireSum(_c) => { /* Do nothing for now */ }
 		});
@@ -938,6 +944,8 @@ impl PhysicalDesign {
 			}
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
+		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
+		self.connected_wires[id_comb_b.0].push(WireId(id_wire));
 		self.wires.push(Wire {
 			id: WireId(id_wire),
 			logic: ld_id_wire,
@@ -945,7 +953,7 @@ impl PhysicalDesign {
 			node2_id: id_comb_b,
 			terminal1_id: term_a,
 			terminal2_id: term_b,
-		})
+		});
 	}
 
 	fn save_svg(&self, ld: &LogicalDesign, filename: &str) {
@@ -1009,6 +1017,75 @@ impl PhysicalDesign {
 			);
 		}
 		svg.save(filename).unwrap()
+	}
+
+	fn validate_against(&self, ld: &LogicalDesign) {
+		for c in &self.combs {
+			let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
+			let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
+			let n3 = ld.get_fanin_network(c.logic, WireColour::Red);
+			let n4 = ld.get_fanin_network(c.logic, WireColour::Green);
+			let n5: HashSet<NodeId> = self
+				.get_fanout_network(c.id, WireColour::Red)
+				.iter()
+				.map(|coid| self.get_logical(*coid, ld).id)
+				.collect();
+			let n6: HashSet<NodeId> = self
+				.get_fanout_network(c.id, WireColour::Green)
+				.iter()
+				.map(|id| self.get_logical(*id, ld).id)
+				.collect();
+			let n7: HashSet<NodeId> = self
+				.get_fanin_network(c.id, WireColour::Red)
+				.iter()
+				.map(|id| self.get_logical(*id, ld).id)
+				.collect();
+			let n8: HashSet<NodeId> = self
+				.get_fanin_network(c.id, WireColour::Green)
+				.iter()
+				.map(|id| self.get_logical(*id, ld).id)
+				.collect();
+			assert_eq!(n1, n5);
+			assert_eq!(n2, n6);
+			assert_eq!(n3, n7);
+			assert_eq!(n4, n8);
+		}
+	}
+
+	pub(crate) fn get_fanin_network(
+		&self,
+		coid: CombinatorId,
+		colour: WireColour,
+		ld: &LogicalDesign,
+	) -> HashSet<CombinatorId> {
+		let node = &self.combs[coid.0];
+		match ld.get_node(node.logic).function {
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::WireSum(..) => return HashSet::new(),
+			_ => {}
+		}
+		let mut queue = BTreeSet::new();
+		let mut seen = HashSet::new();
+		let mut retval = HashSet::new();
+		seen.insert(coid);
+		retval.insert(coid);
+		for wiid in &self.connected_wires[coid.0] {
+			let wire = &self.wires[wiid.0];
+			if wire.node2_id == coid {
+				queue.insert(wiid);
+			}
+		}
+		while !queue.is_empty() {}
+		retval
+	}
+
+	pub(crate) fn get_fanout_network(
+		&self,
+		coid: CombinatorId,
+		colour: WireColour,
+	) -> HashSet<CombinatorId> {
+		todo!()
 	}
 }
 

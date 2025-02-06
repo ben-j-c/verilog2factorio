@@ -939,20 +939,26 @@ impl LogicalDesign {
 		return false;
 	}
 
-	// To be used by model checker
-	pub(crate) fn have_shared_network(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
+	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
+		let node = &self.nodes[ldid.0];
+		let mut retval = HashSet::new();
+		for wire in node.iter_fanin(colour) {
+			let localio: HashSet<NodeId> =
+				self.get_local_cell_io_network(*wire).into_iter().collect();
+			retval = retval.union(&localio).copied().collect();
+		}
+		return retval;
+	}
+
+	pub(crate) fn get_fanout_network(&self, ldid_1: NodeId, colour: WireColour) -> HashSet<NodeId> {
 		let node = &self.nodes[ldid_1.0];
-		for wire in node.iter_fanin_both() {
-			if self.get_local_cell_io_network(*wire).contains(&ldid_2) {
-				return true;
-			}
+		let mut retval = HashSet::new();
+		for wire in node.iter_fanout(colour) {
+			let localio: HashSet<NodeId> =
+				self.get_local_cell_io_network(*wire).into_iter().collect();
+			retval = retval.union(&localio).copied().collect();
 		}
-		for wire in node.iter_fanout_both() {
-			if self.get_local_cell_io_network(*wire).contains(&ldid_2) {
-				return true;
-			}
-		}
-		return false;
+		return retval;
 	}
 
 	fn get_wire_colour(&self, nodeid: NodeId) -> WireColour {
