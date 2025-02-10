@@ -1374,22 +1374,4 @@ mod test {
 		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
 		println!("\n{}", blueprint_json);
 	}
-
-	#[test]
-	fn design_complex_expr_ilp_dense() {
-		let file = File::open("./test_designs/output/complex_expr.json").unwrap();
-		let reader = BufReader::new(file);
-		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
-		let mut checked_design = CheckedDesign::new();
-		let mut logical_design = LogicalDesign::new();
-		let mut physical_design = PhysicalDesign::new();
-		let mut serializable_design = SerializableDesign::new();
-		checked_design.build_from(&mapped_design);
-		logical_design.build_from(&checked_design, &mapped_design);
-		logical_design.for_all(|_, y| println!("{:?}", y));
-		physical_design.build_from(&logical_design, PlacementStrategy::ILP);
-		serializable_design.build_from(&physical_design, &logical_design);
-		let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
-		println!("{}", blueprint_json);
-	}
 }

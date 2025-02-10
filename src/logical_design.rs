@@ -26,16 +26,25 @@ use std::{
 	cell::RefCell,
 	cmp::max,
 	collections::{BTreeSet, HashMap, HashSet, LinkedList},
+	fmt::Display,
 	hash::Hash,
+	process::Output,
 	slice::Iter,
 	usize, vec,
 };
+
+use itertools::{izip, Itertools};
 
 use crate::{
 	checked_design::CheckedDesign,
 	connected_design::CoarseExpr,
 	mapped_design::{BitSliceOps, MappedDesign},
 };
+
+pub const NET_RED_GREEN: (bool, bool) = (true, true);
+pub const NET_RED: (bool, bool) = (true, false);
+pub const NET_GREEN: (bool, bool) = (false, true);
+pub const NET_NONE: (bool, bool) = (false, false);
 
 // Supported Arithmetic Combinator operations as in the game.
 #[derive(Debug, Clone)]
@@ -222,6 +231,59 @@ impl Node {
 	pub fn fanout_empty(&self) -> bool {
 		self.fanout_green.is_empty() && self.fanout_red.is_empty()
 	}
+
+	pub(crate) fn is_constant(&self) -> bool {
+		match &self.function {
+			NodeFunction::Constant { .. } => true,
+			_ => false,
+		}
+	}
+
+	pub(crate) fn is_decider(&self) -> bool {
+		match &self.function {
+			NodeFunction::Decider { .. } => true,
+			_ => false,
+		}
+	}
+
+	pub(crate) fn is_arithmetic(&self) -> bool {
+		match &self.function {
+			NodeFunction::Arithmetic { .. } => true,
+			_ => false,
+		}
+	}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ResetSpec {
+	Sync(Signal),
+	Async(Signal),
+	Disabled,
+}
+
+pub struct MemoryReadPort {
+	pub addr: Signal,
+	pub data: Signal,
+	pub clk: Option<Signal>,
+	pub en: Option<Signal>,
+	pub rst: ResetSpec,
+	pub transparent: bool,
+}
+
+pub struct MemoryWritePort {
+	pub addr: Signal,
+	pub data: Signal,
+	pub clk: Signal,
+	pub en: Option<Signal>,
+}
+
+#[derive(Debug)]
+pub struct MemoryPortReadFilled {
+	pub addr_wire: NodeId,
+	pub data: NodeId,
+	pub clk_wire: Option<NodeId>,
+	pub en_wire: Option<NodeId>,
+	pub rst_wire: Option<NodeId>,
 }
 
 /// Performance? never heard of her.
@@ -300,6 +362,10 @@ impl LogicalDesign {
 	/// A subsequent call to this function where that red wire is now the `out_node` and some other combinator is the `in_node` will result in the arithmetic comb having an output wire
 	/// attached to the input of the second comb.
 	pub fn connect_red(&mut self, out_node: NodeId, in_node: NodeId) {
+		assert!(
+			self.is_wire(out_node) != self.is_wire(in_node),
+			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
+		);
 		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout_red.push(in_node);
 		self.nodes[in_node.0].fanin_red.push(out_node);
@@ -307,6 +373,10 @@ impl LogicalDesign {
 
 	/// See [`connect_red`] but replace red with green.
 	pub fn connect_green(&mut self, out_node: NodeId, in_node: NodeId) {
+		assert!(
+			self.is_wire(out_node) != self.is_wire(in_node),
+			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
+		);
 		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout_green.push(in_node);
 		self.nodes[in_node.0].fanin_green.push(out_node);
@@ -325,8 +395,8 @@ impl LogicalDesign {
 				op: expr.1,
 				input_1: expr.0,
 				input_2: expr.2,
-				input_left_network: (true, true),
-				input_right_network: (true, true),
+				input_left_network: NET_RED_GREEN,
+				input_right_network: NET_RED_GREEN,
 			},
 			vec![output],
 		)
@@ -341,8 +411,8 @@ impl LogicalDesign {
 				op: ArithmeticOperator::Add,
 				input_1: input,
 				input_2: Signal::Constant(0),
-				input_left_network: (true, true),
-				input_right_network: (true, true),
+				input_left_network: NET_RED_GREEN,
+				input_right_network: NET_RED_GREEN,
 			},
 			vec![output],
 		)
@@ -357,10 +427,10 @@ impl LogicalDesign {
 			ret,
 			(input, DeciderOperator::Equal, Signal::Constant(0)),
 			DeciderRowConjDisj::FirstRow,
-			(true, true),
-			(true, true),
+			NET_RED_GREEN,
+			NET_RED_GREEN,
 		);
-		self.add_decider_comb_output(ret, output, false, (true, true));
+		self.add_decider_comb_output(ret, output, false, NET_RED_GREEN);
 		ret
 	}
 
@@ -374,10 +444,10 @@ impl LogicalDesign {
 				ic,
 				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
-				(true, true),
-				(true, true),
+				NET_RED_GREEN,
+				NET_RED_GREEN,
 			);
-			self.add_decider_comb_output(ic, data, true, (true, true));
+			self.add_decider_comb_output(ic, data, true, NET_RED_GREEN);
 			ic
 		};
 
@@ -387,10 +457,10 @@ impl LogicalDesign {
 				mc,
 				(clk, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
-				(true, true),
-				(true, true),
+				NET_RED_GREEN,
+				NET_RED_GREEN,
 			);
-			self.add_decider_comb_output(mc, data, true, (true, true));
+			self.add_decider_comb_output(mc, data, true, NET_RED_GREEN);
 			mc
 		};
 
@@ -426,6 +496,262 @@ impl LogicalDesign {
 			self.add_wire_red(vec![latch_out_2], vec![final_out]);
 			(latch_in_wire_1, clk_wire, final_out)
 		}
+	}
+
+	pub fn add_adffe(
+		&mut self,
+		input: Signal,
+		clk: Signal,
+		en: Signal,
+		arst: Signal,
+		output: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
+		todo!()
+	}
+
+	pub fn add_dffe(
+		&mut self,
+		input: Signal,
+		clk: Signal,
+		en: Signal,
+		output: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId) {
+		// If the compiler was aware of either green or red wires, then clk_buf could be eliminated.
+		//
+		// en---r-----------------+
+		//                        |
+		// clk--r--clk_buf--g--clk_en_buf--r--dff--r--output
+		//                                     |
+		// input--r----------------------------+
+		let (d_wire, clk_wire, q) = self.add_dff(input, clk, output);
+		let clk_en_buf = self.add_decider_comb();
+		self.add_decider_comb_input(
+			clk_en_buf,
+			(en, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		self.add_decider_comb_output(clk_en_buf, clk, true, NET_GREEN);
+		let clk_buf = self.add_nop(clk, clk);
+		self.add_wire_green(vec![clk_buf], vec![clk_en_buf]);
+		self.connect_red(clk_en_buf, clk_wire);
+		let clk_in_wire = self.add_wire_red(vec![], vec![clk_buf]);
+		let en_wire = self.add_wire_red(vec![], vec![clk_en_buf]);
+		(d_wire, clk_in_wire, en_wire, q)
+	}
+
+	pub fn add_sdffe(
+		&mut self,
+		input: Signal,
+		clk: Signal,
+		srst: Signal,
+		en: Signal,
+		output: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
+		todo!()
+	}
+
+	pub fn add_rom(
+		&mut self,
+		ports: Vec<MemoryReadPort>,
+		rom_values: Vec<i32>,
+		density: Option<i32>,
+	) -> Vec<MemoryPortReadFilled> {
+		let mut addresses_ret = vec![];
+		let mut data_ret = vec![];
+		let mut en_ret = vec![];
+		let mut clk_ret = vec![];
+		let mut rst_ret = vec![];
+
+		assert!(
+			rom_values.len() <= u32::MAX as usize,
+			"Can't support more than {} distinct addresses (32-bit restriction)",
+			u32::MAX
+		);
+		let mut preferred_output = None;
+		for p in &ports {
+			preferred_output = match preferred_output {
+				Some(o) => Some(o),
+				None => Some(p.data),
+			}
+		}
+		let preferred_output = preferred_output.unwrap();
+		let mut rom_combs = vec![];
+		if let Some(packing) = &density {
+			for values in &rom_values.iter().chunks(*packing as usize) {
+				let mut signals = vec![];
+				let mut constants = vec![];
+				for (i, v) in values.enumerate() {
+					signals.push(Signal::Id(i as i32));
+					constants.push(*v);
+				}
+				rom_combs.push(self.add_constant_comb(signals, constants));
+			}
+		} else {
+			for value in rom_values.iter() {
+				rom_combs.push(self.add_constant_comb(vec![preferred_output], vec![*value]));
+			}
+		}
+
+		for p in &ports {
+			let mut last_wire_input = self.add_wire_floating_red();
+			let mut mux1s = vec![];
+			addresses_ret.push(last_wire_input);
+			for (addr, constant) in rom_combs.iter().enumerate() {
+				let mux = self.add_decider_comb();
+				mux1s.push(mux);
+				if let Some(packing) = &density {
+					self.add_decider_comb_input(
+						mux,
+						(
+							p.addr,
+							DeciderOperator::GreaterThanEqual,
+							Signal::Constant(addr as i32 * packing),
+						),
+						DeciderRowConjDisj::FirstRow,
+						NET_RED,
+						NET_RED_GREEN,
+					);
+					self.add_decider_comb_input(
+						mux,
+						(
+							p.addr,
+							DeciderOperator::LessThan,
+							Signal::Constant(addr as i32 * packing + packing),
+						),
+						DeciderRowConjDisj::And,
+						NET_RED,
+						NET_RED_GREEN,
+					);
+				} else {
+					self.add_decider_comb_input(
+						mux,
+						(
+							p.addr,
+							DeciderOperator::Equal,
+							Signal::Constant(addr as i32),
+						),
+						DeciderRowConjDisj::FirstRow,
+						NET_RED,
+						NET_RED_GREEN,
+					);
+				}
+				self.add_decider_comb_output(mux, Signal::Everything, true, NET_GREEN);
+				self.add_wire_green(vec![*constant], vec![mux]);
+				self.connect_red(last_wire_input, mux);
+				last_wire_input = self.add_wire_red(vec![], vec![mux]);
+			}
+			if let Some(packing) = &density {
+				let mut mux2s = vec![];
+				for (idx, mux1) in mux1s.iter().enumerate() {
+					if idx == 0 {
+						continue;
+					}
+					self.add_wire_green(vec![*mux1, mux1s[idx - 1]], vec![]);
+				}
+				let addr_lower = self.add_arithmetic_comb(
+					(p.addr, ArithmeticOperator::Mod, Signal::Constant(*packing)),
+					p.addr,
+				);
+				self.connect_red(*addresses_ret.last().unwrap(), addr_lower);
+				for i in 0..*packing as usize {
+					mux2s.push(self.add_decider_comb());
+					self.add_decider_comb_input(
+						mux2s[i],
+						(p.addr, DeciderOperator::Equal, Signal::Constant(i as i32)),
+						DeciderRowConjDisj::FirstRow,
+						NET_RED,
+						NET_RED_GREEN,
+					);
+					self.add_decider_comb_output(mux2s[i], Signal::Id(i as i32), true, NET_GREEN);
+					if i == 0 {
+						self.add_wire_red(vec![addr_lower], vec![mux2s[0]]);
+						self.add_wire_green(vec![mux1s[0]], vec![mux2s[0]]);
+					} else {
+						self.add_wire_red(vec![], vec![mux2s[i], mux2s[i - 1]]);
+						self.add_wire_green(vec![], vec![mux2s[i], mux2s[i - 1]]);
+						self.add_wire_red(vec![mux2s[i], mux2s[i - 1]], vec![]);
+					}
+				}
+				let collapse = self.add_nop(Signal::Each, p.data);
+				self.add_wire_red(vec![mux2s[0]], vec![collapse]);
+				data_ret.push(collapse);
+			} else {
+				for (idx, mux1) in mux1s.iter().enumerate() {
+					if idx == 0 {
+						continue;
+					}
+					self.add_wire_red(vec![*mux1, mux1s[idx - 1]], vec![]);
+				}
+				if p.data != preferred_output {
+					let nop = self.add_nop(preferred_output, p.data);
+					self.add_wire_red(vec![mux1s[0]], vec![nop]);
+					data_ret.push(nop);
+				} else {
+					data_ret.push(mux1s[0]);
+				}
+			};
+		}
+		// buffering
+		for (i, p) in ports.iter().enumerate() {
+			if let Some(clk) = p.clk {
+				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
+					ResetSpec::Sync(rst) => self.add_sdffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)),
+						rst,
+						p.data,
+					),
+					ResetSpec::Async(rst) => self.add_adffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)),
+						rst,
+						p.data,
+					),
+					ResetSpec::Disabled => {
+						if let Some(en) = p.en {
+							let (d_wire, clk_wire, en_wire, q) =
+								self.add_dffe(p.data, clk, en, p.data);
+							(d_wire, clk_wire, en_wire, NodeId(usize::MAX), q)
+						} else {
+							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
+							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
+						}
+					}
+				};
+				if p.en.is_some() {
+					en_ret.push(Some(en_wire));
+				} else {
+					en_ret.push(None);
+				}
+				clk_ret.push(Some(clk_wire));
+				self.connect_red(data_ret[i], d_wire);
+				data_ret[i] = q;
+				if p.rst != ResetSpec::Disabled {
+					rst_ret.push(Some(rst_wire));
+				} else {
+					rst_ret.push(None);
+				}
+			} else {
+				clk_ret.push(None);
+				rst_ret.push(None);
+				en_ret.push(None);
+			}
+		}
+		let mut ret = vec![];
+		for (data, addr, clk, rst, en) in izip!(data_ret, addresses_ret, clk_ret, rst_ret, en_ret) {
+			ret.push(MemoryPortReadFilled {
+				addr_wire: addr,
+				data,
+				clk_wire: clk,
+				en_wire: en,
+				rst_wire: rst,
+			});
+		}
+		ret
 	}
 
 	/// A pattern for bit manipulations. ehhhhh too lazy to spec it now. Raise an issue if you want me to.
@@ -585,6 +911,12 @@ impl LogicalDesign {
 	///
 	/// Returns the id for the wire you created.
 	pub fn add_wire_red(&mut self, fanin: Vec<NodeId>, fanout: Vec<NodeId>) -> NodeId {
+		for x in &fanin {
+			assert!(!self.is_wire(*x), "Can't add wires to wires.")
+		}
+		for x in &fanout {
+			assert!(!self.is_wire(*x), "Can't add wires to wires.")
+		}
 		let id = self.add_node(
 			NodeFunction::WireSum(WireColour::Red),
 			vec![Signal::Everything],
@@ -602,6 +934,12 @@ impl LogicalDesign {
 	///
 	/// Returns the id for the wire you created.
 	pub fn add_wire_green(&mut self, fanin: Vec<NodeId>, fanout: Vec<NodeId>) -> NodeId {
+		for x in &fanin {
+			assert!(!self.is_wire(*x), "Can't add wires to wires.")
+		}
+		for x in &fanout {
+			assert!(!self.is_wire(*x), "Can't add wires to wires.")
+		}
 		let id = self.add_node(
 			NodeFunction::WireSum(WireColour::Green),
 			vec![Signal::Everything],
@@ -877,7 +1215,7 @@ impl LogicalDesign {
 		let mut counter = vec![false; width];
 
 		let lut_comb = self.add_decider_comb();
-		self.add_decider_comb_output(lut_comb, sig_out, false, (true, true));
+		self.add_decider_comb_output(lut_comb, sig_out, false, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![lut_comb]);
 
 		let mut first = true;
@@ -903,8 +1241,8 @@ impl LogicalDesign {
 						lut_comb,
 						(sig_left, DeciderOperator::Equal, sig_right),
 						conj_disj,
-						(true, true),
-						(true, true),
+						NET_RED_GREEN,
+						NET_RED_GREEN,
 					);
 					first_condition = false;
 					first = false;
@@ -950,8 +1288,8 @@ impl LogicalDesign {
 		return retval;
 	}
 
-	pub(crate) fn get_fanout_network(&self, ldid_1: NodeId, colour: WireColour) -> HashSet<NodeId> {
-		let node = &self.nodes[ldid_1.0];
+	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
+		let node = &self.nodes[ldid.0];
 		let mut retval = HashSet::new();
 		for wire in node.iter_fanout(colour) {
 			let localio: HashSet<NodeId> =
@@ -1017,6 +1355,20 @@ impl LogicalDesign {
 
 	pub fn set_description_node(&mut self, id: NodeId, desc: String) {
 		self.nodes[id.0].description = Some(desc);
+	}
+}
+
+impl Display for LogicalDesign {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("LogicalDesign begin\n")?;
+		for x in &self.nodes {
+			let disp = format!("{:?}", x);
+			f.write_str(" ")?;
+			f.write_str(disp.as_str())?;
+			f.write_str("\n")?;
+		}
+		f.write_str("END")?;
+		Ok(())
 	}
 }
 
@@ -1099,6 +1451,35 @@ pub(crate) fn get_large_logical_design(n: usize) -> LogicalDesign {
 		l.add_wire_red(vec![left], vec![right]);
 	}
 	l
+}
+
+#[cfg(test)]
+pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
+	let data = vec![0; n];
+	let mut d = LogicalDesign::new();
+	let mpf_arr = d.add_rom(
+		vec![MemoryReadPort {
+			addr: Signal::Id(0),
+			data: Signal::Id(1),
+			clk: None,
+			en: None,
+			rst: ResetSpec::Disabled,
+			transparent: false,
+		}],
+		data,
+		None,
+	);
+	assert_eq!(mpf_arr.len(), 1);
+	let port = mpf_arr.first().unwrap();
+	let addr = d.add_constant_comb(vec![Signal::Id(0)], vec![6]);
+	let data = d.add_lamp((
+		Signal::Id(1),
+		DeciderOperator::Equal,
+		Signal::Constant(2000),
+	));
+	d.connect_red(addr, port.addr_wire);
+	d.add_wire_red(vec![port.data], vec![data]);
+	d
 }
 
 #[cfg(test)]
@@ -1295,6 +1676,103 @@ mod test {
 		for x in &d.nodes {
 			println!("{:?}", x);
 		}
+
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d, PlacementStrategy::default());
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn rom_simple() {
+		let data = vec![555, 666, 777, 888, 999, 1000, 2000, 3000, 4000, 5000];
+		let mut d = LogicalDesign::new();
+		let mpf_arr = d.add_rom(
+			vec![MemoryReadPort {
+				addr: Sig::Id(0),
+				data: Sig::Id(1),
+				clk: None,
+				en: None,
+				rst: ResetSpec::Disabled,
+				transparent: false,
+			}],
+			data,
+			None,
+		);
+		assert_eq!(mpf_arr.len(), 1);
+		let port = mpf_arr.first().unwrap();
+		let addr = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let data = d.add_lamp((Sig::Id(1), Dop::Equal, Sig::Constant(2000)));
+		d.connect_red(addr, port.addr_wire);
+		d.add_wire_red(vec![port.data], vec![data]);
+
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d, PlacementStrategy::default());
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn rom_dense_simple() {
+		let data = vec![555, 666, 777, 888, 999, 1000, 2000, 3000, 4000, 5000];
+		let mut d = LogicalDesign::new();
+		let mpf_arr = d.add_rom(
+			vec![MemoryReadPort {
+				addr: Sig::Id(0),
+				data: Sig::Id(1),
+				clk: None,
+				en: None,
+				rst: ResetSpec::Disabled,
+				transparent: false,
+			}],
+			data,
+			Some(10),
+		);
+		assert_eq!(mpf_arr.len(), 1);
+		let port = mpf_arr.first().unwrap();
+		let addr_in = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let data_lamp = d.add_lamp((Sig::Id(1), Dop::Equal, Sig::Constant(2000)));
+		d.connect_red(addr_in, port.addr_wire);
+		d.add_wire_red(vec![port.data], vec![data_lamp]);
+
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d, PlacementStrategy::default());
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn rom_dense_large() {
+		let mut data = vec![0, 1];
+		for i in 2..47 {
+			data.push((data[i - 1] + data[i - 2]));
+		}
+
+		let mut d = LogicalDesign::new();
+		let mpf_arr = d.add_rom(
+			vec![MemoryReadPort {
+				addr: Sig::Id(0),
+				data: Sig::Id(1),
+				clk: None,
+				en: None,
+				rst: ResetSpec::Disabled,
+				transparent: false,
+			}],
+			data,
+			Some(10),
+		);
+		assert_eq!(mpf_arr.len(), 1);
+		let port = mpf_arr.first().unwrap();
+		let addr_in = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let data_lamp = d.add_lamp((Sig::Id(1), Dop::NotEqual, Sig::Constant(0)));
+		d.connect_red(addr_in, port.addr_wire);
+		d.add_wire_red(vec![port.data], vec![data_lamp]);
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();

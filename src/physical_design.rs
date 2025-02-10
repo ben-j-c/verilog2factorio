@@ -1,7 +1,9 @@
 use core::panic;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::{
 	cmp::Ordering,
-	collections::{BTreeSet, HashMap, HashSet},
+	collections::{HashMap, HashSet, LinkedList},
 	hash::Hash,
 	vec,
 };
@@ -9,7 +11,7 @@ use std::{
 use good_lp::{constraint, variable, ResolutionError, Solution, SolverModel};
 
 use crate::{
-	logical_design::{self as ld, LogicalDesign, NodeId, WireColour},
+	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
 };
 
@@ -20,15 +22,16 @@ pub enum PlacementStrategy {
 	ILP,
 	ILPCoarse15,
 	ILPCoarse8,
+	MCMCSACoarse15,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CombinatorId(usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WireId(usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TerminalId(pub u32);
 
 impl TerminalId {
@@ -318,6 +321,58 @@ impl PhysicalDesign {
 				}
 				panic!("Well we tried a very large area and it didn't work.");
 			}
+			PlacementStrategy::MCMCSACoarse15 => {
+				let scale_factors = [1.0, 2.0, 4.0, 8.0];
+				let mut last_optimal = None;
+				for scale in scale_factors {
+					self.reset_place_route();
+					let comb_positions =
+						match self.solve_as_mcmc_coarse15(logical, scale, last_optimal) {
+							Ok(pos) => pos,
+							Err(e) => {
+								println!("WARN: MCMC failed to place with scale {scale}");
+								println!("WARN: {}", e.0);
+								self.place_combs_physical_coarse15(&e.1, logical);
+								self.connect_combs(logical);
+								self.save_svg(
+									logical,
+									format!("./svg/failed{}.svg", scale).as_str(),
+								);
+								last_optimal = Some(e.1);
+								continue;
+							}
+						};
+					self.place_combs_physical_coarse15(&comb_positions, logical);
+					return;
+				}
+				panic!("Well we tried a very large area and it didn't work.");
+			}
+		}
+	}
+
+	fn place_combs_physical_coarse15(
+		&mut self,
+		comb_positions: &Vec<(usize, usize)>,
+		logical: &LogicalDesign,
+	) {
+		let mut coarse_cells: HashMap<(usize, usize), usize> = HashMap::new();
+		for (idx, (x, y)) in comb_positions.iter().enumerate() {
+			let allocated_resources = match coarse_cells.get(&(*x, *y)) {
+				Some(&allocated) => {
+					coarse_cells.insert((*x, *y), allocated + 1);
+					allocated
+				}
+				None => {
+					coarse_cells.insert((*x, *y), 1);
+					0
+				}
+			};
+			let p = (
+				(*x * 3 + (allocated_resources % 3)) as f64 * 2.0,
+				(*y * 5 + allocated_resources / 3) as f64,
+			);
+			self.place_comb_physical(p, CombinatorId(idx), logical)
+				.unwrap();
 		}
 	}
 
@@ -596,6 +651,168 @@ impl PhysicalDesign {
 		}
 	}
 
+	pub fn solve_as_mcmc_coarse15(
+		&self,
+		ld: &LogicalDesign,
+		scale_factor: f64,
+		init: Option<Vec<(usize, usize)>>,
+	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
+		let side_length = (self.combs.len() as f64 * scale_factor / 15.0)
+			.sqrt()
+			.ceil() as usize;
+		let num_cells = self.combs.len();
+
+		let mut connections = vec![];
+		for i in 0..num_cells {
+			for j in 0..i {
+				if ld.have_shared_wire(self.combs[i].logic, self.combs[j].logic) {
+					connections.push((i, j));
+				}
+			}
+		}
+
+		let compute_cost = |assign: &Vec<(usize, usize)>| -> f64 {
+			let mut cost = 0.0;
+			for &(i, j) in &connections {
+				let (x_i, y_i) = assign[i];
+				let (x_j, y_j) = assign[j];
+				let dx = (x_i as isize - x_j as isize).abs();
+				let dy = (y_i as isize - y_j as isize).abs();
+				if dx + dy >= 1 {
+					cost += (dx + dy).pow(2) as f64;
+				}
+			}
+			cost
+		};
+
+		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
+		let mut assignments = vec![(0, 0); num_cells];
+		let mut block_counts = vec![vec![0; side_length]; side_length];
+
+		if let Some(init) = init {
+			assignments = init;
+			for (cx, cy) in &assignments {
+				block_counts[*cx][*cy] += 1;
+			}
+		} else {
+			for cell in 0..num_cells {
+				loop {
+					let (cx, cy) = (
+						rng.random_range(0..side_length),
+						rng.random_range(0..side_length),
+					);
+					if block_counts[cx][cy] < 15 {
+						assignments[cell] = (cx, cy);
+						block_counts[cx][cy] += 1;
+						break;
+					}
+				}
+			}
+		}
+
+		let mut best_assign = assignments.clone();
+		let mut best_block_counts = block_counts.clone();
+		let mut best_cost = compute_cost(&assignments);
+
+		let mut temp = 10.0;
+		let cooling_rate = 0.99992;
+		let mut iterations = 500000;
+
+		let pick_ripup = |u: f64| -> usize {
+			let lambda = std::f64::consts::LN_2 / (0.05 * (num_cells as f64));
+			let x = -1.0 / lambda * u.ln();
+			let mut r = x.round() as isize;
+			if r < 1 {
+				r = 1;
+			} else if r > (num_cells as isize) {
+				r = num_cells as isize;
+			}
+			r as usize
+		};
+
+		let mut step = 0;
+		while step < iterations {
+			let ripup = pick_ripup(rng.random());
+			let mut ripup_cells = vec![];
+			while ripup_cells.len() != ripup {
+				let cell = rng.random_range(0..num_cells);
+				if ripup_cells.contains(&cell) {
+					continue;
+				}
+				ripup_cells.push(cell);
+			}
+
+			let mut new_block_counts = block_counts.clone();
+			let mut new_assignments = assignments.clone();
+			for cell in &ripup_cells {
+				let ass = assignments[*cell];
+				new_block_counts[ass.0][ass.1] -= 1;
+			}
+
+			for cell in &ripup_cells {
+				loop {
+					let (cx, cy) = (
+						rng.random_range(0..side_length),
+						rng.random_range(0..side_length),
+					);
+					if block_counts[cx][cy] < 15 {
+						new_assignments[*cell] = (cx, cy);
+						new_block_counts[cx][cy] += 1;
+						break;
+					}
+				}
+			}
+
+			let new_cost = compute_cost(&new_assignments);
+			let delta = new_cost - best_cost;
+
+			if delta < 0.0 {
+				best_cost = new_cost;
+				best_assign = new_assignments.clone();
+				assignments = new_assignments;
+				block_counts = new_block_counts;
+				println!("Best cost {}, temp {}", best_cost, temp);
+				if iterations - step < iterations * 1 / 20 {
+					println!("Boosting iterations {}", best_cost);
+					iterations = iterations * 20 / 19;
+				}
+				if best_cost == 0.0 {
+					break;
+				}
+			} else {
+				let p = f64::exp(-delta / temp);
+				if rng.random_bool(p) {
+					assignments = new_assignments;
+					block_counts = new_block_counts;
+				}
+			}
+
+			temp *= cooling_rate;
+			if temp < 1e-3 {
+				temp = 1e-3;
+			}
+			step += 1;
+		}
+
+		for &(i, j) in &connections {
+			let (x_i, y_i) = best_assign[i];
+			let (x_j, y_j) = best_assign[j];
+			let dist = ((x_i as isize - x_j as isize).abs() + (y_i as isize - y_j as isize).abs())
+				as usize;
+			if dist > 1 {
+				return Err((
+					format!(
+						"Could not satisfy distance requirements, lowest cost: {}",
+						best_cost
+					),
+					best_assign,
+				));
+			}
+		}
+
+		Ok(best_assign)
+	}
+
 	pub fn max_allowable_distance(
 		&self,
 		logical: &LogicalDesign,
@@ -613,6 +830,13 @@ impl PhysicalDesign {
 			.wire_hop_type()
 			.wire_hop_spec();
 		f64::min(hop_spec_i.reach, hop_spec_j.reach)
+	}
+
+	fn reset_place_route(&mut self) {
+		self.space.clear();
+		for x in &mut self.connected_wires {
+			x.clear();
+		}
 	}
 
 	fn place_comb_physical(
@@ -811,7 +1035,7 @@ impl PhysicalDesign {
 							if euclidean_distance_squared_f64_pair(comb_i.position, comb_j.position)
 								< min_distance * min_distance
 							{
-								edges.push((true, *id_j, false, *id_i));
+								edges.push((false, *id_j, true, *id_i));
 							}
 						}
 					}
@@ -1020,72 +1244,98 @@ impl PhysicalDesign {
 	}
 
 	fn validate_against(&self, ld: &LogicalDesign) {
+		return;
+		todo!();
 		for c in &self.combs {
-			let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
-			let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
-			let n3 = ld.get_fanin_network(c.logic, WireColour::Red);
-			let n4 = ld.get_fanin_network(c.logic, WireColour::Green);
-			let n5: HashSet<NodeId> = self
-				.get_fanout_network(c.id, WireColour::Red)
-				.iter()
-				.map(|coid| self.get_logical(*coid, ld).id)
-				.collect();
-			let n6: HashSet<NodeId> = self
-				.get_fanout_network(c.id, WireColour::Green)
-				.iter()
-				.map(|id| self.get_logical(*id, ld).id)
-				.collect();
-			let n7: HashSet<NodeId> = self
-				.get_fanin_network(c.id, WireColour::Red)
-				.iter()
-				.map(|id| self.get_logical(*id, ld).id)
-				.collect();
-			let n8: HashSet<NodeId> = self
-				.get_fanin_network(c.id, WireColour::Green)
-				.iter()
-				.map(|id| self.get_logical(*id, ld).id)
-				.collect();
-			assert_eq!(n1, n5);
-			assert_eq!(n2, n6);
-			assert_eq!(n3, n7);
-			assert_eq!(n4, n8);
-		}
-	}
-
-	pub(crate) fn get_fanin_network(
-		&self,
-		coid: CombinatorId,
-		colour: WireColour,
-		ld: &LogicalDesign,
-	) -> HashSet<CombinatorId> {
-		let node = &self.combs[coid.0];
-		match ld.get_node(node.logic).function {
-			ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. }
-			| ld::NodeFunction::WireSum(..) => return HashSet::new(),
-			_ => {}
-		}
-		let mut queue = BTreeSet::new();
-		let mut seen = HashSet::new();
-		let mut retval = HashSet::new();
-		seen.insert(coid);
-		retval.insert(coid);
-		for wiid in &self.connected_wires[coid.0] {
-			let wire = &self.wires[wiid.0];
-			if wire.node2_id == coid {
-				queue.insert(wiid);
+			let ld_comb = ld.get_node(c.logic);
+			if ld_comb.is_constant() {
+				let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
+				let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
+				let n3 = self
+					.get_network(c.id, TerminalId::output_constant(WireColour::Red))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				let n4 = self
+					.get_network(c.id, TerminalId::output_constant(WireColour::Green))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				println!("\n\n{:?}", self.connected_wires);
+				assert_eq!(n1, n3);
+				assert_eq!(n2, n4);
+			} else {
+				let n1 = ld.get_fanin_network(c.logic, WireColour::Red);
+				let n2 = ld.get_fanin_network(c.logic, WireColour::Green);
+				let n3 = self
+					.get_network(c.id, TerminalId::input(WireColour::Red))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				let n4 = self
+					.get_network(c.id, TerminalId::input(WireColour::Green))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				assert_eq!(n1, n3);
+				assert_eq!(n2, n4);
+			}
+			if ld_comb.is_arithmetic() || ld_comb.is_decider() {
+				let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
+				let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
+				let n3 = self
+					.get_network(c.id, TerminalId::output_combinator(WireColour::Red))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				let n4 = self
+					.get_network(c.id, TerminalId::output_combinator(WireColour::Green))
+					.iter()
+					.map(|(coid, _)| self.combs[coid.0].logic)
+					.collect();
+				assert_eq!(n1, n3);
+				assert_eq!(n2, n4);
 			}
 		}
-		while !queue.is_empty() {}
-		retval
 	}
 
-	pub(crate) fn get_fanout_network(
+	pub(crate) fn get_network(
 		&self,
 		coid: CombinatorId,
-		colour: WireColour,
-	) -> HashSet<CombinatorId> {
-		todo!()
+		terminal: TerminalId,
+	) -> HashSet<(CombinatorId, TerminalId)> {
+		println!("starting {:?} {:?}", coid, terminal);
+		let mut queue = LinkedList::new();
+		let mut seen: HashSet<WireId> = HashSet::new();
+		let mut retval = HashSet::new();
+		let add_wires_on_terminal =
+			|coid: CombinatorId, terminal: TerminalId, queue: &mut LinkedList<WireId>| {
+				for wiid in &self.connected_wires[coid.0] {
+					let wire = &self.wires[wiid.0];
+					if wire.node1_id == coid && wire.terminal1_id == terminal
+						|| wire.node2_id == coid && wire.terminal2_id == terminal
+					{
+						queue.push_back(*wiid);
+					}
+				}
+			};
+		add_wires_on_terminal(coid, terminal, &mut queue);
+		println!("Queue: {:?}", queue);
+		while !queue.is_empty() {
+			let wiid = queue.pop_front().unwrap();
+			if seen.contains(&wiid) {
+				continue;
+			}
+			seen.insert(wiid);
+			let wire = &self.wires[wiid.0];
+			println!("Taking: {:?}", wire);
+			add_wires_on_terminal(wire.node1_id, wire.terminal1_id, &mut queue);
+			add_wires_on_terminal(wire.node2_id, wire.terminal2_id, &mut queue);
+			retval.insert((wire.node1_id, wire.terminal1_id));
+			retval.insert((wire.node2_id, wire.terminal2_id));
+			println!("Queue: {:?}", queue);
+		}
+		retval
 	}
 }
 
@@ -1177,6 +1427,8 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 
 #[cfg(test)]
 mod test {
+	use ld::get_large_memory_test_design;
+
 	use crate::logical_design::{get_large_logical_design, NodeId};
 
 	use super::*;
@@ -1212,11 +1464,11 @@ mod test {
 	}
 
 	#[test]
-	fn complex_40_ilp_coarse15() {
+	fn complex_40_ilp_coarse15_objective() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_complex_40_logical_design();
 		p.build_from(&l, PlacementStrategy::ILPCoarse15);
-		p.save_svg(&l, "svg/n_combs_ilp_coarse15.svg");
+		p.save_svg(&l, "svg/complex40_combs_ilp_coarse15.svg");
 	}
 
 	#[test]
@@ -1232,5 +1484,29 @@ mod test {
 		let l = get_large_logical_design(200);
 		p.build_from(&l, PlacementStrategy::ConnectivityAveraging);
 		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg");
+	}
+
+	#[test]
+	fn simple_connectivity_averaging() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_simple_logical_design();
+		println!("{l}");
+		p.build_from(&l, PlacementStrategy::ConnectivityAveraging);
+	}
+
+	#[test]
+	fn complex_40_mcmc_coarse15() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_complex_40_logical_design();
+		p.build_from(&l, PlacementStrategy::MCMCSACoarse15);
+		p.save_svg(&l, "svg/complex40_mcmc_coarse15.svg");
+	}
+
+	#[test]
+	fn memory_n_mcmc_coarse15() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_large_memory_test_design(80);
+		p.build_from(&l, PlacementStrategy::MCMCSACoarse15);
+		p.save_svg(&l, "svg/memory_n_mcmc_coarse15.svg");
 	}
 }

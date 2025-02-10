@@ -541,5 +541,7 @@ mod test {
 		let l = logical_design::get_simple_logical_design();
 		p.build_from(&l, PlacementStrategy::default());
 		s.build_from(&p, &l);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("{}", blueprint_json);
 	}
 }
