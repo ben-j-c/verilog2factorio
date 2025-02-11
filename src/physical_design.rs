@@ -22,7 +22,7 @@ pub enum PlacementStrategy {
 	ILP,
 	ILPCoarse15,
 	ILPCoarse8,
-	MCMCSACoarse15,
+	MCMCSADense,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -321,32 +321,43 @@ impl PhysicalDesign {
 				}
 				panic!("Well we tried a very large area and it didn't work.");
 			}
-			PlacementStrategy::MCMCSACoarse15 => {
+			PlacementStrategy::MCMCSADense => {
 				let scale_factors = [1.0, 2.0, 4.0, 8.0];
 				let mut last_optimal = None;
+				let mut temp = None;
 				for scale in scale_factors {
 					self.reset_place_route();
-					let comb_positions =
-						match self.solve_as_mcmc_coarse15(logical, scale, last_optimal) {
-							Ok(pos) => pos,
-							Err(e) => {
-								println!("WARN: MCMC failed to place with scale {scale}");
-								println!("WARN: {}", e.0);
-								self.place_combs_physical_coarse15(&e.1, logical);
-								self.connect_combs(logical);
-								self.save_svg(
-									logical,
-									format!("./svg/failed{}.svg", scale).as_str(),
-								);
-								last_optimal = Some(e.1);
-								continue;
-							}
-						};
-					self.place_combs_physical_coarse15(&comb_positions, logical);
+					let comb_positions = match self.solve_as_mcmc_dense(logical, scale, None, None)
+					{
+						Ok(pos) => pos,
+						Err(e) => {
+							println!("WARN: MCMC failed to place with scale {scale}");
+							println!("WARN: {}", e.0);
+							self.place_combs_physical_dense(&e.1, logical);
+							self.connect_combs(logical);
+							self.save_svg(logical, format!("./svg/failed{}.svg", scale).as_str());
+							last_optimal = Some(e.1);
+							temp = Some(0.1);
+							continue;
+						}
+					};
+					self.place_combs_physical_dense(&comb_positions, logical);
 					return;
 				}
 				panic!("Well we tried a very large area and it didn't work.");
 			}
+		}
+	}
+
+	fn place_combs_physical_dense(
+		&mut self,
+		comb_positions: &Vec<(usize, usize)>,
+		logical: &LogicalDesign,
+	) {
+		for (idx, (x, y)) in comb_positions.iter().enumerate() {
+			let p = (*x as f64, *y as f64);
+			self.place_comb_physical(p, CombinatorId(idx), logical)
+				.unwrap();
 		}
 	}
 
@@ -651,38 +662,46 @@ impl PhysicalDesign {
 		}
 	}
 
-	pub fn solve_as_mcmc_coarse15(
+	pub fn solve_as_mcmc_dense(
 		&self,
 		ld: &LogicalDesign,
 		scale_factor: f64,
 		init: Option<Vec<(usize, usize)>>,
+		init_temp: Option<f64>,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
-		let side_length = (self.combs.len() as f64 * scale_factor / 15.0)
-			.sqrt()
-			.ceil() as usize;
+		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		let num_cells = self.combs.len();
 
 		let mut connections = vec![];
 		for i in 0..num_cells {
 			for j in 0..i {
+				if j >= i {
+					break;
+				}
 				if ld.have_shared_wire(self.combs[i].logic, self.combs[j].logic) {
 					connections.push((i, j));
 				}
 			}
 		}
 
-		let compute_cost = |assign: &Vec<(usize, usize)>| -> f64 {
+		let compute_cost = |assign: &Vec<(usize, usize)>| -> (f64, bool, i32) {
 			let mut cost = 0.0;
+			let mut sat_count = 0;
+			let mut sat = true;
 			for &(i, j) in &connections {
 				let (x_i, y_i) = assign[i];
 				let (x_j, y_j) = assign[j];
-				let dx = (x_i as isize - x_j as isize).abs();
-				let dy = (y_i as isize - y_j as isize).abs();
-				if dx + dy >= 1 {
-					cost += (dx + dy).pow(2) as f64;
+				let dx = (x_i as isize - x_j as isize).abs() as f64;
+				let dy = (y_i as isize - y_j as isize).abs() as f64;
+				if dx.powi(2) + dy.powi(2) > 80.0 {
+					cost += dx.powi(2) + dy.powi(2) as f64;
+					sat_count += 1;
+					sat = false;
+				} else {
+					cost += dx + dy;
 				}
 			}
-			cost
+			(cost, sat, sat_count)
 		};
 
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
@@ -698,10 +717,10 @@ impl PhysicalDesign {
 			for cell in 0..num_cells {
 				loop {
 					let (cx, cy) = (
-						rng.random_range(0..side_length),
+						rng.random_range(0..side_length) / 2 * 2,
 						rng.random_range(0..side_length),
 					);
-					if block_counts[cx][cy] < 15 {
+					if block_counts[cx][cy] < 1 {
 						assignments[cell] = (cx, cy);
 						block_counts[cx][cy] += 1;
 						break;
@@ -714,8 +733,8 @@ impl PhysicalDesign {
 		let mut best_block_counts = block_counts.clone();
 		let mut best_cost = compute_cost(&assignments);
 
-		let mut temp = 10.0;
-		let cooling_rate = 0.99992;
+		let mut temp = init_temp.unwrap_or(20.0 + 15.0 * (num_cells as f64).sqrt());
+		let cooling_rate = 0.999999;
 		let mut iterations = 500000;
 
 		let pick_ripup = |u: f64| -> usize {
@@ -730,8 +749,24 @@ impl PhysicalDesign {
 			r as usize
 		};
 
+		let check_shit = |block_counts: &Vec<Vec<i32>>| {
+			for (x, block_y) in block_counts.iter().enumerate() {
+				for (_y, count) in block_y.iter().enumerate() {
+					if *count > 1 {
+						assert!(false);
+					}
+					if *count > 0 && x % 2 == 1 {
+						assert!(false);
+					}
+				}
+			}
+		};
+
 		let mut step = 0;
 		while step < iterations {
+			if best_cost.1 {
+				break;
+			}
 			let ripup = pick_ripup(rng.random());
 			let mut ripup_cells = vec![];
 			while ripup_cells.len() != ripup {
@@ -749,36 +784,41 @@ impl PhysicalDesign {
 				new_block_counts[ass.0][ass.1] -= 1;
 			}
 
+			check_shit(&new_block_counts);
+
 			for cell in &ripup_cells {
 				loop {
 					let (cx, cy) = (
-						rng.random_range(0..side_length),
+						rng.random_range(0..side_length) / 2 * 2,
 						rng.random_range(0..side_length),
 					);
-					if block_counts[cx][cy] < 15 {
+					if new_block_counts[cx][cy] < 1 {
 						new_assignments[*cell] = (cx, cy);
 						new_block_counts[cx][cy] += 1;
 						break;
 					}
 				}
 			}
+			check_shit(&new_block_counts);
 
 			let new_cost = compute_cost(&new_assignments);
-			let delta = new_cost - best_cost;
+			let delta = new_cost.0 - best_cost.0;
 
-			if delta < 0.0 {
+			if delta < 0.0 || new_cost.1 {
 				best_cost = new_cost;
 				best_assign = new_assignments.clone();
 				assignments = new_assignments;
 				block_counts = new_block_counts;
-				println!("Best cost {}, temp {}", best_cost, temp);
-				if iterations - step < iterations * 1 / 20 {
-					println!("Boosting iterations {}", best_cost);
-					iterations = iterations * 20 / 19;
+				best_block_counts = block_counts.clone();
+				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
+				if iterations - step < iterations * 1 / 10 {
+					println!("Boosting iterations {}", best_cost.0);
+					iterations = iterations * 25 / 20;
+					temp *= 1.1;
 				}
-				if best_cost == 0.0 {
-					break;
-				}
+			} else if delta / best_cost.0 > 1.5 {
+				assignments = best_assign.clone();
+				block_counts = best_block_counts.clone();
 			} else {
 				let p = f64::exp(-delta / temp);
 				if rng.random_bool(p) {
@@ -794,20 +834,16 @@ impl PhysicalDesign {
 			step += 1;
 		}
 
-		for &(i, j) in &connections {
-			let (x_i, y_i) = best_assign[i];
-			let (x_j, y_j) = best_assign[j];
-			let dist = ((x_i as isize - x_j as isize).abs() + (y_i as isize - y_j as isize).abs())
-				as usize;
-			if dist > 1 {
-				return Err((
-					format!(
-						"Could not satisfy distance requirements, lowest cost: {}",
-						best_cost
-					),
-					best_assign,
-				));
-			}
+		check_shit(&best_block_counts);
+
+		if !best_cost.1 {
+			return Err((
+				format!(
+					"Could not satisfy distance requirements, lowest cost: {}",
+					best_cost.0
+				),
+				best_assign,
+			));
 		}
 
 		Ok(best_assign)
@@ -1495,18 +1531,18 @@ mod test {
 	}
 
 	#[test]
-	fn complex_40_mcmc_coarse15() {
+	fn complex_40_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l, PlacementStrategy::MCMCSACoarse15);
+		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/complex40_mcmc_coarse15.svg");
 	}
 
 	#[test]
-	fn memory_n_mcmc_coarse15() {
+	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_large_memory_test_design(80);
-		p.build_from(&l, PlacementStrategy::MCMCSACoarse15);
-		p.save_svg(&l, "svg/memory_n_mcmc_coarse15.svg");
+		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
 }
