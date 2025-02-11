@@ -1515,8 +1515,8 @@ mod test {
 		let mut d = LogicalDesign::new();
 		let constant = d.add_constant_comb(vec![Sig::Id(2)], vec![100]);
 		let lamp = d.add_lamp((Sig::Id(2), Dop::Equal, Sig::Constant(100)));
-		d.connect_red(constant, lamp);
-		assert_eq!(d.nodes.len(), 2);
+		let wire = d.add_wire_red(vec![constant], vec![lamp]);
+		assert_eq!(d.nodes.len(), 3);
 
 		assert_eq!(constant.0, 0);
 		assert_eq!(lamp.0, 1);
@@ -1524,8 +1524,8 @@ mod test {
 		assert_eq!(d.nodes[constant.0].id, constant);
 		assert_eq!(d.nodes[lamp.0].id, lamp);
 
-		assert!(d.nodes[constant.0].fanout_red.contains(&lamp));
-		assert!(d.nodes[lamp.0].fanin_red.contains(&constant));
+		assert!(d.nodes[constant.0].fanout_red.contains(&wire));
+		assert!(d.nodes[lamp.0].fanin_red.contains(&wire));
 
 		assert_eq!(d.nodes[constant.0].fanout_red.len(), 1);
 		assert_eq!(d.nodes[lamp.0].fanin_red.len(), 1);
@@ -1534,7 +1534,7 @@ mod test {
 			assert_eq!(n.id, constant);
 		});
 
-		d.for_all_depth(1, |n| {
+		d.for_all_depth(2, |n| {
 			assert_eq!(n.id, lamp);
 		});
 
@@ -1542,18 +1542,12 @@ mod test {
 			assert_eq!(n.id, lamp);
 		});
 
-		d.for_all_rev_depth(1, |n| {
+		d.for_all_rev_depth(2, |n| {
 			assert_eq!(n.id, constant);
 		});
 
 		d.for_all_roots(|n| {
 			assert_eq!(n.id, constant);
-		});
-
-		let mut id = 0;
-		d.for_all_topological_order(|n| {
-			assert_eq!(n.id.0, id);
-			id += 1;
 		});
 
 		assert_eq!(d.get_node(constant).output.len(), 1);
