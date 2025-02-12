@@ -381,12 +381,13 @@ impl PhysicalDesign {
 				let (x_j, y_j) = assign[j];
 				let dx = (x_i as isize - x_j as isize).abs() as f64;
 				let dy = (y_i as isize - y_j as isize).abs() as f64;
-				if dx.powi(2) + dy.powi(2) > (64.0 + 81.0) / 2.0 {
-					cost += dx.powi(2) + dy.powi(2) as f64;
+				let r2distance = dx.powi(2) + dy.powi(2);
+				if r2distance > (64.0 + 81.0) / 2.0 {
+					cost += r2distance.sqrt();
 					sat_count += 1;
 					sat = false;
 				} else {
-					cost += dx / 8.0 + dy / 16.0;
+					cost += r2distance.sqrt() / 10.0;
 				}
 			}
 			for (x, block_y) in block_counts.iter().enumerate() {
@@ -433,12 +434,12 @@ impl PhysicalDesign {
 		let mut best_cost = compute_cost(&assignments, &block_counts, max_density);
 		let mut assignments_cost = best_cost;
 
-		let mut temp = init_temp.unwrap_or(20.0 + 15.0 * (num_cells as f64));
+		let mut temp = init_temp.unwrap_or(20.0 + 10.0 * (num_cells as f64));
 		let cooling_rate = 1.0 - 1E-7;
 		let mut iterations = 20_000_000;
 
-		let exponential_distr_10pct = |u: f64| -> usize {
-			let lambda = std::f64::consts::LN_2 / (0.10 * (num_cells as f64));
+		let exponential_distr = |u: f64| -> usize {
+			let lambda = std::f64::consts::LN_2 / (0.02 * (num_cells as f64));
 			let x = -1.0 / lambda * u.ln();
 			let mut r = x.round() as isize;
 			if r < 1 {
@@ -462,11 +463,14 @@ impl PhysicalDesign {
 			}
 		};
 
+		let mut final_stage = false;
 		let mut step = 0;
 		while step < iterations {
-			if best_cost.1 {
+			if best_cost.1 && !final_stage {
 				check_invariants(&block_counts, 1);
-				break;
+				final_stage = true;
+				iterations = (step as f64 * 1.2) as i32;
+				println!("Entering final compacting stage.");
 			}
 
 			let mut new_block_counts = block_counts.clone();
@@ -474,7 +478,7 @@ impl PhysicalDesign {
 
 			match rng.random_range(0..1000) {
 				i if i < 750 => {
-					let ripup = exponential_distr_10pct(rng.random());
+					let ripup = exponential_distr(rng.random());
 					let mut ripup_cells = vec![];
 					while ripup_cells.len() != ripup {
 						let cell = rng.random_range(0..num_cells);
@@ -504,7 +508,10 @@ impl PhysicalDesign {
 					}
 				}
 				i if i < 775 => {
-					let swap_count = exponential_distr_10pct(rng.random()) / 2 * 2;
+					if final_stage {
+						continue;
+					}
+					let swap_count = exponential_distr(rng.random()) / 2 * 2;
 					let mut picked = vec![];
 
 					while picked.len() < swap_count {
@@ -523,7 +530,10 @@ impl PhysicalDesign {
 						new_assignments[c2] = (x1, y1);
 					}
 				}
-				i if i < 800 => {
+				i if i < 900 => {
+					if final_stage {
+						continue;
+					}
 					let region_w = rng.random_range(1..=side_length / 4);
 					let region_h = rng.random_range(1..=side_length / 4);
 
@@ -554,9 +564,12 @@ impl PhysicalDesign {
 					}
 				}
 				i if i < 1000 => {
+					if final_stage {
+						continue;
+					}
 					if rng.random_bool(0.5) {
 						if rng.random_bool(0.5) {
-							let line_y = rng.random_range(2..side_length);
+							let line_y = rng.random_range(3..side_length - 3);
 							let mut ripup_cells = vec![];
 							for cell in 0..num_cells {
 								let (cx, cy) = new_assignments[cell];
@@ -580,7 +593,7 @@ impl PhysicalDesign {
 								}
 							}
 						} else {
-							let line_y = rng.random_range(0..side_length - 1);
+							let line_y = rng.random_range(3..side_length - 3);
 							let mut ripup_cells = vec![];
 							for cell in 0..num_cells {
 								let (cx, cy) = new_assignments[cell];
@@ -606,60 +619,52 @@ impl PhysicalDesign {
 						}
 					} else {
 						if rng.random_bool(0.5) {
-							// Shift cells to the left when x > some threshold
-							let line_x = rng.random_range(2..side_length - 1) / 2 * 2; // pick a vertical "line"
+							let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
 							let mut ripup_cells = Vec::new();
 							for cell in 0..num_cells {
 								let (cx, cy) = new_assignments[cell];
 								if cx == 0 {
-									continue; // can't shift left if we're at x=0
+									continue;
 								}
 								if cx > line_x {
 									ripup_cells.push(cell);
 									new_block_counts[cx][cy] -= 1;
 								}
 							}
-							// Sort so we shift in a stable order (largest x first)
 							ripup_cells
 								.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
 
 							for cell in ripup_cells {
 								let (cx, cy) = new_assignments[cell];
-								// Attempt to move left by 1
 								if new_block_counts[cx - 2][cy] < max_density {
 									new_block_counts[cx - 2][cy] += 1;
 									new_assignments[cell] = (cx - 2, cy);
 								} else {
-									// Revert if we can’t place it
 									new_block_counts[cx][cy] += 1;
 								}
 							}
 						} else {
-							// Shift cells to the right when x < some threshold
-							let line_x = rng.random_range(2..(side_length - 1)) / 2 * 2; // pick a vertical "line"
+							let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
 							let mut ripup_cells = Vec::new();
 							for cell in 0..num_cells {
 								let (cx, cy) = new_assignments[cell];
 								if cx == side_length - 1 {
-									continue; // can't shift right at the far edge
+									continue;
 								}
 								if cx < line_x {
 									ripup_cells.push(cell);
 									new_block_counts[cx][cy] -= 1;
 								}
 							}
-							// Sort so we shift in a stable order (smallest x first)
 							ripup_cells
 								.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
 
 							for cell in ripup_cells {
 								let (cx, cy) = new_assignments[cell];
-								// Attempt to move right by 1
 								if new_block_counts[cx + 2][cy] < max_density {
 									new_block_counts[cx + 2][cy] += 1;
 									new_assignments[cell] = (cx + 2, cy);
 								} else {
-									// Revert if we can’t place it
 									new_block_counts[cx][cy] += 1;
 								}
 							}
@@ -684,7 +689,9 @@ impl PhysicalDesign {
 				);
 			}
 
-			if delta < 0.0 {
+			if !final_stage && (delta < 0.0 || new_cost.1)
+				|| final_stage && (delta < 0.0 && new_cost.1)
+			{
 				best_cost = new_cost;
 				best_assign = new_assignments.clone();
 				assignments = new_assignments;
@@ -692,7 +699,7 @@ impl PhysicalDesign {
 				assignments_cost = best_cost;
 				best_block_counts = block_counts.clone();
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
-				if iterations - step < iterations * 1 / 10 {
+				if !final_stage && iterations - step < iterations * 1 / 10 {
 					println!("Boosting iterations {}", best_cost.0);
 					iterations = iterations * 25 / 20;
 					temp *= 1.12;
@@ -706,7 +713,7 @@ impl PhysicalDesign {
 				}
 			}
 
-			if assignments_cost.0 / best_cost.0 > 1.5 {
+			if assignments_cost.0 / best_cost.0 > 2.0 {
 				assignments = best_assign.clone();
 				block_counts = best_block_counts.clone();
 				assignments_cost = best_cost;
@@ -1389,7 +1396,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(40);
+		let l = ld::get_large_memory_test_design(80);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
