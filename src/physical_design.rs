@@ -19,9 +19,6 @@ use crate::{
 pub enum PlacementStrategy {
 	#[default]
 	ConnectivityAveraging,
-	ILP,
-	ILPCoarse15,
-	ILPCoarse8,
 	MCMCSADense,
 }
 
@@ -231,13 +228,14 @@ impl PhysicalDesign {
 			.unwrap()
 			.floor();
 		for c in &mut self.combs {
-			c.position.0 -= min_x - 1.0;
-			c.position.1 -= min_y - 1.0;
+			c.position.0 -= min_x;
+			c.position.1 -= min_y;
 		}
 		let mut ret = vec![(0, 0); self.combs.len()];
 		for (idx, c) in self.combs.iter().enumerate() {
-			ret[idx] = (c.position.0 as usize, c.position.1 as usize);
+			ret[idx] = (c.position.0.round() as usize + 1, c.position.1 as usize);
 		}
+		self.save_svg(logical, format!("./svg/internal_cavg.svg").as_str());
 		self.reset_place_route();
 		Ok(ret)
 	}
@@ -248,119 +246,50 @@ impl PhysicalDesign {
 				let pos = self.solve_as_connectivity_averaging(logical).unwrap();
 				self.place_combs_physical_dense(&pos, logical).unwrap();
 			}
-			PlacementStrategy::ILP => {
-				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
-				for scale in scale_factors {
-					let comb_positions = match self.solve_as_ilp_dense(logical, scale) {
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: ILP failed to place with scale {scale}");
-							println!("WARN: {e}");
-							continue;
-						}
-					};
-					for (idx, (x, y)) in comb_positions.iter().enumerate() {
-						self.place_comb_physical((x * 2.0, *y), CombinatorId(idx), logical)
-							.unwrap();
-					}
-					return;
-				}
-				panic!("Well we tried a very large area and it didn't work.");
-			}
-			PlacementStrategy::ILPCoarse15 => {
-				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
-				for scale in scale_factors {
-					let comb_positions = match self.solve_as_ilp_coarse15(logical, scale) {
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: ILP failed to place with scale {scale}");
-							println!("WARN: {e}");
-							continue;
-						}
-					};
-					let mut coarse_cells: HashMap<(usize, usize), usize> = HashMap::new();
-					for (idx, (x, y)) in comb_positions.iter().enumerate() {
-						let allocated_resources = match coarse_cells.get(&(*x, *y)) {
-							Some(&allocated) => {
-								coarse_cells.insert((*x, *y), allocated + 1);
-								allocated
-							}
-							None => {
-								coarse_cells.insert((*x, *y), 1);
-								0
-							}
-						};
-						let p = (
-							(*x * 3 + (allocated_resources % 3)) as f64 * 2.0,
-							(*y * 5 + allocated_resources / 3) as f64,
-						);
-						self.place_comb_physical(p, CombinatorId(idx), logical)
-							.unwrap();
-					}
-					return;
-				}
-				panic!("Well we tried a very large area and it didn't work.");
-			}
-			PlacementStrategy::ILPCoarse8 => {
-				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
-				for scale in scale_factors {
-					let comb_positions = match self.solve_as_ilp_coarse8(logical, scale) {
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: ILP failed to place with scale {scale}");
-							println!("WARN: {e}");
-							continue;
-						}
-					};
-					let mut coarse_cells: HashMap<(usize, usize), usize> = HashMap::new();
-					for (idx, (x, y)) in comb_positions.iter().enumerate() {
-						let allocated_resources = match coarse_cells.get(&(*x, *y)) {
-							Some(&allocated) => {
-								coarse_cells.insert((*x, *y), allocated + 1);
-								allocated
-							}
-							None => {
-								coarse_cells.insert((*x, *y), 1);
-								0
-							}
-						};
-						let p = (
-							(*x * 2 + (allocated_resources % 2)) as f64 * 2.0,
-							(*y * 4 + allocated_resources / 2) as f64,
-						);
-						self.place_comb_physical(p, CombinatorId(idx), logical)
-							.unwrap();
-					}
-					return;
-				}
-				panic!("Well we tried a very large area and it didn't work.");
-			}
 			PlacementStrategy::MCMCSADense => {
-				let scale_factors = [1.3, 2.0, 4.0, 8.0];
-				let mut _last_optimal = None;
+				let scale_factors = [1.3, 2.0];
+				let mut initial = vec![];
+				let side_length = (self.combs.len() as f64).sqrt().ceil() as usize;
+				let mut x = 0;
+				let mut y = 0;
+				for c in &self.combs {
+					if y >= side_length {
+						x += 2;
+						y = 0;
+					}
+					initial.push((x, y));
+					y += 1;
+				}
+				let mut last_optimal = Some(initial.clone());
 				let mut _temp = None;
 				for scale in scale_factors {
 					self.reset_place_route();
-					let comb_positions = match self.solve_as_mcmc_dense(logical, scale, None, None)
-					{
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: MCMC failed to place with scale {scale}");
-							println!("WARN: {}", e.0);
-							match self.place_combs_physical_dense(&e.1, logical) {
-								Ok(_) => {}
-								Err(_) => {}
+					let comb_positions =
+						match self.solve_as_mcmc_dense(logical, scale, last_optimal, None) {
+							Ok(pos) => pos,
+							Err(e) => {
+								println!("WARN: MCMC failed to place with scale {scale}");
+								println!("WARN: {}", e.0);
+								match self.place_combs_physical_dense(&e.1, logical) {
+									Ok(_) => {}
+									Err(_) => {}
+								}
+								self.connect_combs(logical);
+								self.save_svg(
+									logical,
+									format!("./svg/failed{}.svg", scale).as_str(),
+								);
+								last_optimal = Some(e.1);
+								_temp = Some(0.1);
+								continue;
 							}
-							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", scale).as_str());
-							_last_optimal = Some(e.1);
-							_temp = Some(0.1);
-							continue;
-						}
-					};
+						};
 					match self.place_combs_physical_dense(&comb_positions, logical) {
 						Ok(_) => {}
-						Err(_) => continue,
+						Err(_) => {
+							last_optimal = Some(initial.clone());
+							continue;
+						}
 					}
 					return;
 				}
@@ -407,281 +336,6 @@ impl PhysicalDesign {
 		}
 	}
 
-	/// This function should support up to 1000 nodes to be placed.
-	fn solve_as_ilp_dense(
-		&self,
-		ld: &LogicalDesign,
-		scale_factor: f64,
-	) -> Result<Vec<(f64, f64)>, ResolutionError> {
-		let side_length = (2.0 * self.combs.len() as f64 * scale_factor).sqrt().ceil() as i32;
-		use good_lp as ilp;
-		let mut problem = ilp::ProblemVariables::new();
-		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
-		let mut vars = vec![];
-		for (i, comb_i) in self.combs.iter().enumerate() {
-			for (j, comb_j) in self.combs.iter().enumerate() {
-				if j >= i {
-					break;
-				}
-				if ld.have_shared_wire(comb_i.logic, comb_j.logic) {
-					connections[i][j] = true;
-				}
-			}
-		}
-		for _comb_i in self.combs.iter().enumerate() {
-			let mut vars_plane = vec![vec![]; (side_length / 2) as usize];
-			for x in 0..side_length / 2 {
-				for _y in 0..side_length {
-					vars_plane[x as usize].push(problem.add(variable().binary()));
-				}
-			}
-			vars.push(vars_plane);
-		}
-		let mut problem = ilp::default_solver(problem.minimise(0));
-		for i in 0..vars.len() {
-			let mut expr = ilp::Expression::with_capacity((side_length * side_length / 2) as usize);
-			for x in 0..vars[i].len() {
-				for y in 0..vars[i][x].len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-			}
-			problem.add_constraint(ilp::constraint!(expr == 1));
-		}
-		for x in 0..side_length as usize / 2 {
-			for y in 0..side_length as usize {
-				let mut expr = ilp::Expression::with_capacity(self.combs.len());
-				for i in 0..self.combs.len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-				problem.add_constraint(ilp::constraint!(expr <= 1));
-			}
-		}
-		for i in 0..vars.len() {
-			for j in 0..i {
-				if connections[i][j] {
-					for x1 in 0..vars[i].len() {
-						for y1 in 0..vars[i][x1].len() {
-							for x2 in 0..vars[j].len() {
-								for y2 in 0..vars[j][x2].len() {
-									let dist = (2 * x1 as i32 - 2 * x2 as i32).pow(2)
-										+ (y1 as i32 - y2 as i32).pow(2);
-									let distance = self.max_allowable_distance(
-										ld,
-										CombinatorId(i),
-										CombinatorId(j),
-									);
-									if dist as f64 > distance * distance {
-										problem.add_constraint(constraint!(
-											vars[i][x1][y1] + vars[j][x2][y2] <= 1
-										));
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		match problem.solve() {
-			Ok(solution) => {
-				let mut pos_vec = vec![];
-				for i in 0..vars.len() {
-					for x in 0..vars[i].len() {
-						for y in 0..vars[i][x].len() {
-							if solution.value(vars[i][x][y]) == 1.0 {
-								pos_vec.push((x as f64, y as f64));
-							}
-						}
-					}
-				}
-				assert_eq!(pos_vec.len(), self.combs.len());
-				Ok(pos_vec)
-			}
-			Err(e) => Err(e),
-		}
-	}
-
-	fn solve_as_ilp_coarse15(
-		&self,
-		ld: &LogicalDesign,
-		scale_factor: f64,
-	) -> Result<Vec<(usize, usize)>, ResolutionError> {
-		let side_length = (self.combs.len() as f64 * scale_factor / 15.0)
-			.sqrt()
-			.ceil() as i32;
-		use good_lp as ilp;
-		let mut problem = ilp::ProblemVariables::new();
-		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
-		let mut vars = vec![];
-		for (i, comb_i) in self.combs.iter().enumerate() {
-			for (j, comb_j) in self.combs.iter().enumerate() {
-				if j >= i {
-					break;
-				}
-				if ld.have_shared_wire(comb_i.logic, comb_j.logic) {
-					connections[i][j] = true;
-				}
-			}
-		}
-		for _comb_i in self.combs.iter().enumerate() {
-			let mut vars_plane = vec![vec![]; (side_length) as usize];
-			for x in 0..side_length {
-				for _y in 0..side_length {
-					vars_plane[x as usize].push(problem.add(variable().binary()));
-				}
-			}
-			vars.push(vars_plane);
-		}
-		let mut problem = ilp::default_solver(problem.minimise(0));
-		for i in 0..vars.len() {
-			let mut expr = ilp::Expression::with_capacity((side_length * side_length) as usize);
-			for x in 0..vars[i].len() {
-				for y in 0..vars[i][x].len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-			}
-			problem.add_constraint(ilp::constraint!(expr == 1));
-		}
-		for x in 0..side_length as usize {
-			for y in 0..side_length as usize {
-				let mut expr = ilp::Expression::with_capacity(self.combs.len());
-				for i in 0..self.combs.len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-				problem.add_constraint(ilp::constraint!(expr <= 15));
-			}
-		}
-		for i in 0..vars.len() {
-			for j in 0..i {
-				if connections[i][j] {
-					for x1 in 0..vars[i].len() {
-						for y1 in 0..vars[i][x1].len() {
-							for x2 in 0..vars[j].len() {
-								for y2 in 0..vars[j][x2].len() {
-									let dist = (x1 as i32 - 2 * x2 as i32).abs()
-										+ (y1 as i32 - y2 as i32).abs();
-									if dist > 1 {
-										problem.add_constraint(constraint!(
-											vars[i][x1][y1] + vars[j][x2][y2] <= 1
-										));
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		match problem.solve() {
-			Ok(solution) => {
-				let mut pos_vec = vec![];
-				for i in 0..vars.len() {
-					for x in 0..vars[i].len() {
-						for y in 0..vars[i][x].len() {
-							if solution.value(vars[i][x][y]) == 1.0 {
-								pos_vec.push((x, y));
-							}
-						}
-					}
-				}
-				assert_eq!(pos_vec.len(), self.combs.len());
-				Ok(pos_vec)
-			}
-			Err(e) => Err(e),
-		}
-	}
-
-	fn solve_as_ilp_coarse8(
-		&self,
-		ld: &LogicalDesign,
-		scale_factor: f64,
-	) -> Result<Vec<(usize, usize)>, ResolutionError> {
-		let side_length = (self.combs.len() as f64 * scale_factor / 8.0).sqrt().ceil() as i32;
-		use good_lp as ilp;
-		let mut problem = ilp::ProblemVariables::new();
-		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
-		let mut vars = vec![];
-		for (i, comb_i) in self.combs.iter().enumerate() {
-			for (j, comb_j) in self.combs.iter().enumerate() {
-				if j >= i {
-					break;
-				}
-				if ld.have_shared_wire(comb_i.logic, comb_j.logic) {
-					connections[i][j] = true;
-				}
-			}
-		}
-		for _comb_i in self.combs.iter().enumerate() {
-			let mut vars_plane = vec![vec![]; (side_length) as usize];
-			for x in 0..side_length {
-				for _y in 0..side_length {
-					vars_plane[x as usize].push(problem.add(variable().binary()));
-				}
-			}
-			vars.push(vars_plane);
-		}
-		let mut problem = ilp::default_solver(problem.minimise(0));
-		for i in 0..vars.len() {
-			let mut expr = ilp::Expression::with_capacity((side_length * side_length) as usize);
-			for x in 0..vars[i].len() {
-				for y in 0..vars[i][x].len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-			}
-			problem.add_constraint(ilp::constraint!(expr == 1));
-		}
-		for x in 0..side_length as usize {
-			for y in 0..side_length as usize {
-				let mut expr = ilp::Expression::with_capacity(self.combs.len());
-				for i in 0..self.combs.len() {
-					expr.add_mul(1, vars[i][x][y]);
-				}
-				problem.add_constraint(ilp::constraint!(expr <= 8));
-			}
-		}
-		for i in 0..vars.len() {
-			for j in 0..i {
-				if connections[i][j] {
-					for x1 in 0..vars[i].len() {
-						for y1 in 0..vars[i][x1].len() {
-							for x2 in 0..vars[j].len() {
-								for y2 in 0..vars[j][x2].len() {
-									let dx = (x1 as i32 - 2 * x2 as i32).abs();
-									let dy = (y1 as i32 - 2 * y2 as i32).abs();
-									if dx > 1 || dy > 1 {
-										problem.add_constraint(constraint!(
-											vars[i][x1][y1] + vars[j][x2][y2] <= 1
-										));
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		match problem.solve() {
-			Ok(solution) => {
-				let mut pos_vec = vec![];
-				for i in 0..vars.len() {
-					for x in 0..vars[i].len() {
-						for y in 0..vars[i][x].len() {
-							if solution.value(vars[i][x][y]) == 1.0 {
-								pos_vec.push((x, y));
-							}
-						}
-					}
-				}
-				assert_eq!(pos_vec.len(), self.combs.len());
-				Ok(pos_vec)
-			}
-			Err(e) => Err(e),
-		}
-	}
-
 	pub fn solve_as_mcmc_dense(
 		&self,
 		ld: &LogicalDesign,
@@ -689,7 +343,18 @@ impl PhysicalDesign {
 		init: Option<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
-		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
+		let side_length = {
+			if let Some(pos) = &init {
+				let mut max_dim = 0;
+				for (_idx, (x, y)) in pos.iter().enumerate() {
+					max_dim = max_dim.max(*x).max(*y);
+					assert!(x % 2 == 0);
+				}
+				max_dim + 1
+			} else {
+				(self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize
+			}
+		};
 		let num_cells = self.combs.len();
 
 		let mut connections = vec![];
@@ -721,7 +386,7 @@ impl PhysicalDesign {
 					sat_count += 1;
 					sat = false;
 				} else {
-					cost += dx + dy;
+					cost += dx / 8.0 + dy / 16.0;
 				}
 			}
 			for (x, block_y) in block_counts.iter().enumerate() {
@@ -766,12 +431,13 @@ impl PhysicalDesign {
 		let mut best_assign = assignments.clone();
 		let mut best_block_counts = block_counts.clone();
 		let mut best_cost = compute_cost(&assignments, &block_counts, max_density);
+		let mut assignments_cost = best_cost;
 
-		let mut temp = init_temp.unwrap_or(20.0 + 15.0 * (num_cells as f64).sqrt());
-		let cooling_rate = 0.999999;
-		let mut iterations = 500000;
+		let mut temp = init_temp.unwrap_or(20.0 + 15.0 * (num_cells as f64));
+		let cooling_rate = 1.0 - 1E-7;
+		let mut iterations = 20_000_000;
 
-		let pick_ripup = |u: f64| -> usize {
+		let exponential_distr_10pct = |u: f64| -> usize {
 			let lambda = std::f64::consts::LN_2 / (0.10 * (num_cells as f64));
 			let x = -1.0 / lambda * u.ln();
 			let mut r = x.round() as isize;
@@ -803,35 +469,204 @@ impl PhysicalDesign {
 				break;
 			}
 
-			let ripup = pick_ripup(rng.random());
-			let mut ripup_cells = vec![];
-			while ripup_cells.len() != ripup {
-				let cell = rng.random_range(0..num_cells);
-				if ripup_cells.contains(&cell) {
-					continue;
-				}
-				ripup_cells.push(cell);
-			}
-
 			let mut new_block_counts = block_counts.clone();
 			let mut new_assignments = assignments.clone();
-			for cell in &ripup_cells {
-				let ass = assignments[*cell];
-				new_block_counts[ass.0][ass.1] -= 1;
-			}
 
-			for cell in &ripup_cells {
-				loop {
-					let (cx, cy) = (
-						rng.random_range(0..side_length) / 2 * 2,
-						rng.random_range(0..side_length),
-					);
-					if new_block_counts[cx][cy] < max_density {
-						new_assignments[*cell] = (cx, cy);
-						new_block_counts[cx][cy] += 1;
-						break;
+			match rng.random_range(0..1000) {
+				i if i < 750 => {
+					let ripup = exponential_distr_10pct(rng.random());
+					let mut ripup_cells = vec![];
+					while ripup_cells.len() != ripup {
+						let cell = rng.random_range(0..num_cells);
+						if ripup_cells.contains(&cell) {
+							continue;
+						}
+						ripup_cells.push(cell);
+					}
+
+					for cell in &ripup_cells {
+						let ass = assignments[*cell];
+						new_block_counts[ass.0][ass.1] -= 1;
+					}
+
+					for cell in &ripup_cells {
+						loop {
+							let (cx, cy) = (
+								rng.random_range(0..side_length) / 2 * 2,
+								rng.random_range(0..side_length),
+							);
+							if new_block_counts[cx][cy] < max_density {
+								new_assignments[*cell] = (cx, cy);
+								new_block_counts[cx][cy] += 1;
+								break;
+							}
+						}
 					}
 				}
+				i if i < 775 => {
+					let swap_count = exponential_distr_10pct(rng.random()) / 2 * 2;
+					let mut picked = vec![];
+
+					while picked.len() < swap_count {
+						let c = rng.random_range(0..num_cells);
+						if !picked.contains(&c) {
+							picked.push(c);
+						}
+					}
+
+					for i in (0..swap_count).step_by(2) {
+						let c1 = picked[i];
+						let c2 = picked[i + 1];
+						let (x1, y1) = new_assignments[c1];
+						let (x2, y2) = new_assignments[c2];
+						new_assignments[c1] = (x2, y2);
+						new_assignments[c2] = (x1, y1);
+					}
+				}
+				i if i < 800 => {
+					let region_w = rng.random_range(1..=side_length / 4);
+					let region_h = rng.random_range(1..=side_length / 4);
+
+					let sx = rng.random_range(0..(side_length - region_w).max(1));
+					let sy = rng.random_range(0..(side_length - region_h).max(1));
+
+					let mut ripup_cells = vec![];
+					for cell in 0..num_cells {
+						let (cx, cy) = new_assignments[cell];
+						if cx >= sx && cx < sx + region_w && cy >= sy && cy < sy + region_h {
+							ripup_cells.push(cell);
+							new_block_counts[cx][cy] -= 1;
+						}
+					}
+
+					for cell in &ripup_cells {
+						loop {
+							let (cx, cy) = (
+								rng.random_range(0..side_length) / 2 * 2,
+								rng.random_range(0..side_length),
+							);
+							if new_block_counts[cx][cy] < max_density {
+								new_assignments[*cell] = (cx, cy);
+								new_block_counts[cx][cy] += 1;
+								break;
+							}
+						}
+					}
+				}
+				i if i < 1000 => {
+					if rng.random_bool(0.5) {
+						if rng.random_bool(0.5) {
+							let line_y = rng.random_range(2..side_length);
+							let mut ripup_cells = vec![];
+							for cell in 0..num_cells {
+								let (cx, cy) = new_assignments[cell];
+								if cy == 0 {
+									continue;
+								}
+								if cy < line_y {
+									ripup_cells.push(cell);
+									new_block_counts[cx][cy] -= 1;
+								}
+							}
+							ripup_cells
+								.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
+							for cell in ripup_cells {
+								let (cx, cy) = new_assignments[cell];
+								if new_block_counts[cx][cy - 1] < max_density {
+									new_block_counts[cx][cy - 1] += 1;
+									new_assignments[cell] = (cx, cy - 1);
+								} else {
+									new_block_counts[cx][cy] += 1;
+								}
+							}
+						} else {
+							let line_y = rng.random_range(0..side_length - 1);
+							let mut ripup_cells = vec![];
+							for cell in 0..num_cells {
+								let (cx, cy) = new_assignments[cell];
+								if cy == side_length - 1 {
+									continue;
+								}
+								if cy > line_y {
+									ripup_cells.push(cell);
+									new_block_counts[cx][cy] -= 1;
+								}
+							}
+							ripup_cells
+								.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
+							for cell in ripup_cells {
+								let (cx, cy) = new_assignments[cell];
+								if new_block_counts[cx][cy + 1] < max_density {
+									new_block_counts[cx][cy + 1] += 1;
+									new_assignments[cell] = (cx, cy + 1);
+								} else {
+									new_block_counts[cx][cy] += 1;
+								}
+							}
+						}
+					} else {
+						if rng.random_bool(0.5) {
+							// Shift cells to the left when x > some threshold
+							let line_x = rng.random_range(2..side_length - 1) / 2 * 2; // pick a vertical "line"
+							let mut ripup_cells = Vec::new();
+							for cell in 0..num_cells {
+								let (cx, cy) = new_assignments[cell];
+								if cx == 0 {
+									continue; // can't shift left if we're at x=0
+								}
+								if cx > line_x {
+									ripup_cells.push(cell);
+									new_block_counts[cx][cy] -= 1;
+								}
+							}
+							// Sort so we shift in a stable order (largest x first)
+							ripup_cells
+								.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+
+							for cell in ripup_cells {
+								let (cx, cy) = new_assignments[cell];
+								// Attempt to move left by 1
+								if new_block_counts[cx - 2][cy] < max_density {
+									new_block_counts[cx - 2][cy] += 1;
+									new_assignments[cell] = (cx - 2, cy);
+								} else {
+									// Revert if we can’t place it
+									new_block_counts[cx][cy] += 1;
+								}
+							}
+						} else {
+							// Shift cells to the right when x < some threshold
+							let line_x = rng.random_range(2..(side_length - 1)) / 2 * 2; // pick a vertical "line"
+							let mut ripup_cells = Vec::new();
+							for cell in 0..num_cells {
+								let (cx, cy) = new_assignments[cell];
+								if cx == side_length - 1 {
+									continue; // can't shift right at the far edge
+								}
+								if cx < line_x {
+									ripup_cells.push(cell);
+									new_block_counts[cx][cy] -= 1;
+								}
+							}
+							// Sort so we shift in a stable order (smallest x first)
+							ripup_cells
+								.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
+
+							for cell in ripup_cells {
+								let (cx, cy) = new_assignments[cell];
+								// Attempt to move right by 1
+								if new_block_counts[cx + 2][cy] < max_density {
+									new_block_counts[cx + 2][cy] += 1;
+									new_assignments[cell] = (cx + 2, cy);
+								} else {
+									// Revert if we can’t place it
+									new_block_counts[cx][cy] += 1;
+								}
+							}
+						}
+					}
+				}
+				_ => unreachable!(),
 			}
 
 			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
@@ -842,11 +677,19 @@ impl PhysicalDesign {
 				println!("Reducing max density to {max_density}");
 			}
 
-			if delta < 0.0 || new_cost.1 {
+			if step % 1000000 == 0 {
+				println!(
+					"Current cost {} ({}), temp {}",
+					assignments_cost.0, assignments_cost.2, temp
+				);
+			}
+
+			if delta < 0.0 {
 				best_cost = new_cost;
 				best_assign = new_assignments.clone();
 				assignments = new_assignments;
 				block_counts = new_block_counts;
+				assignments_cost = best_cost;
 				best_block_counts = block_counts.clone();
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
 				if iterations - step < iterations * 1 / 10 {
@@ -854,15 +697,19 @@ impl PhysicalDesign {
 					iterations = iterations * 25 / 20;
 					temp *= 1.12;
 				}
-			} else if delta / best_cost.0 > 1.05 {
-				assignments = best_assign.clone();
-				block_counts = best_block_counts.clone();
 			} else {
 				let p = f64::exp(-delta / temp);
 				if rng.random_bool(p) {
 					assignments = new_assignments;
 					block_counts = new_block_counts;
+					assignments_cost = new_cost;
 				}
+			}
+
+			if assignments_cost.0 / best_cost.0 > 1.5 {
+				assignments = best_assign.clone();
+				block_counts = best_block_counts.clone();
+				assignments_cost = best_cost;
 			}
 
 			temp *= cooling_rate;
@@ -910,6 +757,9 @@ impl PhysicalDesign {
 		self.space.clear();
 		for x in &mut self.connected_wires {
 			x.clear();
+		}
+		for c in &mut self.combs {
+			c.placed = false;
 		}
 	}
 
@@ -1513,45 +1363,6 @@ mod test {
 	}
 
 	#[test]
-	fn complex_40_ilp() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l, PlacementStrategy::ILP);
-	}
-
-	#[test]
-	fn simple_ilp() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_simple_logical_design();
-		p.build_from(&l, PlacementStrategy::ILP);
-	}
-
-	#[test]
-	fn n_combs_ilp() {
-		let mut p = PhysicalDesign::new();
-		let mut l = LogicalDesign::new();
-		for _ in 0..500 {
-			l.add_nop(ld::Signal::Id(0), ld::Signal::Id(0));
-		}
-		p.build_from(&l, PlacementStrategy::ILP);
-	}
-
-	#[test]
-	fn complex_40_ilp_coarse15_objective() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l, PlacementStrategy::ILPCoarse15);
-		p.save_svg(&l, "svg/complex40_combs_ilp_coarse15.svg");
-	}
-
-	#[test]
-	fn complex_40_ilp_coarse8() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l, PlacementStrategy::ILPCoarse8);
-	}
-
-	#[test]
 	fn n_combs() {
 		let mut p = PhysicalDesign::new();
 		let l = get_large_logical_design(200);
@@ -1578,7 +1389,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(80);
+		let l = ld::get_large_memory_test_design(100);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
