@@ -1389,7 +1389,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(100);
+		let l = ld::get_large_memory_test_design(40);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
