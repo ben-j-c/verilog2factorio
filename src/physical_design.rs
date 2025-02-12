@@ -201,38 +201,52 @@ impl PhysicalDesign {
 		ld_node
 	}
 
+	fn solve_as_connectivity_averaging(
+		&mut self,
+		logical: &LogicalDesign,
+	) -> Result<Vec<(usize, usize)>, ()> {
+		logical.for_all(|_, node| {
+			match node.function {
+				ld::NodeFunction::Arithmetic { .. }
+				| ld::NodeFunction::Decider { .. }
+				| ld::NodeFunction::Constant { .. }
+				| ld::NodeFunction::Lamp { .. } => {
+					self.recurse_place_comb(*self.idx_combs.get(&node.id).unwrap(), logical)
+				}
+				ld::NodeFunction::WireSum(..) => {}
+			};
+		});
+		let min_x = self
+			.combs
+			.iter()
+			.map(|c| c.position.0)
+			.min_by(|a, b| a.total_cmp(b))
+			.unwrap()
+			.floor();
+		let min_y = self
+			.combs
+			.iter()
+			.map(|c| c.position.1)
+			.min_by(|a, b| a.total_cmp(b))
+			.unwrap()
+			.floor();
+		for c in &mut self.combs {
+			c.position.0 -= min_x - 1.0;
+			c.position.1 -= min_y - 1.0;
+		}
+		let mut ret = vec![(0, 0); self.combs.len()];
+		for (idx, c) in self.combs.iter().enumerate() {
+			ret[idx] = (c.position.0 as usize, c.position.1 as usize);
+		}
+		self.reset_place_route();
+		Ok(ret)
+	}
+
 	fn place_combs(&mut self, logical: &LogicalDesign, placement_strategy: PlacementStrategy) {
 		match placement_strategy {
 			PlacementStrategy::ConnectivityAveraging => {
-				logical.for_all(|_, node| {
-					match node.function {
-						ld::NodeFunction::Arithmetic { .. }
-						| ld::NodeFunction::Decider { .. }
-						| ld::NodeFunction::Constant { .. }
-						| ld::NodeFunction::Lamp { .. } => {
-							self.recurse_place_comb(*self.idx_combs.get(&node.id).unwrap(), logical)
-						}
-						ld::NodeFunction::WireSum(..) => {}
-					};
-				});
-				let min_x = self
-					.combs
-					.iter()
-					.map(|c| c.position.0)
-					.min_by(|a, b| a.total_cmp(b))
-					.unwrap()
-					.floor();
-				let min_y = self
-					.combs
-					.iter()
-					.map(|c| c.position.1)
-					.min_by(|a, b| a.total_cmp(b))
-					.unwrap()
-					.floor();
-				for c in &mut self.combs {
-					c.position.0 -= min_x - 1.0;
-					c.position.1 -= min_y - 1.0;
-				}
+				let pos = self.solve_as_connectivity_averaging(logical).unwrap();
+				self.place_combs_physical_dense(&pos, logical).unwrap();
 			}
 			PlacementStrategy::ILP => {
 				let scale_factors = [1.0, 1.1, 1.5, 2.0, 4.0];
@@ -322,9 +336,9 @@ impl PhysicalDesign {
 				panic!("Well we tried a very large area and it didn't work.");
 			}
 			PlacementStrategy::MCMCSADense => {
-				let scale_factors = [1.0, 2.0, 4.0, 8.0];
-				let mut last_optimal = None;
-				let mut temp = None;
+				let scale_factors = [1.3, 2.0, 4.0, 8.0];
+				let mut _last_optimal = None;
+				let mut _temp = None;
 				for scale in scale_factors {
 					self.reset_place_route();
 					let comb_positions = match self.solve_as_mcmc_dense(logical, scale, None, None)
@@ -333,15 +347,21 @@ impl PhysicalDesign {
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale {scale}");
 							println!("WARN: {}", e.0);
-							self.place_combs_physical_dense(&e.1, logical);
+							match self.place_combs_physical_dense(&e.1, logical) {
+								Ok(_) => {}
+								Err(_) => {}
+							}
 							self.connect_combs(logical);
 							self.save_svg(logical, format!("./svg/failed{}.svg", scale).as_str());
-							last_optimal = Some(e.1);
-							temp = Some(0.1);
+							_last_optimal = Some(e.1);
+							_temp = Some(0.1);
 							continue;
 						}
 					};
-					self.place_combs_physical_dense(&comb_positions, logical);
+					match self.place_combs_physical_dense(&comb_positions, logical) {
+						Ok(_) => {}
+						Err(_) => continue,
+					}
 					return;
 				}
 				panic!("Well we tried a very large area and it didn't work.");
@@ -353,12 +373,12 @@ impl PhysicalDesign {
 		&mut self,
 		comb_positions: &Vec<(usize, usize)>,
 		logical: &LogicalDesign,
-	) {
+	) -> Result<(), ()> {
 		for (idx, (x, y)) in comb_positions.iter().enumerate() {
 			let p = (*x as f64, *y as f64);
-			self.place_comb_physical(p, CombinatorId(idx), logical)
-				.unwrap();
+			self.place_comb_physical(p, CombinatorId(idx), logical)?;
 		}
+		Ok(())
 	}
 
 	fn place_combs_physical_coarse15(
@@ -684,7 +704,10 @@ impl PhysicalDesign {
 			}
 		}
 
-		let compute_cost = |assign: &Vec<(usize, usize)>| -> (f64, bool, i32) {
+		let compute_cost = |assign: &Vec<(usize, usize)>,
+		                    block_counts: &Vec<Vec<i32>>,
+		                    max_density: i32|
+		 -> (f64, bool, i32) {
 			let mut cost = 0.0;
 			let mut sat_count = 0;
 			let mut sat = true;
@@ -693,12 +716,21 @@ impl PhysicalDesign {
 				let (x_j, y_j) = assign[j];
 				let dx = (x_i as isize - x_j as isize).abs() as f64;
 				let dy = (y_i as isize - y_j as isize).abs() as f64;
-				if dx.powi(2) + dy.powi(2) > 80.0 {
+				if dx.powi(2) + dy.powi(2) > (64.0 + 81.0) / 2.0 {
 					cost += dx.powi(2) + dy.powi(2) as f64;
 					sat_count += 1;
 					sat = false;
 				} else {
 					cost += dx + dy;
+				}
+			}
+			for (x, block_y) in block_counts.iter().enumerate() {
+				for (_y, count) in block_y.iter().enumerate() {
+					if *count > 1 {
+						sat = false;
+						cost += *count as f64 * 10.0;
+						sat_count += *count - max_density;
+					}
 				}
 			}
 			(cost, sat, sat_count)
@@ -707,6 +739,8 @@ impl PhysicalDesign {
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
 		let mut assignments = vec![(0, 0); num_cells];
 		let mut block_counts = vec![vec![0; side_length]; side_length];
+
+		let mut max_density = 15;
 
 		if let Some(init) = init {
 			assignments = init;
@@ -720,7 +754,7 @@ impl PhysicalDesign {
 						rng.random_range(0..side_length) / 2 * 2,
 						rng.random_range(0..side_length),
 					);
-					if block_counts[cx][cy] < 1 {
+					if block_counts[cx][cy] < max_density {
 						assignments[cell] = (cx, cy);
 						block_counts[cx][cy] += 1;
 						break;
@@ -731,14 +765,14 @@ impl PhysicalDesign {
 
 		let mut best_assign = assignments.clone();
 		let mut best_block_counts = block_counts.clone();
-		let mut best_cost = compute_cost(&assignments);
+		let mut best_cost = compute_cost(&assignments, &block_counts, max_density);
 
 		let mut temp = init_temp.unwrap_or(20.0 + 15.0 * (num_cells as f64).sqrt());
 		let cooling_rate = 0.999999;
 		let mut iterations = 500000;
 
 		let pick_ripup = |u: f64| -> usize {
-			let lambda = std::f64::consts::LN_2 / (0.05 * (num_cells as f64));
+			let lambda = std::f64::consts::LN_2 / (0.10 * (num_cells as f64));
 			let x = -1.0 / lambda * u.ln();
 			let mut r = x.round() as isize;
 			if r < 1 {
@@ -749,10 +783,10 @@ impl PhysicalDesign {
 			r as usize
 		};
 
-		let check_shit = |block_counts: &Vec<Vec<i32>>| {
+		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
 			for (x, block_y) in block_counts.iter().enumerate() {
 				for (_y, count) in block_y.iter().enumerate() {
-					if *count > 1 {
+					if *count > max_density {
 						assert!(false);
 					}
 					if *count > 0 && x % 2 == 1 {
@@ -765,8 +799,10 @@ impl PhysicalDesign {
 		let mut step = 0;
 		while step < iterations {
 			if best_cost.1 {
+				check_invariants(&block_counts, 1);
 				break;
 			}
+
 			let ripup = pick_ripup(rng.random());
 			let mut ripup_cells = vec![];
 			while ripup_cells.len() != ripup {
@@ -784,25 +820,27 @@ impl PhysicalDesign {
 				new_block_counts[ass.0][ass.1] -= 1;
 			}
 
-			check_shit(&new_block_counts);
-
 			for cell in &ripup_cells {
 				loop {
 					let (cx, cy) = (
 						rng.random_range(0..side_length) / 2 * 2,
 						rng.random_range(0..side_length),
 					);
-					if new_block_counts[cx][cy] < 1 {
+					if new_block_counts[cx][cy] < max_density {
 						new_assignments[*cell] = (cx, cy);
 						new_block_counts[cx][cy] += 1;
 						break;
 					}
 				}
 			}
-			check_shit(&new_block_counts);
 
-			let new_cost = compute_cost(&new_assignments);
+			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
 			let delta = new_cost.0 - best_cost.0;
+
+			if new_cost.2 <= 0 && max_density > 1 {
+				max_density -= 1;
+				println!("Reducing max density to {max_density}");
+			}
 
 			if delta < 0.0 || new_cost.1 {
 				best_cost = new_cost;
@@ -814,9 +852,9 @@ impl PhysicalDesign {
 				if iterations - step < iterations * 1 / 10 {
 					println!("Boosting iterations {}", best_cost.0);
 					iterations = iterations * 25 / 20;
-					temp *= 1.1;
+					temp *= 1.12;
 				}
-			} else if delta / best_cost.0 > 1.5 {
+			} else if delta / best_cost.0 > 1.05 {
 				assignments = best_assign.clone();
 				block_counts = best_block_counts.clone();
 			} else {
@@ -834,7 +872,7 @@ impl PhysicalDesign {
 			step += 1;
 		}
 
-		check_shit(&best_block_counts);
+		//check_invariants(&block_counts, max_density);
 
 		if !best_cost.1 {
 			return Err((
@@ -1463,9 +1501,8 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 
 #[cfg(test)]
 mod test {
-	use ld::get_large_memory_test_design;
 
-	use crate::logical_design::{get_large_logical_design, NodeId};
+	use crate::logical_design::get_large_logical_design;
 
 	use super::*;
 	#[test]
@@ -1544,5 +1581,13 @@ mod test {
 		let l = ld::get_large_memory_test_design(80);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
+	}
+
+	#[test]
+	fn synthetic_n_mcmc_dense() {
+		let mut p = PhysicalDesign::new();
+		let l = get_large_logical_design(100);
+		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
 }
