@@ -1,4 +1,4 @@
-use core::panic;
+use core::{f64, panic};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{
@@ -238,6 +238,67 @@ impl PhysicalDesign {
 		Ok(ret)
 	}
 
+	fn get_initializations(&self, logical: &LogicalDesign) -> Vec<Vec<(usize, usize)>> {
+		let side_length = (self.combs.len() as f64 * 2.0).sqrt().ceil() as usize;
+		let mut initial0 = vec![(0, 0); self.combs.len()];
+		{
+			let mut x = 0;
+			let mut y: isize = 0;
+			let mut ydir = 1;
+			for c in &self.get_bfs_order(CombinatorId(0), logical) {
+				if y >= side_length as isize || y < 0 {
+					x += 2;
+					ydir = -ydir;
+					y += ydir;
+				}
+				initial0[c.0] = (x, y as usize);
+				y += ydir;
+			}
+		}
+		let mut initial1 = vec![(0, 0); self.combs.len()];
+		{
+			let mut x = 0;
+			let mut y = 0;
+			for c in &self.get_bfs_order(CombinatorId(0), logical) {
+				if y >= side_length {
+					x += 2;
+					y = 0;
+				}
+				initial1[c.0] = (x, y as usize);
+				y += 1;
+			}
+		}
+		let mut initial2 = vec![(0, 0); self.combs.len()];
+		{
+			let mut x = 0;
+			let mut y: isize = 0;
+			let mut ydir = 1;
+			for c in 0..self.combs.len() {
+				if y >= side_length as isize || y < 0 {
+					x += 2;
+					ydir = -ydir;
+					y += ydir;
+				}
+				initial2[c] = (x, y as usize);
+				y += ydir;
+			}
+		}
+		let mut initial3 = vec![(0, 0); self.combs.len()];
+		{
+			let mut x = 0;
+			let mut y = 0;
+			for c in 0..self.combs.len() {
+				if y >= side_length {
+					x += 2;
+					y = 0;
+				}
+				initial3[c] = (x, y as usize);
+				y += 1;
+			}
+		}
+		vec![initial0, initial1, initial2, initial3]
+	}
+
 	fn place_combs(&mut self, logical: &LogicalDesign, placement_strategy: PlacementStrategy) {
 		match placement_strategy {
 			PlacementStrategy::ConnectivityAveraging => {
@@ -245,25 +306,13 @@ impl PhysicalDesign {
 				self.place_combs_physical_dense(&pos, logical).unwrap();
 			}
 			PlacementStrategy::MCMCSADense => {
-				let scale_factors = [1.3, 2.0];
-				let mut initial = vec![];
-				let side_length = (self.combs.len() as f64).sqrt().ceil() as usize;
-				let mut x = 0;
-				let mut y = 0;
-				for _c in &self.combs {
-					if y >= side_length {
-						x += 2;
-						y = 0;
-					}
-					initial.push((x, y));
-					y += 1;
-				}
-				let mut last_optimal = Some(initial.clone());
+				let scale_factors = [1.3];
+				let initializations = self.get_initializations(logical);
 				let mut _temp = None;
 				for scale in scale_factors {
 					self.reset_place_route();
 					let comb_positions =
-						match self.solve_as_mcmc_dense(logical, scale, last_optimal, None) {
+						match self.solve_as_mcmc_dense(logical, scale, &initializations, None) {
 							Ok(pos) => pos,
 							Err(e) => {
 								println!("WARN: MCMC failed to place with scale {scale}");
@@ -277,7 +326,6 @@ impl PhysicalDesign {
 									logical,
 									format!("./svg/failed{}.svg", scale).as_str(),
 								);
-								last_optimal = Some(e.1);
 								_temp = Some(0.1);
 								continue;
 							}
@@ -285,7 +333,6 @@ impl PhysicalDesign {
 					match self.place_combs_physical_dense(&comb_positions, logical) {
 						Ok(_) => {}
 						Err(_) => {
-							last_optimal = Some(initial.clone());
 							continue;
 						}
 					}
@@ -338,21 +385,10 @@ impl PhysicalDesign {
 		&self,
 		ld: &LogicalDesign,
 		scale_factor: f64,
-		init: Option<Vec<(usize, usize)>>,
+		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
-		let side_length = {
-			if let Some(pos) = &init {
-				let mut max_dim = 0;
-				for (_idx, (x, y)) in pos.iter().enumerate() {
-					max_dim = max_dim.max(*x).max(*y);
-					assert!(x % 2 == 0);
-				}
-				max_dim + 1
-			} else {
-				(self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize
-			}
-		};
+		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		let num_cells = self.combs.len();
 
 		let mut connections = vec![];
@@ -406,12 +442,7 @@ impl PhysicalDesign {
 
 		let mut max_density = 15;
 
-		if let Some(init) = init {
-			assignments = init;
-			for (cx, cy) in &assignments {
-				block_counts[*cx][*cy] += 1;
-			}
-		} else {
+		if initializations.is_empty() {
 			for cell in 0..num_cells {
 				loop {
 					let (cx, cy) = (
@@ -424,6 +455,31 @@ impl PhysicalDesign {
 						break;
 					}
 				}
+			}
+		} else {
+			let mut min_score = (f64::INFINITY, false, i32::MAX);
+			let mut min_idx = 0;
+			for (idx, init) in initializations.iter().enumerate() {
+				block_counts = vec![vec![0; side_length]; side_length];
+				for (cx, cy) in init {
+					block_counts[*cx][*cy] += 1;
+				}
+				let cost = compute_cost(init, &block_counts, max_density);
+				if min_score.1 && min_score.2 == 0 {
+					if cost.1 && cost.2 == 0 && cost.0 < min_score.0 {
+						min_score = cost;
+						min_idx = idx;
+					}
+				} else if cost.0 < min_score.0 {
+					min_score = cost;
+					min_idx = idx;
+				}
+			}
+			println!("Selecting initialization number {min_idx}");
+			assignments = initializations[min_idx].clone();
+			block_counts = vec![vec![0; side_length]; side_length];
+			for (cx, cy) in &assignments {
+				block_counts[*cx][*cy] += 1;
 			}
 		}
 
@@ -1076,7 +1132,6 @@ impl PhysicalDesign {
 		coid: CombinatorId,
 		terminal: TerminalId,
 	) -> HashSet<(CombinatorId, TerminalId)> {
-		println!("starting {:?} {:?}", coid, terminal);
 		let mut queue = LinkedList::new();
 		let mut seen: HashSet<WireId> = HashSet::new();
 		let mut retval = HashSet::new();
@@ -1092,7 +1147,6 @@ impl PhysicalDesign {
 				}
 			};
 		add_wires_on_terminal(coid, terminal, &mut queue);
-		println!("Queue: {:?}", queue);
 		while !queue.is_empty() {
 			let wiid = queue.pop_front().unwrap();
 			if seen.contains(&wiid) {
@@ -1100,12 +1154,39 @@ impl PhysicalDesign {
 			}
 			seen.insert(wiid);
 			let wire = &self.wires[wiid.0];
-			println!("Taking: {:?}", wire);
 			add_wires_on_terminal(wire.node1_id, wire.terminal1_id, &mut queue);
 			add_wires_on_terminal(wire.node2_id, wire.terminal2_id, &mut queue);
 			retval.insert((wire.node1_id, wire.terminal1_id));
 			retval.insert((wire.node2_id, wire.terminal2_id));
-			println!("Queue: {:?}", queue);
+		}
+		retval
+	}
+
+	fn get_bfs_order(&self, coid: CombinatorId, ld: &LogicalDesign) -> Vec<CombinatorId> {
+		// Replace with cheaper algo. I just copy pasted it.
+		let mut connections = vec![vec![]; self.combs.len()];
+		for i in 0..self.combs.len() {
+			for j in 0..self.combs.len() {
+				if ld.have_shared_wire(self.combs[i].logic, self.combs[j].logic) {
+					connections[i].push(CombinatorId(j));
+				}
+			}
+		}
+		let mut queue = LinkedList::new();
+		let mut seen_comb: HashSet<CombinatorId> = HashSet::new();
+		let mut retval = vec![];
+		queue.push_back(coid);
+		retval.push(coid);
+		while !queue.is_empty() {
+			let coid = queue.pop_front().unwrap();
+			if seen_comb.contains(&coid) {
+				continue;
+			}
+			seen_comb.insert(coid);
+			retval.push(coid);
+			for coid_faninfanout in &connections[coid.0] {
+				queue.push_back(*coid_faninfanout);
+			}
 		}
 		retval
 	}
@@ -1526,7 +1607,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(100);
+		let l = ld::get_large_memory_test_design(400);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
@@ -1534,7 +1615,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(300);
+		let l = get_large_logical_design(200);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
