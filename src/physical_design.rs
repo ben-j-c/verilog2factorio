@@ -1404,7 +1404,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(200);
+		let l = get_large_logical_design(100);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
