@@ -1,4 +1,4 @@
-use core::{num, panic};
+use core::panic;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{
@@ -8,8 +8,6 @@ use std::{
 	vec,
 };
 
-use good_lp::{constraint, variable, ResolutionError, Solution, SolverModel};
-
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
@@ -17,8 +15,8 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum PlacementStrategy {
-	#[default]
 	ConnectivityAveraging,
+	#[default]
 	MCMCSADense,
 }
 
@@ -252,7 +250,7 @@ impl PhysicalDesign {
 				let side_length = (self.combs.len() as f64).sqrt().ceil() as usize;
 				let mut x = 0;
 				let mut y = 0;
-				for c in &self.combs {
+				for _c in &self.combs {
 					if y >= side_length {
 						x += 2;
 						y = 0;
@@ -390,7 +388,7 @@ impl PhysicalDesign {
 					cost += r2distance.sqrt() / 10.0;
 				}
 			}
-			for (x, block_y) in block_counts.iter().enumerate() {
+			for (_x, block_y) in block_counts.iter().enumerate() {
 				for (_y, count) in block_y.iter().enumerate() {
 					if *count > 1 {
 						sat = false;
@@ -459,6 +457,9 @@ impl PhysicalDesign {
 				final_stage = true;
 				iterations = (step as f64 * 1.2) as i32;
 				println!("Entering final compacting stage.");
+				if best_cost.0 <= 0.0 {
+					break;
+				}
 			}
 
 			let mut new_block_counts = block_counts.clone();
@@ -1365,7 +1366,7 @@ fn ripup_range_method(
 fn crack_in_two_method(
 	rng: &mut StdRng,
 	assignments: &Vec<(usize, usize)>,
-	block_counts: &Vec<Vec<i32>>,
+	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
 	side_length: usize,
@@ -1533,7 +1534,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(100);
+		let l = get_large_logical_design(300);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
