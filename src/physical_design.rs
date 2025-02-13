@@ -477,7 +477,7 @@ impl PhysicalDesign {
 			let mut new_assignments = assignments.clone();
 
 			match rng.random_range(0..1000) {
-				i if i < 750 => {
+				i if i < 700 => {
 					let ripup = exponential_distr(rng.random());
 					let mut ripup_cells = vec![];
 					while ripup_cells.len() != ripup {
@@ -507,7 +507,7 @@ impl PhysicalDesign {
 						}
 					}
 				}
-				i if i < 775 => {
+				i if i < 725 => {
 					if final_stage {
 						continue;
 					}
@@ -530,7 +530,7 @@ impl PhysicalDesign {
 						new_assignments[c2] = (x1, y1);
 					}
 				}
-				i if i < 900 => {
+				i if i < 750 => {
 					if final_stage {
 						continue;
 					}
@@ -1404,7 +1404,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(100);
+		let l = get_large_logical_design(200);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
