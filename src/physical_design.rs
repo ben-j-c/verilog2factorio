@@ -1,4 +1,4 @@
-use core::panic;
+use core::{num, panic};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{
@@ -438,18 +438,6 @@ impl PhysicalDesign {
 		let cooling_rate = 1.0 - 1E-7;
 		let mut iterations = 20_000_000;
 
-		let exponential_distr = |u: f64| -> usize {
-			let lambda = std::f64::consts::LN_2 / (0.02 * (num_cells as f64));
-			let x = -1.0 / lambda * u.ln();
-			let mut r = x.round() as isize;
-			if r < 1 {
-				r = 1;
-			} else if r > (num_cells as isize) {
-				r = num_cells as isize;
-			}
-			r as usize
-		};
-
 		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
 			for (x, block_y) in block_counts.iter().enumerate() {
 				for (_y, count) in block_y.iter().enumerate() {
@@ -476,202 +464,54 @@ impl PhysicalDesign {
 			let mut new_block_counts = block_counts.clone();
 			let mut new_assignments = assignments.clone();
 
-			match rng.random_range(0..1000) {
-				i if i < 700 => {
-					let ripup = exponential_distr(rng.random());
-					let mut ripup_cells = vec![];
-					while ripup_cells.len() != ripup {
-						let cell = rng.random_range(0..num_cells);
-						if ripup_cells.contains(&cell) {
-							continue;
-						}
-						ripup_cells.push(cell);
-					}
+			const METHODS: &[(
+				usize,
+				bool,
+				fn(
+					rng: &mut StdRng,
+					assignments: &Vec<(usize, usize)>,
+					block_counts: &Vec<Vec<i32>>,
+					new_assignments: &mut Vec<(usize, usize)>,
+					new_block_counts: &mut Vec<Vec<i32>>,
+					side_length: usize,
+					max_density: i32,
+				),
+			)] = &[
+				(750, true, ripup_replace_method),
+				(100, true, swap_local_method),
+				(25, false, swap_random_method),
+				(25, false, ripup_range_method),
+				(250, false, crack_in_two_method),
+			];
 
-					for cell in &ripup_cells {
-						let ass = assignments[*cell];
-						new_block_counts[ass.0][ass.1] -= 1;
-					}
+			// Select weighted method
+			{
+				let total_weight: usize = METHODS
+					.iter()
+					.filter(|(_, can_run_if_final, _)| !final_stage || *can_run_if_final)
+					.map(|(weight, _, _)| *weight)
+					.sum();
 
-					for cell in &ripup_cells {
-						loop {
-							let (cx, cy) = (
-								rng.random_range(0..side_length) / 2 * 2,
-								rng.random_range(0..side_length),
-							);
-							if new_block_counts[cx][cy] < max_density {
-								new_assignments[*cell] = (cx, cy);
-								new_block_counts[cx][cy] += 1;
-								break;
-							}
-						}
-					}
-				}
-				i if i < 725 => {
-					if final_stage {
+				let pick = rng.random_range(0..total_weight);
+				let mut cumulative = 0;
+				for (weight, can_run_if_final, func) in METHODS {
+					if final_stage && !can_run_if_final {
 						continue;
 					}
-					let swap_count = exponential_distr(rng.random()) / 2 * 2;
-					let mut picked = vec![];
-
-					while picked.len() < swap_count {
-						let c = rng.random_range(0..num_cells);
-						if !picked.contains(&c) {
-							picked.push(c);
-						}
-					}
-
-					for i in (0..swap_count).step_by(2) {
-						let c1 = picked[i];
-						let c2 = picked[i + 1];
-						let (x1, y1) = new_assignments[c1];
-						let (x2, y2) = new_assignments[c2];
-						new_assignments[c1] = (x2, y2);
-						new_assignments[c2] = (x1, y1);
+					cumulative += weight;
+					if pick < cumulative {
+						func(
+							&mut rng,
+							&assignments,
+							&block_counts,
+							&mut new_assignments,
+							&mut new_block_counts,
+							side_length,
+							max_density,
+						);
+						break;
 					}
 				}
-				i if i < 750 => {
-					if final_stage {
-						continue;
-					}
-					let region_w = rng.random_range(1..=side_length / 4);
-					let region_h = rng.random_range(1..=side_length / 4);
-
-					let sx = rng.random_range(0..(side_length - region_w).max(1));
-					let sy = rng.random_range(0..(side_length - region_h).max(1));
-
-					let mut ripup_cells = vec![];
-					for cell in 0..num_cells {
-						let (cx, cy) = new_assignments[cell];
-						if cx >= sx && cx < sx + region_w && cy >= sy && cy < sy + region_h {
-							ripup_cells.push(cell);
-							new_block_counts[cx][cy] -= 1;
-						}
-					}
-
-					for cell in &ripup_cells {
-						loop {
-							let (cx, cy) = (
-								rng.random_range(0..side_length) / 2 * 2,
-								rng.random_range(0..side_length),
-							);
-							if new_block_counts[cx][cy] < max_density {
-								new_assignments[*cell] = (cx, cy);
-								new_block_counts[cx][cy] += 1;
-								break;
-							}
-						}
-					}
-				}
-				i if i < 1000 => {
-					if final_stage {
-						continue;
-					}
-					if rng.random_bool(0.5) {
-						if rng.random_bool(0.5) {
-							let line_y = rng.random_range(3..side_length - 3);
-							let mut ripup_cells = vec![];
-							for cell in 0..num_cells {
-								let (cx, cy) = new_assignments[cell];
-								if cy == 0 {
-									continue;
-								}
-								if cy < line_y {
-									ripup_cells.push(cell);
-									new_block_counts[cx][cy] -= 1;
-								}
-							}
-							ripup_cells
-								.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
-							for cell in ripup_cells {
-								let (cx, cy) = new_assignments[cell];
-								if new_block_counts[cx][cy - 1] < max_density {
-									new_block_counts[cx][cy - 1] += 1;
-									new_assignments[cell] = (cx, cy - 1);
-								} else {
-									new_block_counts[cx][cy] += 1;
-								}
-							}
-						} else {
-							let line_y = rng.random_range(3..side_length - 3);
-							let mut ripup_cells = vec![];
-							for cell in 0..num_cells {
-								let (cx, cy) = new_assignments[cell];
-								if cy == side_length - 1 {
-									continue;
-								}
-								if cy > line_y {
-									ripup_cells.push(cell);
-									new_block_counts[cx][cy] -= 1;
-								}
-							}
-							ripup_cells
-								.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
-							for cell in ripup_cells {
-								let (cx, cy) = new_assignments[cell];
-								if new_block_counts[cx][cy + 1] < max_density {
-									new_block_counts[cx][cy + 1] += 1;
-									new_assignments[cell] = (cx, cy + 1);
-								} else {
-									new_block_counts[cx][cy] += 1;
-								}
-							}
-						}
-					} else {
-						if rng.random_bool(0.5) {
-							let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
-							let mut ripup_cells = Vec::new();
-							for cell in 0..num_cells {
-								let (cx, cy) = new_assignments[cell];
-								if cx == 0 {
-									continue;
-								}
-								if cx > line_x {
-									ripup_cells.push(cell);
-									new_block_counts[cx][cy] -= 1;
-								}
-							}
-							ripup_cells
-								.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
-
-							for cell in ripup_cells {
-								let (cx, cy) = new_assignments[cell];
-								if new_block_counts[cx - 2][cy] < max_density {
-									new_block_counts[cx - 2][cy] += 1;
-									new_assignments[cell] = (cx - 2, cy);
-								} else {
-									new_block_counts[cx][cy] += 1;
-								}
-							}
-						} else {
-							let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
-							let mut ripup_cells = Vec::new();
-							for cell in 0..num_cells {
-								let (cx, cy) = new_assignments[cell];
-								if cx == side_length - 1 {
-									continue;
-								}
-								if cx < line_x {
-									ripup_cells.push(cell);
-									new_block_counts[cx][cy] -= 1;
-								}
-							}
-							ripup_cells
-								.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-							for cell in ripup_cells {
-								let (cx, cy) = new_assignments[cell];
-								if new_block_counts[cx + 2][cy] < max_density {
-									new_block_counts[cx + 2][cy] += 1;
-									new_assignments[cell] = (cx + 2, cy);
-								} else {
-									new_block_counts[cx][cy] += 1;
-								}
-							}
-						}
-					}
-				}
-				_ => unreachable!(),
 			}
 
 			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
@@ -1356,6 +1196,295 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 	marks.into_iter().collect()
 }
 
+fn ripup_replace_method(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	side_length: usize,
+	max_density: i32,
+) {
+	let num_cells = assignments.len();
+	let ripup = exponential_distr_sample(rng.random(), 0.02, num_cells);
+	let mut ripup_cells = vec![];
+	while ripup_cells.len() != ripup {
+		let cell = rng.random_range(0..num_cells);
+		if ripup_cells.contains(&cell) {
+			continue;
+		}
+		ripup_cells.push(cell);
+	}
+
+	for cell in &ripup_cells {
+		let ass = assignments[*cell];
+		new_block_counts[ass.0][ass.1] -= 1;
+	}
+
+	for cell in &ripup_cells {
+		loop {
+			let (cx, cy) = (
+				rng.random_range(0..side_length) / 2 * 2,
+				rng.random_range(0..side_length),
+			);
+			if new_block_counts[cx][cy] < max_density {
+				new_assignments[*cell] = (cx, cy);
+				new_block_counts[cx][cy] += 1;
+				break;
+			}
+		}
+	}
+}
+
+fn swap_local_method(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	side_length: usize,
+	_max_density: i32,
+) {
+	let num_cells = assignments.len();
+	let n_swap = exponential_distr_sample(rng.random(), 0.02, num_cells);
+	let mut swap_cells = vec![];
+	while swap_cells.len() != n_swap {
+		let cell = rng.random_range(0..num_cells);
+		if swap_cells.contains(&cell) {
+			continue;
+		}
+		swap_cells.push(cell);
+	}
+
+	for cell in &swap_cells {
+		let (cx, cy) = new_assignments[*cell];
+		loop {
+			let pick_x: i32 = rng.random_range(0..=1) * 2;
+			let pick_y: i32 = rng.random_range(-1..=1);
+			let want_x = cx as isize + pick_x as isize;
+			let want_y = cy as isize + pick_y as isize;
+			let want_assignment = (want_x, want_y);
+			if (cx as isize, cy as isize) == want_assignment
+				|| want_assignment.0 < 0
+				|| want_assignment.0 >= side_length as isize
+				|| want_assignment.1 < 0
+				|| want_assignment.1 >= side_length as isize
+			{
+				continue;
+			}
+			let want_assignment = (want_x as usize, want_y as usize);
+			let mut did_swap = false;
+			for (cell2, cxy2) in new_assignments.iter().enumerate() {
+				if *cxy2 != want_assignment {
+					continue;
+				}
+				did_swap = true;
+				new_assignments.swap(*cell, cell2);
+				break;
+			}
+			if !did_swap {
+				new_assignments[*cell] = want_assignment;
+				new_block_counts[want_assignment.0][want_assignment.1] += 1;
+				new_block_counts[cx][cy] -= 1;
+			}
+			break;
+		}
+	}
+}
+
+fn swap_random_method(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	_new_block_counts: &mut Vec<Vec<i32>>,
+	_side_length: usize,
+	_max_density: i32,
+) {
+	let num_cells = assignments.len();
+	let swap_count = exponential_distr_sample(rng.random(), 0.02, num_cells) / 2 * 2;
+	let mut picked = vec![];
+
+	while picked.len() < swap_count {
+		let c = rng.random_range(0..num_cells);
+		if !picked.contains(&c) {
+			picked.push(c);
+		}
+	}
+
+	for i in (0..swap_count).step_by(2) {
+		let c1 = picked[i];
+		let c2 = picked[i + 1];
+		let (x1, y1) = new_assignments[c1];
+		let (x2, y2) = new_assignments[c2];
+		new_assignments[c1] = (x2, y2);
+		new_assignments[c2] = (x1, y1);
+	}
+}
+
+fn ripup_range_method(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	side_length: usize,
+	max_density: i32,
+) {
+	let num_cells = assignments.len();
+	let region_w = rng.random_range(1..=side_length / 4);
+	let region_h = rng.random_range(1..=side_length / 4);
+
+	let sx = rng.random_range(0..(side_length - region_w).max(1));
+	let sy = rng.random_range(0..(side_length - region_h).max(1));
+
+	let mut ripup_cells = vec![];
+	for cell in 0..num_cells {
+		let (cx, cy) = new_assignments[cell];
+		if cx >= sx && cx < sx + region_w && cy >= sy && cy < sy + region_h {
+			ripup_cells.push(cell);
+			new_block_counts[cx][cy] -= 1;
+		}
+	}
+
+	for cell in &ripup_cells {
+		loop {
+			let (cx, cy) = (
+				rng.random_range(0..side_length) / 2 * 2,
+				rng.random_range(0..side_length),
+			);
+			if new_block_counts[cx][cy] < max_density {
+				new_assignments[*cell] = (cx, cy);
+				new_block_counts[cx][cy] += 1;
+				break;
+			}
+		}
+	}
+}
+
+fn crack_in_two_method(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	side_length: usize,
+	max_density: i32,
+) {
+	let num_cells = assignments.len();
+	if rng.random_bool(0.5) {
+		if rng.random_bool(0.5) {
+			let line_y = rng.random_range(3..side_length - 3);
+			let mut ripup_cells = vec![];
+			for cell in 0..num_cells {
+				let (cx, cy) = new_assignments[cell];
+				if cy == 0 {
+					continue;
+				}
+				if cy < line_y {
+					ripup_cells.push(cell);
+					new_block_counts[cx][cy] -= 1;
+				}
+			}
+			ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
+			for cell in ripup_cells {
+				let (cx, cy) = new_assignments[cell];
+				if new_block_counts[cx][cy - 1] < max_density {
+					new_block_counts[cx][cy - 1] += 1;
+					new_assignments[cell] = (cx, cy - 1);
+				} else {
+					new_block_counts[cx][cy] += 1;
+				}
+			}
+		} else {
+			let line_y = rng.random_range(3..side_length - 3);
+			let mut ripup_cells = vec![];
+			for cell in 0..num_cells {
+				let (cx, cy) = new_assignments[cell];
+				if cy == side_length - 1 {
+					continue;
+				}
+				if cy > line_y {
+					ripup_cells.push(cell);
+					new_block_counts[cx][cy] -= 1;
+				}
+			}
+			ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
+			for cell in ripup_cells {
+				let (cx, cy) = new_assignments[cell];
+				if new_block_counts[cx][cy + 1] < max_density {
+					new_block_counts[cx][cy + 1] += 1;
+					new_assignments[cell] = (cx, cy + 1);
+				} else {
+					new_block_counts[cx][cy] += 1;
+				}
+			}
+		}
+	} else {
+		if rng.random_bool(0.5) {
+			let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
+			let mut ripup_cells = Vec::new();
+			for cell in 0..num_cells {
+				let (cx, cy) = new_assignments[cell];
+				if cx == 0 {
+					continue;
+				}
+				if cx > line_x {
+					ripup_cells.push(cell);
+					new_block_counts[cx][cy] -= 1;
+				}
+			}
+			ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+
+			for cell in ripup_cells {
+				let (cx, cy) = new_assignments[cell];
+				if new_block_counts[cx - 2][cy] < max_density {
+					new_block_counts[cx - 2][cy] += 1;
+					new_assignments[cell] = (cx - 2, cy);
+				} else {
+					new_block_counts[cx][cy] += 1;
+				}
+			}
+		} else {
+			let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
+			let mut ripup_cells = Vec::new();
+			for cell in 0..num_cells {
+				let (cx, cy) = new_assignments[cell];
+				if cx == side_length - 1 {
+					continue;
+				}
+				if cx < line_x {
+					ripup_cells.push(cell);
+					new_block_counts[cx][cy] -= 1;
+				}
+			}
+			ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
+
+			for cell in ripup_cells {
+				let (cx, cy) = new_assignments[cell];
+				if new_block_counts[cx + 2][cy] < max_density {
+					new_block_counts[cx + 2][cy] += 1;
+					new_assignments[cell] = (cx + 2, cy);
+				} else {
+					new_block_counts[cx][cy] += 1;
+				}
+			}
+		}
+	}
+}
+
+fn exponential_distr_sample(u: f64, median: f64, num_cells: usize) -> usize {
+	let lambda = std::f64::consts::LN_2 / (median * (num_cells as f64));
+	let x = -1.0 / lambda * u.ln();
+	let mut r = x.round() as isize;
+	if r < 1 {
+		r = 1;
+	} else if r > (num_cells as isize) {
+		r = num_cells as isize;
+	}
+	r as usize
+}
+
 #[cfg(test)]
 mod test {
 
@@ -1396,7 +1525,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(80);
+		let l = ld::get_large_memory_test_design(100);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
