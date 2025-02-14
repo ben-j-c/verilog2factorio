@@ -1,4 +1,5 @@
 use core::{f64, panic};
+use itertools::izip;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{
@@ -378,17 +379,7 @@ impl PhysicalDesign {
 		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		let num_cells = self.combs.len();
 
-		let mut connections = vec![];
-		for i in 0..num_cells {
-			for j in 0..i {
-				if j >= i {
-					break;
-				}
-				if ld.have_shared_wire(self.combs[i].logic, self.combs[j].logic) {
-					connections.push((i, j));
-				}
-			}
-		}
+		let mut connections = self.get_connectivity_as_edges(ld, true);
 
 		let compute_cost = |assign: &Vec<(usize, usize)>,
 		                    block_counts: &Vec<Vec<i32>>,
@@ -1151,15 +1142,7 @@ impl PhysicalDesign {
 	}
 
 	fn get_bfs_order(&self, coid: CombinatorId, ld: &LogicalDesign) -> Vec<CombinatorId> {
-		// Replace with cheaper algo. I just copy pasted it.
-		let mut connections = vec![vec![]; self.combs.len()];
-		for i in 0..self.combs.len() {
-			for j in 0..self.combs.len() {
-				if ld.have_shared_wire(self.combs[i].logic, self.combs[j].logic) {
-					connections[i].push(CombinatorId(j));
-				}
-			}
-		}
+		let connections = self.get_connectivity_as_vec(ld);
 		let mut queue = LinkedList::new();
 		let mut seen_comb: HashSet<CombinatorId> = HashSet::new();
 		let mut retval = vec![];
@@ -1177,6 +1160,52 @@ impl PhysicalDesign {
 			}
 		}
 		retval
+	}
+
+	pub fn get_connectivity_as_vec(&self, ld: &LogicalDesign) -> Vec<Vec<CombinatorId>> {
+		let mut connections = vec![vec![]; self.combs.len()];
+		for cell in &self.combs {
+			for ldid in ld.get_connected_combs(cell.logic) {
+				connections[cell.id.0].push(*self.idx_combs.get(&ldid).unwrap());
+			}
+		}
+		connections
+	}
+
+	pub fn get_connectivity_as_matrix(
+		&self,
+		ld: &LogicalDesign,
+		triangular: bool,
+	) -> Vec<Vec<bool>> {
+		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
+		let conn_list = self.get_connectivity_as_vec(ld);
+		for (id_i, connected_i) in conn_list.iter().enumerate() {
+			for id_j in connected_i {
+				if triangular && id_j.0 < id_i {
+					continue;
+				}
+				connections[id_i][id_j.0] = true;
+			}
+		}
+		connections
+	}
+
+	pub fn get_connectivity_as_edges(
+		&self,
+		ld: &LogicalDesign,
+		triangular: bool,
+	) -> Vec<(usize, usize)> {
+		let mut ret = vec![];
+		let conn_list = self.get_connectivity_as_vec(ld);
+		for (id_i, connected_j) in conn_list.iter().enumerate() {
+			for id_j in connected_j {
+				if triangular && id_j.0 < id_i {
+					continue;
+				}
+				ret.push((id_i, id_j.0));
+			}
+		}
+		ret
 	}
 }
 
@@ -1647,9 +1676,17 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(400);
+		let l = ld::get_large_memory_test_design(1_000);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
+	}
+
+	#[test]
+	fn dense_memory_n_mcmc_dense() {
+		let mut p = PhysicalDesign::new();
+		let l = ld::get_large_dense_memory_test_design(1_000_000);
+		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.save_svg(&l, "svg/dense_memory_n_mcmc_dense.svg");
 	}
 
 	#[test]

@@ -1277,9 +1277,29 @@ impl LogicalDesign {
 		return false;
 	}
 
+	pub(crate) fn get_connected_combs(&self, ldid: NodeId) -> Vec<NodeId> {
+		self.assert_is_not_wire_sum(ldid);
+		let node = &self.nodes[ldid.0];
+		let mut ret = HashSet::new();
+		for wire in node.iter_fanin_both().chain(node.iter_fanout_both()) {
+			let wire_node = &self.nodes[wire.0];
+			for connected in wire_node
+				.iter_fanin_both()
+				.chain(wire_node.iter_fanout_both())
+			{
+				if *connected == ldid {
+					continue;
+				}
+				ret.insert(*connected);
+			}
+		}
+		ret.into_iter().collect_vec()
+	}
+
 	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = HashSet::new();
+		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanin(colour) {
 			let localio: HashSet<NodeId> =
 				self.get_local_cell_io_network(*wire).into_iter().collect();
@@ -1291,6 +1311,7 @@ impl LogicalDesign {
 	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = HashSet::new();
+		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanout(colour) {
 			let localio: HashSet<NodeId> =
 				self.get_local_cell_io_network(*wire).into_iter().collect();
@@ -1468,6 +1489,35 @@ pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
 		}],
 		data,
 		None,
+	);
+	assert_eq!(mpf_arr.len(), 1);
+	let port = mpf_arr.first().unwrap();
+	let addr = d.add_constant_comb(vec![Signal::Id(0)], vec![6]);
+	let data = d.add_lamp((
+		Signal::Id(1),
+		DeciderOperator::Equal,
+		Signal::Constant(2000),
+	));
+	d.connect_red(addr, port.addr_wire);
+	d.add_wire_red(vec![port.data], vec![data]);
+	d
+}
+
+#[cfg(test)]
+pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
+	let data = vec![0; n];
+	let mut d = LogicalDesign::new();
+	let mpf_arr = d.add_rom(
+		vec![MemoryReadPort {
+			addr: Signal::Id(0),
+			data: Signal::Id(1),
+			clk: None,
+			en: None,
+			rst: ResetSpec::Disabled,
+			transparent: false,
+		}],
+		data,
+		Some(256),
 	);
 	assert_eq!(mpf_arr.len(), 1);
 	let port = mpf_arr.first().unwrap();
@@ -1774,5 +1824,28 @@ mod test {
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn get_connected_combs() {
+		// (_0_)----(_1_)----(_3_)
+		//           |
+		//          (_2_)
+		let mut d = LogicalDesign::new();
+		let nop0 = d.add_nop(Signal::Each, Signal::Each);
+		let nop1 = d.add_nop(Signal::Each, Signal::Each);
+		let nop2 = d.add_nop(Signal::Each, Signal::Each);
+		let nop3 = d.add_nop(Signal::Each, Signal::Each);
+		d.add_wire_red(vec![], vec![nop1, nop2]);
+		d.add_wire_red(vec![nop0], vec![nop1]);
+		d.add_wire_red(vec![nop1], vec![nop3]);
+		let c0 = d.get_connected_combs(nop0);
+		let c1 = d.get_connected_combs(nop1);
+		let c2 = d.get_connected_combs(nop2);
+		let c3 = d.get_connected_combs(nop3);
+		assert_eq!(c0, vec![nop1]);
+		assert!(c1.contains(&nop0) && c1.contains(&nop2) && c1.contains(&nop3) && c1.len() == 3);
+		assert_eq!(c2, vec![nop1]);
+		assert_eq!(c3, vec![nop1]);
 	}
 }
