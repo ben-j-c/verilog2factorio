@@ -306,39 +306,26 @@ impl PhysicalDesign {
 				self.place_combs_physical_dense(&pos, logical).unwrap();
 			}
 			PlacementStrategy::MCMCSADense => {
-				let scale_factors = [1.3];
 				let initializations = self.get_initializations(logical);
-				let mut _temp = None;
-				for scale in scale_factors {
-					self.reset_place_route();
-					let comb_positions =
-						match self.solve_as_mcmc_dense(logical, scale, &initializations, None) {
-							Ok(pos) => pos,
-							Err(e) => {
-								println!("WARN: MCMC failed to place with scale {scale}");
-								println!("WARN: {}", e.0);
-								match self.place_combs_physical_dense(&e.1, logical) {
-									Ok(_) => {}
-									Err(_) => {}
-								}
-								self.connect_combs(logical);
-								self.save_svg(
-									logical,
-									format!("./svg/failed{}.svg", scale).as_str(),
-								);
-								_temp = Some(0.1);
-								continue;
+				self.reset_place_route();
+				let comb_positions =
+					match self.solve_as_mcmc_dense(logical, 1.3, &initializations, None) {
+						Ok(pos) => pos,
+						Err(e) => {
+							println!("WARN: MCMC failed to place with scale 1.3");
+							println!("WARN: {}", e.0);
+							match self.place_combs_physical_dense(&e.1, logical) {
+								Ok(_) => {}
+								Err(_) => {}
 							}
-						};
-					match self.place_combs_physical_dense(&comb_positions, logical) {
-						Ok(_) => {}
-						Err(_) => {
-							continue;
+							self.connect_combs(logical);
+							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
+							panic!("failed to place");
 						}
-					}
-					return;
-				}
-				panic!("Well we tried a very large area and it didn't work.");
+					};
+				self.place_combs_physical_dense(&comb_positions, logical)
+					.unwrap();
+				return;
 			}
 		}
 	}
@@ -536,9 +523,10 @@ impl PhysicalDesign {
 			)] = &[
 				(750, true, ripup_replace_method),
 				(100, true, swap_local_method),
-				(25, false, swap_random_method),
+				//(15, false, swap_random_method),
 				(25, false, ripup_range_method),
-				(250, false, crack_in_two_method),
+				(350, false, crack_in_two_method),
+				(100, false, overflowing_cells_swap_local_method),
 			];
 
 			// Select weighted method
@@ -1555,6 +1543,58 @@ fn crack_in_two_method(
 	}
 }
 
+fn overflowing_cells_swap_local_method(
+	rng: &mut StdRng,
+	_assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	side_length: usize,
+	_max_density: i32,
+) {
+	let mut swap_cells = vec![];
+	for (idx, (cx, cy)) in new_assignments.iter().enumerate() {
+		if new_block_counts[*cx][*cy] > 1 {
+			swap_cells.push(idx);
+		}
+	}
+
+	for cell in &swap_cells {
+		let (cx, cy) = new_assignments[*cell];
+		loop {
+			let pick_x: i32 = rng.random_range(0..=1) * 2;
+			let pick_y: i32 = rng.random_range(-1..=1);
+			let want_x = cx as isize + pick_x as isize;
+			let want_y = cy as isize + pick_y as isize;
+			let want_assignment = (want_x, want_y);
+			if (cx as isize, cy as isize) == want_assignment
+				|| want_assignment.0 < 0
+				|| want_assignment.0 >= side_length as isize
+				|| want_assignment.1 < 0
+				|| want_assignment.1 >= side_length as isize
+			{
+				continue;
+			}
+			let want_assignment = (want_x as usize, want_y as usize);
+			let mut did_swap = false;
+			for (cell2, cxy2) in new_assignments.iter().enumerate() {
+				if *cxy2 != want_assignment {
+					continue;
+				}
+				did_swap = true;
+				new_assignments.swap(*cell, cell2);
+				break;
+			}
+			if !did_swap {
+				new_assignments[*cell] = want_assignment;
+				new_block_counts[want_assignment.0][want_assignment.1] += 1;
+				new_block_counts[cx][cy] -= 1;
+			}
+			break;
+		}
+	}
+}
+
 fn exponential_distr_sample(u: f64, median: f64, num_cells: usize) -> usize {
 	let lambda = std::f64::consts::LN_2 / (median * (num_cells as f64));
 	let x = -1.0 / lambda * u.ln();
@@ -1615,7 +1655,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(200);
+		let l = get_large_logical_design(400);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
