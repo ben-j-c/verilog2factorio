@@ -1,5 +1,4 @@
 use core::{f64, panic};
-use itertools::izip;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{
@@ -379,7 +378,7 @@ impl PhysicalDesign {
 		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		let num_cells = self.combs.len();
 
-		let mut connections = self.get_connectivity_as_edges(ld, true);
+		let connections = self.get_connectivity_as_edges(ld, true);
 
 		let compute_cost = |assign: &Vec<(usize, usize)>,
 		                    block_counts: &Vec<Vec<i32>>,

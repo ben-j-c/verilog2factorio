@@ -10,7 +10,7 @@ pub static SIGNAL_MAP: Lazy<(
 	let mut id = 0;
 	let mut m = HashMap::new();
 	let mut m2 = HashMap::new();
-	let mut signal_type = None;
+	let mut signal_type = Some("virtual");
 	macro_rules! sig_def {
 		($name:expr) => {{
 			m.insert(id, ($name, signal_type));
@@ -18,7 +18,6 @@ pub static SIGNAL_MAP: Lazy<(
 			id += 1;
 		}};
 	}
-	signal_type = Some("virtual");
 	sig_def!("signal-0");
 	sig_def!("signal-1");
 	sig_def!("signal-2");
@@ -363,6 +362,7 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("defender");
 	sig_def!("distractor");
 	sig_def!("destroyer");
+	println!("Registered {} distinct signals", id);
 	(m, m2)
 });
 

@@ -28,7 +28,6 @@ use std::{
 	collections::{BTreeSet, HashMap, HashSet, LinkedList},
 	fmt::Display,
 	hash::Hash,
-	process::Output,
 	slice::Iter,
 	usize, vec,
 };
@@ -500,11 +499,11 @@ impl LogicalDesign {
 
 	pub fn add_adffe(
 		&mut self,
-		input: Signal,
-		clk: Signal,
-		en: Signal,
-		arst: Signal,
-		output: Signal,
+		_input: Signal,
+		_clk: Signal,
+		_en: Signal,
+		_arst: Signal,
+		_output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		todo!()
 	}
@@ -543,11 +542,11 @@ impl LogicalDesign {
 
 	pub fn add_sdffe(
 		&mut self,
-		input: Signal,
-		clk: Signal,
-		srst: Signal,
-		en: Signal,
-		output: Signal,
+		_input: Signal,
+		_clk: Signal,
+		_srst: Signal,
+		_en: Signal,
+		_output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		todo!()
 	}
@@ -1799,7 +1798,7 @@ mod test {
 	fn rom_dense_large() {
 		let mut data = vec![0, 1];
 		for i in 2..47 {
-			data.push((data[i - 1] + data[i - 2]));
+			data.push(data[i - 1] + data[i - 2]);
 		}
 
 		let mut d = LogicalDesign::new();
