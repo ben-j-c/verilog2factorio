@@ -441,17 +441,10 @@ impl Combinator {
 impl Signal {
 	fn resolve_signal_id(&self) -> Option<SignalID> {
 		match *self {
-			Signal::Id(id) if id < signal_lookup_table::N_VIRTUAL_SIGNAL => Some(SignalID {
-				name: signal_lookup_table::virtual_signal(id),
-				type_: Some("virtual"),
+			Signal::Id(id) => Some(SignalID {
+				name: signal_lookup_table::lookup_str(id).0,
+				type_: signal_lookup_table::lookup_str(id).1,
 			}),
-			Signal::Id(id) if id < signal_lookup_table::N_ANY_SIGNAL => Some(SignalID {
-				name: signal_lookup_table::entity_signal(id),
-				type_: None,
-			}),
-			Signal::Id(_) => {
-				panic!("Somehow got a bad signal id")
-			}
 			Signal::Everything => Some(SignalID {
 				name: "signal-everything",
 				type_: Some("virtual"),

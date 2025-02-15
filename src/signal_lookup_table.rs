@@ -1,375 +1,380 @@
 //! The authority between named signals in the game and ids used by the compiler and APIs.
 
-pub const N_VIRTUAL_SIGNAL: i32 = 67;
-pub const N_ENTITY_SIGNAL: i32 = 267;
-pub const N_ANY_SIGNAL: i32 = N_VIRTUAL_SIGNAL + N_ENTITY_SIGNAL;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
-/// Convert the signal id of a virtual signal into a string the game understands.
-pub fn virtual_signal(v: i32) -> &'static str {
-	match v {
-		0 => "signal-0",
-		1 => "signal-1",
-		2 => "signal-2",
-		3 => "signal-3",
-		4 => "signal-4",
-		5 => "signal-5",
-		6 => "signal-6",
-		7 => "signal-7",
-		8 => "signal-8",
-		9 => "signal-9",
-		10 => "signal-A",
-		11 => "signal-B",
-		12 => "signal-C",
-		13 => "signal-D",
-		14 => "signal-E",
-		15 => "signal-F",
-		16 => "signal-G",
-		17 => "signal-H",
-		18 => "signal-I",
-		19 => "signal-J",
-		20 => "signal-K",
-		21 => "signal-L",
-		22 => "signal-M",
-		23 => "signal-N",
-		24 => "signal-O",
-		25 => "signal-P",
-		26 => "signal-Q",
-		27 => "signal-R",
-		28 => "signal-S",
-		29 => "signal-T",
-		30 => "signal-U",
-		31 => "signal-V",
-		32 => "signal-X",
-		33 => "signal-Y",
-		34 => "signal-Z",
-		35 => "signal-red",
-		36 => "signal-green",
-		37 => "signal-blue",
-		38 => "signal-yellow",
-		39 => "signal-pink",
-		40 => "signal-cyan",
-		41 => "signal-white",
-		42 => "signal-grey",
-		43 => "signal-black",
-		44 => "signal-check",
-		45 => "signal-deny",
-		46 => "signal-info",
-		47 => "signal-dot",
-		48 => "shape-vertical",
-		49 => "shape-horizontal",
-		50 => "shape-diagonal",
-		51 => "shape-curve",
-		52 => "shape-cross",
-		53 => "shape-diagonal-cross",
-		54 => "shape-corner",
-		55 => "shape-t",
-		56 => "shape-circle",
-		57 => "up-arrow",
-		58 => "up-right-arrow",
-		59 => "right-arrow",
-		60 => "down-right-arrow",
-		61 => "down-arrow",
-		62 => "down-left-arrow",
-		63 => "left-arrow",
-		64 => "up-left-arrow",
-		65 => "signal-stack-size",
-		66 => "signal-heart",
-		67 => "signal-skull",
-		68 => "signal-ghost",
-		_ => unreachable!(),
+pub static SIGNAL_MAP: Lazy<(
+	HashMap<i32, (&'static str, Option<&'static str>)>,
+	HashMap<&'static str, (i32, Option<&'static str>)>,
+)> = Lazy::new(|| {
+	let mut id = 0;
+	let mut m = HashMap::new();
+	let mut m2 = HashMap::new();
+	let mut signal_type = None;
+	macro_rules! sig_def {
+		($name:expr) => {{
+			m.insert(id, ($name, signal_type));
+			m2.insert($name, (id, signal_type));
+			id += 1;
+		}};
 	}
+	signal_type = Some("virtual");
+	sig_def!("signal-0");
+	sig_def!("signal-1");
+	sig_def!("signal-2");
+	sig_def!("signal-3");
+	sig_def!("signal-4");
+	sig_def!("signal-5");
+	sig_def!("signal-6");
+	sig_def!("signal-7");
+	sig_def!("signal-8");
+	sig_def!("signal-9");
+	sig_def!("signal-A");
+	sig_def!("signal-B");
+	sig_def!("signal-C");
+	sig_def!("signal-D");
+	sig_def!("signal-E");
+	sig_def!("signal-F");
+	sig_def!("signal-G");
+	sig_def!("signal-H");
+	sig_def!("signal-I");
+	sig_def!("signal-J");
+	sig_def!("signal-K");
+	sig_def!("signal-L");
+	sig_def!("signal-M");
+	sig_def!("signal-N");
+	sig_def!("signal-O");
+	sig_def!("signal-P");
+	sig_def!("signal-Q");
+	sig_def!("signal-R");
+	sig_def!("signal-S");
+	sig_def!("signal-T");
+	sig_def!("signal-U");
+	sig_def!("signal-V");
+	sig_def!("signal-X");
+	sig_def!("signal-Y");
+	sig_def!("signal-Z");
+	sig_def!("signal-red");
+	sig_def!("signal-green");
+	sig_def!("signal-blue");
+	sig_def!("signal-yellow");
+	sig_def!("signal-pink");
+	sig_def!("signal-cyan");
+	sig_def!("signal-white");
+	sig_def!("signal-grey");
+	sig_def!("signal-black");
+	sig_def!("signal-check");
+	sig_def!("signal-deny");
+	sig_def!("signal-info");
+	sig_def!("signal-dot");
+	sig_def!("shape-vertical");
+	sig_def!("shape-horizontal");
+	sig_def!("shape-diagonal");
+	sig_def!("shape-curve");
+	sig_def!("shape-cross");
+	sig_def!("shape-diagonal-cross");
+	sig_def!("shape-corner");
+	sig_def!("shape-t");
+	sig_def!("shape-circle");
+	sig_def!("up-arrow");
+	sig_def!("up-right-arrow");
+	sig_def!("right-arrow");
+	sig_def!("down-right-arrow");
+	sig_def!("down-arrow");
+	sig_def!("down-left-arrow");
+	sig_def!("left-arrow");
+	sig_def!("up-left-arrow");
+	sig_def!("signal-stack-size");
+	sig_def!("signal-heart");
+	sig_def!("signal-skull");
+	sig_def!("signal-ghost");
+
+	signal_type = None;
+	sig_def!("wooden-chest");
+	sig_def!("iron-chest");
+	sig_def!("steel-chest");
+	sig_def!("storage-tank");
+	sig_def!("transport-belt");
+	sig_def!("fast-transport-belt");
+	sig_def!("express-transport-belt");
+	sig_def!("underground-belt");
+	sig_def!("fast-underground-belt");
+	sig_def!("express-underground-belt");
+	sig_def!("splitter");
+	sig_def!("fast-splitter");
+	sig_def!("express-splitter");
+	sig_def!("burner-inserter");
+	sig_def!("inserter");
+	sig_def!("long-handed-inserter");
+	sig_def!("fast-inserter");
+	sig_def!("bulk-inserter");
+	sig_def!("small-electric-pole");
+	sig_def!("medium-electric-pole");
+	sig_def!("big-electric-pole");
+	sig_def!("substation");
+	sig_def!("pipe");
+	sig_def!("pipe-to-ground");
+	sig_def!("pump");
+	sig_def!("rail");
+	sig_def!("train-stop");
+	sig_def!("rail-signal");
+	sig_def!("rail-chain-signal");
+	sig_def!("locomotive");
+	sig_def!("cargo-wagon");
+	sig_def!("fluid-wagon");
+	sig_def!("artillery-wagon");
+	sig_def!("car");
+	sig_def!("tank");
+	sig_def!("spidertron");
+	sig_def!("logistic-robot");
+	sig_def!("construction-robot");
+	sig_def!("active-provider-chest");
+	sig_def!("passive-provider-chest");
+	sig_def!("storage-chest");
+	sig_def!("buffer-chest");
+	sig_def!("requester-chest");
+	sig_def!("roboport");
+	sig_def!("small-lamp");
+	sig_def!("arithmetic-combinator");
+	sig_def!("decider-combinator");
+	sig_def!("selector-combinator");
+	sig_def!("constant-combinator");
+	sig_def!("power-switch");
+	sig_def!("programmable-speaker");
+	sig_def!("display-panel");
+	sig_def!("stone-brick");
+	sig_def!("concrete");
+	sig_def!("hazard-concrete");
+	sig_def!("refined-concrete");
+	sig_def!("refined-hazard-concrete");
+	sig_def!("landfill");
+	sig_def!("cliff-explosives");
+	sig_def!("repair-pack");
+	sig_def!("blueprint");
+	sig_def!("deconstruction-planner");
+	sig_def!("upgrade-planner");
+	sig_def!("blueprint-book");
+	sig_def!("boiler");
+	sig_def!("steam-engine");
+	sig_def!("solar-panel");
+	sig_def!("speed-module");
+	sig_def!("nuclear-reactor");
+	sig_def!("heat-pipe");
+	sig_def!("heat-exchanger");
+	sig_def!("steam-turbine");
+	sig_def!("burner-mining-drill");
+	sig_def!("electric-mining-drill");
+	sig_def!("offshore-pump");
+	sig_def!("pumpjack");
+	sig_def!("stone-furnace");
+	sig_def!("steel-furnace");
+	sig_def!("electric-furnace");
+	sig_def!("assembling-machine-1");
+	sig_def!("assembling-machine-2");
+	sig_def!("assembling-machine-3");
+	sig_def!("oil-refinery");
+	sig_def!("chemical-plant");
+	sig_def!("centrifuge");
+	sig_def!("lab");
+	sig_def!("beacon");
+	sig_def!("accumulator");
+	sig_def!("speed-module-2");
+	sig_def!("speed-module-3");
+	sig_def!("efficiency-module");
+	sig_def!("efficiency-module-2");
+	sig_def!("efficiency-module-3");
+	sig_def!("productivity-module");
+	sig_def!("productivity-module-2");
+	sig_def!("productivity-module-3");
+	sig_def!("rocket-silo");
+	sig_def!("cargo-landing-pad");
+	sig_def!("satellite");
+	sig_def!("wood");
+	sig_def!("coal");
+	sig_def!("stone");
+	sig_def!("iron-ore");
+	sig_def!("copper-ore");
+	sig_def!("uranium-ore");
+	sig_def!("raw-fish");
+	sig_def!("iron-plate");
+	sig_def!("copper-plate");
+	sig_def!("steel-plate");
+	sig_def!("solid-fuel");
+	sig_def!("plastic-bar");
+	sig_def!("sulfur");
+	sig_def!("battery");
+	sig_def!("explosives");
+	sig_def!("water-barrel");
+	sig_def!("crude-oil-barrel");
+	sig_def!("petroleum-gas-barrel");
+	sig_def!("light-oil-barrel");
+	sig_def!("heavy-oil-barrel");
+	sig_def!("lubricant-barrel");
+	sig_def!("sulfuric-acid-barrel");
+	sig_def!("water-barrel");
+	sig_def!("crude-oil-barrel");
+	sig_def!("petroleum-gas-barrel");
+	sig_def!("light-oil-barrel");
+	sig_def!("heavy-oil-barrel");
+	sig_def!("lubricant-barrel");
+	sig_def!("sulfuric-acid-barrel");
+	sig_def!("iron-gear-wheel");
+	sig_def!("iron-stick");
+	sig_def!("copper-cable");
+	sig_def!("barrel");
+	sig_def!("electronic-circuit");
+	sig_def!("advanced-circuit");
+	sig_def!("processing-unit");
+	sig_def!("engine-unit");
+	sig_def!("electric-engine-unit");
+	sig_def!("flying-robot-frame");
+	sig_def!("low-density-structure");
+	sig_def!("rocket-fuel");
+	sig_def!("rocket-part");
+	sig_def!("uranium-235");
+	sig_def!("uranium-238");
+	sig_def!("uranium-fuel-cell");
+	sig_def!("depleted-uranium-fuel-cell");
+	sig_def!("nuclear-fuel");
+	sig_def!("automation-science-pack");
+	sig_def!("logistic-science-pack");
+	sig_def!("military-science-pack");
+	sig_def!("chemical-science-pack");
+	sig_def!("production-science-pack");
+	sig_def!("utility-science-pack");
+	sig_def!("space-science-pack");
+	sig_def!("pistol");
+	sig_def!("submachine-gun");
+	sig_def!("shotgun");
+	sig_def!("combat-shotgun");
+	sig_def!("rocket-launcher");
+	sig_def!("flamethrower");
+	sig_def!("firearm-magazine");
+	sig_def!("piercing-rounds-magazine");
+	sig_def!("uranium-rounds-magazine");
+	sig_def!("shotgun-shell");
+	sig_def!("piercing-shotgun-shell");
+	sig_def!("cannon-shell");
+	sig_def!("explosive-cannon-shell");
+	sig_def!("uranium-cannon-shell");
+	sig_def!("explosive-uranium-cannon-shell");
+	sig_def!("artillery-shell");
+	sig_def!("rocket");
+	sig_def!("explosive-rocket");
+	sig_def!("atomic-bomb");
+	sig_def!("flamethrower-ammo");
+	sig_def!("grenade");
+	sig_def!("cluster-grenade");
+	sig_def!("poison-capsule");
+	sig_def!("slowdown-capsule");
+	sig_def!("defender-capsule");
+	sig_def!("distractor-capsule");
+	sig_def!("destroyer-capsule");
+	sig_def!("light-armor");
+	sig_def!("heavy-armor");
+	sig_def!("modular-armor");
+	sig_def!("power-armor");
+	sig_def!("power-armor-mk2");
+	sig_def!("solar-panel-equipment");
+	sig_def!("fission-reactor-equipment");
+	sig_def!("battery-equipment");
+	sig_def!("battery-mk2-equipment");
+	sig_def!("belt-immunity-equipment");
+	sig_def!("exoskeleton-equipment");
+	sig_def!("personal-roboport-equipment");
+	sig_def!("personal-roboport-mk2-equipment");
+	sig_def!("night-vision-equipment");
+	sig_def!("energy-shield-equipment");
+	sig_def!("energy-shield-mk2-equipment");
+	sig_def!("personal-laser-defense-equipment");
+	sig_def!("discharge-defense-equipment");
+	sig_def!("stone-wall");
+	sig_def!("gate");
+	sig_def!("radar");
+	sig_def!("copper-wire");
+	sig_def!("green-wire");
+	sig_def!("red-wire");
+	sig_def!("spidertron-remote");
+	sig_def!("discharge-defense-remote");
+	sig_def!("artillery-targeting-remote");
+
+	signal_type = Some("recipe");
+	sig_def!("basic-oil-processing");
+	sig_def!("advanced-oil-processing");
+	sig_def!("coal-liquefaction");
+	sig_def!("heavy-oil-cracking");
+	sig_def!("light-oil-cracking");
+	sig_def!("solid-fuel-from-petroleum-gas");
+	sig_def!("solid-fuel-from-light-oil");
+	sig_def!("solid-fuel-from-heavy-oil");
+	sig_def!("nuclear-fuel-reprocessing");
+	sig_def!("kovarex-enrichment-process");
+	sig_def!("uranium-processing");
+	sig_def!("empty-water-barrel");
+	sig_def!("empty-crude-oil-barrel");
+	sig_def!("empty-petroleum-gas-barrel");
+	sig_def!("empty-light-oil-barrel");
+	sig_def!("empty-heavy-oil-barrel");
+	sig_def!("empty-lubricant-barrel");
+	sig_def!("empty-sulfuric-acid-barrel");
+
+	signal_type = Some("fluid");
+	sig_def!("water");
+	sig_def!("steam");
+	sig_def!("crude-oil");
+	sig_def!("petroleum-gas");
+	sig_def!("light-oil");
+	sig_def!("heavy-oil");
+	sig_def!("lubricant");
+	sig_def!("sulfuric-acid");
+
+	signal_type = Some("space-location");
+	sig_def!("nauvis");
+
+	signal_type = Some("entity");
+	sig_def!("entity-ghost");
+	sig_def!("item-on-ground");
+	sig_def!("item-request-proxy");
+	sig_def!("tile-ghost");
+	sig_def!("land-mine");
+	sig_def!("gun-turret");
+	sig_def!("laser-turret");
+	sig_def!("flamethrower-turret");
+	sig_def!("artillery-turret");
+	sig_def!("small-biter");
+	sig_def!("medium-biter");
+	sig_def!("big-biter");
+	sig_def!("behemoth-biter");
+	sig_def!("small-spitter");
+	sig_def!("medium-spitter");
+	sig_def!("big-spitter");
+	sig_def!("behemoth-spitter");
+	sig_def!("small-worm-turret");
+	sig_def!("medium-worm-turret");
+	sig_def!("big-worm-turret");
+	sig_def!("behemoth-worm-turret");
+	sig_def!("biter-spawner");
+	sig_def!("spitter-spawner");
+	sig_def!("cliff");
+	sig_def!("character");
+	sig_def!("big-sand-rock");
+	sig_def!("huge-rock");
+	sig_def!("crude-oil");
+	sig_def!("defender");
+	sig_def!("distractor");
+	sig_def!("destroyer");
+	(m, m2)
+});
+
+pub fn lookup_str(id: i32) -> (&'static str, Option<&'static str>) {
+	*SIGNAL_MAP.0.get(&id).unwrap()
 }
 
-/// Convert the signal id of an entity signal into a string the game understands.
-pub fn entity_signal(v: i32) -> &'static str {
-	match v {
-		0 => "wooden-chest",
-		1 => "iron-chest",
-		2 => "steel-chest",
-		3 => "storage-tank",
-		4 => "transport-belt",
-		5 => "fast-transport-belt",
-		6 => "express-transport-belt",
-		7 => "underground-belt",
-		8 => "fast-underground-belt",
-		9 => "express-underground-belt",
-		10 => "splitter",
-		11 => "fast-splitter",
-		12 => "express-splitter",
-		13 => "burner-inserter",
-		14 => "inserter",
-		15 => "long-handed-inserter",
-		16 => "fast-inserter",
-		17 => "bulk-inserter",
-		18 => "small-electric-pole",
-		19 => "medium-electric-pole",
-		20 => "big-electric-pole",
-		21 => "substation",
-		22 => "pipe",
-		23 => "pipe-to-ground",
-		24 => "pump",
-		25 => "rail",
-		26 => "train-stop",
-		27 => "rail-signal",
-		28 => "rail-chain-signal",
-		29 => "locomotive",
-		30 => "cargo-wagon",
-		31 => "fluid-wagon",
-		32 => "artillery-wagon",
-		33 => "car",
-		34 => "tank",
-		35 => "spidertron",
-		36 => "logistic-robot",
-		37 => "construction-robot",
-		38 => "active-provider-chest",
-		39 => "passive-provider-chest",
-		40 => "storage-chest",
-		41 => "buffer-chest",
-		42 => "requester-chest",
-		43 => "roboport",
-		44 => "small-lamp",
-		45 => "arithmetic-combinator",
-		46 => "decider-combinator",
-		47 => "selector-combinator",
-		48 => "constant-combinator",
-		49 => "power-switch",
-		50 => "programmable-speaker",
-		51 => "display-panel",
-		52 => "stone-brick",
-		53 => "concrete",
-		54 => "hazard-concrete",
-		55 => "refined-concrete",
-		56 => "refined-hazard-concrete",
-		57 => "landfill",
-		58 => "cliff-explosives",
-		59 => "repair-pack",
-		60 => "blueprint",
-		61 => "deconstruction-planner",
-		62 => "upgrade-planner",
-		63 => "blueprint-book",
-		64 => "boiler",
-		65 => "steam-engine",
-		66 => "solar-panel",
-		67 => "speed-module",
-		68 => "nuclear-reactor",
-		69 => "heat-pipe",
-		70 => "heat-exchanger",
-		71 => "steam-turbine",
-		72 => "burner-mining-drill",
-		73 => "electric-mining-drill",
-		74 => "offshore-pump",
-		75 => "pumpjack",
-		76 => "stone-furnace",
-		77 => "steel-furnace",
-		78 => "electric-furnace",
-		79 => "assembling-machine-1",
-		80 => "assembling-machine-2",
-		81 => "assembling-machine-3",
-		82 => "oil-refinery",
-		83 => "chemical-plant",
-		84 => "centrifuge",
-		85 => "lab",
-		86 => "beacon",
-		87 => "accumulator",
-		88 => "speed-module-2",
-		89 => "speed-module-3",
-		90 => "efficiency-module",
-		91 => "efficiency-module-2",
-		92 => "efficiency-module-3",
-		93 => "productivity-module",
-		94 => "productivity-module-2",
-		95 => "productivity-module-3",
-		96 => "rocket-silo",
-		97 => "cargo-landing-pad",
-		98 => "satellite",
-		99 => "basic-oil-processing",
-		100 => "advanced-oil-processing",
-		101 => "coal-liquefaction",
-		102 => "heavy-oil-cracking",
-		103 => "light-oil-cracking",
-		104 => "solid-fuel-from-petroleum-gas",
-		105 => "solid-fuel-from-light-oil",
-		106 => "solid-fuel-from-heavy-oil",
-		107 => "wood",
-		108 => "coal",
-		109 => "stone",
-		110 => "iron-ore",
-		111 => "copper-ore",
-		112 => "uranium-ore",
-		113 => "raw-fish",
-		114 => "iron-plate",
-		115 => "copper-plate",
-		116 => "steel-plate",
-		117 => "solid-fuel",
-		118 => "plastic-bar",
-		119 => "sulfur",
-		120 => "battery",
-		121 => "explosives",
-		122 => "water-barrel",
-		123 => "crude-oil-barrel",
-		124 => "petroleum-gas-barrel",
-		125 => "light-oil-barrel",
-		126 => "heavy-oil-barrel",
-		127 => "lubricant-barrel",
-		128 => "sulfuric-acid-barrel",
-		129 => "water-barrel",
-		130 => "crude-oil-barrel",
-		131 => "petroleum-gas-barrel",
-		132 => "light-oil-barrel",
-		133 => "heavy-oil-barrel",
-		134 => "lubricant-barrel",
-		135 => "sulfuric-acid-barrel",
-		136 => "empty-water-barrel",
-		137 => "empty-crude-oil-barrel",
-		138 => "empty-petroleum-gas-barrel",
-		139 => "empty-light-oil-barrel",
-		140 => "empty-heavy-oil-barrel",
-		141 => "empty-lubricant-barrel",
-		142 => "empty-sulfuric-acid-barrel",
-		143 => "iron-gear-wheel",
-		144 => "iron-stick",
-		145 => "copper-cable",
-		146 => "barrel",
-		147 => "electronic-circuit",
-		148 => "advanced-circuit",
-		149 => "processing-unit",
-		150 => "engine-unit",
-		151 => "electric-engine-unit",
-		152 => "flying-robot-frame",
-		153 => "low-density-structure",
-		154 => "rocket-fuel",
-		155 => "rocket-part",
-		156 => "uranium-processing",
-		157 => "uranium-235",
-		158 => "uranium-238",
-		159 => "uranium-fuel-cell",
-		160 => "depleted-uranium-fuel-cell",
-		161 => "nuclear-fuel-reprocessing",
-		162 => "kovarex-enrichment-process",
-		163 => "nuclear-fuel",
-		164 => "automation-science-pack",
-		165 => "logistic-science-pack",
-		166 => "military-science-pack",
-		167 => "chemical-science-pack",
-		168 => "production-science-pack",
-		169 => "utility-science-pack",
-		170 => "space-science-pack",
-		171 => "pistol",
-		172 => "submachine-gun",
-		173 => "shotgun",
-		174 => "combat-shotgun",
-		175 => "rocket-launcher",
-		176 => "flamethrower",
-		177 => "firearm-magazine",
-		178 => "piercing-rounds-magazine",
-		179 => "uranium-rounds-magazine",
-		180 => "shotgun-shell",
-		181 => "piercing-shotgun-shell",
-		182 => "cannon-shell",
-		183 => "explosive-cannon-shell",
-		184 => "uranium-cannon-shell",
-		185 => "explosive-uranium-cannon-shell",
-		186 => "artillery-shell",
-		187 => "rocket",
-		188 => "explosive-rocket",
-		189 => "atomic-bomb",
-		190 => "flamethrower-ammo",
-		191 => "grenade",
-		192 => "cluster-grenade",
-		193 => "poison-capsule",
-		194 => "slowdown-capsule",
-		195 => "defender-capsule",
-		196 => "defender",
-		197 => "distractor",
-		198 => "destroyer",
-		199 => "distractor-capsule",
-		200 => "destroyer-capsule",
-		201 => "light-armor",
-		202 => "heavy-armor",
-		203 => "modular-armor",
-		204 => "power-armor",
-		205 => "power-armor-mk2",
-		206 => "solar-panel-equipment",
-		207 => "fission-reactor-equipment",
-		208 => "battery-equipment",
-		209 => "battery-mk2-equipment",
-		210 => "belt-immunity-equipment",
-		211 => "exoskeleton-equipment",
-		212 => "personal-roboport-equipment",
-		213 => "personal-roboport-mk2-equipment",
-		214 => "night-vision-equipment",
-		215 => "energy-shield-equipment",
-		216 => "energy-shield-mk2-equipment",
-		217 => "personal-laser-defense-equipment",
-		218 => "discharge-defense-equipment",
-		219 => "stone-wall",
-		220 => "gate",
-		221 => "radar",
-		222 => "land-mine",
-		223 => "gun-turret",
-		224 => "laser-turret",
-		225 => "flamethrower-turret",
-		226 => "artillery-turret",
-		227 => "water",
-		228 => "steam",
-		229 => "crude-oil",
-		230 => "petroleum-gas",
-		231 => "light-oil",
-		232 => "heavy-oil",
-		233 => "lubricant",
-		234 => "sulfuric-acid",
-		235 => "small-biter",
-		236 => "medium-biter",
-		237 => "big-biter",
-		238 => "behemoth-biter",
-		239 => "small-spitter",
-		240 => "medium-spitter",
-		241 => "big-spitter",
-		242 => "behemoth-spitter",
-		243 => "small-worm-turret",
-		244 => "medium-worm-turret",
-		245 => "big-worm-turret",
-		246 => "behemoth-worm-turret",
-		247 => "biter-spawner",
-		248 => "spitter-spawner",
-		249 => "cliff",
-		250 => "character",
-		251 => "big-sand-rock",
-		252 => "huge-rock",
-		253 => "crude-oil",
-		254 => "copper-wire",
-		255 => "green-wire",
-		256 => "red-wire",
-		257 => "spidertron-remote",
-		258 => "discharge-defense-remote",
-		259 => "artillery-targeting-remote",
-		260 => "entity-ghost",
-		261 => "item-on-ground",
-		262 => "item-request-proxy",
-		263 => "tile-ghost",
-		264 => "nauvis",
-		265 => "cargo-pod",
-		266 => "cargo-pod-container",
-		_ => unreachable!(),
-	}
-}
-
-/// Convert the signal id of any virtual/entity signal into a string the game understands.
-pub fn any_signal(v: i32) -> &'static str {
-	match v {
-		i if i < N_VIRTUAL_SIGNAL => virtual_signal(i),
-		i if i < N_ANY_SIGNAL => entity_signal(i),
-		_ => unreachable!(),
-	}
-}
-
-/// Do the reverse lookup of a game named signal to its corresponding id.
 pub fn lookup_id(mapped_name: &str) -> Option<i32> {
-	for i in 0..N_ANY_SIGNAL {
-		let language_safe_name = any_signal(i).replace("-", "_");
-		if mapped_name.starts_with(language_safe_name.as_str()) {
-			return Some(i);
-		}
-	}
-	None
+	let id_name = mapped_name.replace("_", "-");
+	SIGNAL_MAP.1.get(id_name.as_str()).map(|x| x.0)
+}
+
+pub fn n_ids() -> i32 {
+	SIGNAL_MAP.0.len() as i32
 }

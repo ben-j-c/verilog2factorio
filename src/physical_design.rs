@@ -1639,7 +1639,9 @@ fn exponential_distr_sample(u: f64, median: f64, num_cells: usize) -> usize {
 #[cfg(test)]
 mod test {
 
-	use crate::logical_design::get_large_logical_design;
+	use std::{fs::File, io::Write};
+
+	use crate::{logical_design::get_large_logical_design, serializable_design};
 
 	use super::*;
 	#[test]
@@ -1684,9 +1686,15 @@ mod test {
 	#[test]
 	fn dense_memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_dense_memory_test_design(1_000_000);
+		let l = ld::get_large_dense_memory_test_design(1_024);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/dense_memory_n_mcmc_dense.svg");
+
+		let mut s = serializable_design::SerializableDesign::new();
+		s.build_from(&p, &l);
+		let blueprint_json: String = serde_json::to_string(&s).unwrap();
+		let mut output = File::create("./output/dense_memory_n_mcmc_dense.json").unwrap();
+		output.write_all(blueprint_json.as_bytes()).unwrap();
 	}
 
 	#[test]

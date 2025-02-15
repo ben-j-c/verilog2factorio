@@ -1505,7 +1505,10 @@ pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
 
 #[cfg(test)]
 pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
-	let data = vec![0; n];
+	let mut data = vec![0; n];
+	for x in 0..n {
+		data[x] = x as i32;
+	}
 	let mut d = LogicalDesign::new();
 	let mpf_arr = d.add_rom(
 		vec![MemoryReadPort {
@@ -1537,6 +1540,7 @@ mod test {
 	use crate::{
 		physical_design::{PhysicalDesign, PlacementStrategy},
 		serializable_design::SerializableDesign,
+		signal_lookup_table,
 	};
 
 	use super::*;
@@ -1847,5 +1851,20 @@ mod test {
 		assert!(c1.contains(&nop0) && c1.contains(&nop2) && c1.contains(&nop3) && c1.len() == 3);
 		assert_eq!(c2, vec![nop1]);
 		assert_eq!(c3, vec![nop1]);
+	}
+
+	#[test]
+	fn named_signals() {
+		let mut d = LogicalDesign::new();
+		for i in 0..signal_lookup_table::n_ids() {
+			let id = d.add_nop(Signal::Id(i), Signal::Id(i));
+			d.set_description_node(id, format!("Sigid: {i}"));
+		}
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d, PlacementStrategy::default());
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
 	}
 }
