@@ -511,13 +511,13 @@ impl PhysicalDesign {
 					max_density: i32,
 				),
 			)] = &[
-				(750, true, ripup_replace_method),
-				(100, true, swap_local_method),
+				(650, true, ripup_replace_method),
+				(200, true, swap_local_method),
 				//(15, false, swap_random_method),
 				(25, false, ripup_range_method),
 				(350, false, crack_in_two_method),
 				(50, false, slide_puzzle_method),
-				(350, false, slide_puzzle_method_worst_cells),
+				(100, false, slide_puzzle_method_worst_cells),
 				(100, false, overflowing_cells_swap_local_method),
 			];
 
@@ -1698,138 +1698,140 @@ fn slide_puzzle_method_worst_cells(
 ) {
 	let num_cells = assignments.len();
 	let mut interesting_cells = vec![];
+	let mut interesting_cells_assignment = vec![];
 	for (idx, (cx, cy)) in new_assignments.iter().enumerate() {
-		if new_block_counts[*cx][*cy] > 1 {
+		if new_block_counts[*cx][*cy] > max_density
+			&& interesting_cells_assignment.last() != Some(&(cx, cy))
+		{
 			interesting_cells.push(idx);
+			interesting_cells_assignment.push((cx, cy));
 		}
 	}
-	if interesting_cells.is_empty() {
-		return;
-	}
-	let picked_cell = interesting_cells[rng.random_range(0..interesting_cells.len())];
-	if new_assignments[picked_cell].1 != 0
-		&& new_assignments[picked_cell].1 != side_length - 1
-		&& rng.random_bool(0.5)
-	{
-		let line_y = new_assignments[picked_cell].1;
-		if rng.random_bool(0.5) {
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == 0 {
-					continue;
+	for picked_cell in interesting_cells {
+		if new_assignments[picked_cell].1 != 0
+			&& new_assignments[picked_cell].1 != side_length - 1
+			&& rng.random_bool(0.5)
+		{
+			let line_y = new_assignments[picked_cell].1;
+			if rng.random_bool(0.5) {
+				let mut ripup_cells = vec![];
+				for cell in 0..num_cells {
+					let (cx, cy) = new_assignments[cell];
+					if cy == 0 {
+						continue;
+					}
+					if cy < line_y && cx == assignments[picked_cell].0 {
+						ripup_cells.push(cell);
+						new_block_counts[cx][cy] -= 1;
+					}
 				}
-				if cy < line_y && cx == assignments[picked_cell].0 {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
+				ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
+				for cell in ripup_cells {
+					let (cx, cy) = new_assignments[cell];
+					if new_block_counts[cx][cy - 1] < max_density {
+						new_block_counts[cx][cy - 1] += 1;
+						new_assignments[cell] = (cx, cy - 1);
+					} else {
+						new_block_counts[cx][cy] += 1;
+					}
 				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
+				let (cx, cy) = new_assignments[picked_cell];
 				if new_block_counts[cx][cy - 1] < max_density {
 					new_block_counts[cx][cy - 1] += 1;
-					new_assignments[cell] = (cx, cy - 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-			let (cx, cy) = new_assignments[picked_cell];
-			if new_block_counts[cx][cy - 1] < max_density {
-				new_block_counts[cx][cy - 1] += 1;
-				new_block_counts[cx][cy] -= 1;
-				new_assignments[picked_cell] = (cx, cy - 1);
-			}
-		} else {
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == side_length - 1 {
-					continue;
-				}
-				if cy > line_y && cx == assignments[picked_cell].0 {
-					ripup_cells.push(cell);
 					new_block_counts[cx][cy] -= 1;
+					new_assignments[picked_cell] = (cx, cy - 1);
 				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
+			} else {
+				let mut ripup_cells = vec![];
+				for cell in 0..num_cells {
+					let (cx, cy) = new_assignments[cell];
+					if cy == side_length - 1 {
+						continue;
+					}
+					if cy > line_y && cx == assignments[picked_cell].0 {
+						ripup_cells.push(cell);
+						new_block_counts[cx][cy] -= 1;
+					}
+				}
+				ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
+				for cell in ripup_cells {
+					let (cx, cy) = new_assignments[cell];
+					if new_block_counts[cx][cy + 1] < max_density {
+						new_block_counts[cx][cy + 1] += 1;
+						new_assignments[cell] = (cx, cy + 1);
+					} else {
+						new_block_counts[cx][cy] += 1;
+					}
+				}
+				let (cx, cy) = new_assignments[picked_cell];
 				if new_block_counts[cx][cy + 1] < max_density {
 					new_block_counts[cx][cy + 1] += 1;
-					new_assignments[cell] = (cx, cy + 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-			let (cx, cy) = new_assignments[picked_cell];
-			if new_block_counts[cx][cy + 1] < max_density {
-				new_block_counts[cx][cy + 1] += 1;
-				new_block_counts[cx][cy] -= 1;
-				new_assignments[picked_cell] = (cx, cy + 1);
-			}
-		}
-	} else if new_assignments[picked_cell].0 != 0
-		&& new_assignments[picked_cell].0 < side_length - 2
-	{
-		let line_x = new_assignments[picked_cell].0;
-		if rng.random_bool(0.5) {
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == 0 {
-					continue;
-				}
-				if cx > line_x && cy == assignments[picked_cell].1 {
-					ripup_cells.push(cell);
 					new_block_counts[cx][cy] -= 1;
+					new_assignments[picked_cell] = (cx, cy + 1);
 				}
 			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+		} else if new_assignments[picked_cell].0 != 0
+			&& new_assignments[picked_cell].0 < side_length - 2
+		{
+			let line_x = new_assignments[picked_cell].0;
+			if rng.random_bool(0.5) {
+				let mut ripup_cells = Vec::new();
+				for cell in 0..num_cells {
+					let (cx, cy) = new_assignments[cell];
+					if cx == 0 {
+						continue;
+					}
+					if cx > line_x && cy == assignments[picked_cell].1 {
+						ripup_cells.push(cell);
+						new_block_counts[cx][cy] -= 1;
+					}
+				}
+				ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
 
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
+				for cell in ripup_cells {
+					let (cx, cy) = new_assignments[cell];
+					if new_block_counts[cx - 2][cy] < max_density {
+						new_block_counts[cx - 2][cy] += 1;
+						new_assignments[cell] = (cx - 2, cy);
+					} else {
+						new_block_counts[cx][cy] += 1;
+					}
+				}
+				let (cx, cy) = new_assignments[picked_cell];
 				if new_block_counts[cx - 2][cy] < max_density {
 					new_block_counts[cx - 2][cy] += 1;
-					new_assignments[cell] = (cx - 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-			let (cx, cy) = new_assignments[picked_cell];
-			if new_block_counts[cx - 2][cy] < max_density {
-				new_block_counts[cx - 2][cy] += 1;
-				new_block_counts[cx][cy] -= 1;
-				new_assignments[picked_cell] = (cx - 2, cy);
-			}
-		} else {
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == side_length - 1 {
-					continue;
-				}
-				if cx < line_x && cy == assignments[picked_cell].1 {
-					ripup_cells.push(cell);
 					new_block_counts[cx][cy] -= 1;
+					new_assignments[picked_cell] = (cx - 2, cy);
 				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
+			} else {
+				let mut ripup_cells = Vec::new();
+				for cell in 0..num_cells {
+					let (cx, cy) = new_assignments[cell];
+					if cx == side_length - 1 {
+						continue;
+					}
+					if cx < line_x && cy == assignments[picked_cell].1 {
+						ripup_cells.push(cell);
+						new_block_counts[cx][cy] -= 1;
+					}
+				}
+				ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
 
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
+				for cell in ripup_cells {
+					let (cx, cy) = new_assignments[cell];
+					if new_block_counts[cx + 2][cy] < max_density {
+						new_block_counts[cx + 2][cy] += 1;
+						new_assignments[cell] = (cx + 2, cy);
+					} else {
+						new_block_counts[cx][cy] += 1;
+					}
+				}
+				let (cx, cy) = new_assignments[picked_cell];
 				if new_block_counts[cx + 2][cy] < max_density {
 					new_block_counts[cx + 2][cy] += 1;
-					new_assignments[cell] = (cx + 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
+					new_block_counts[cx][cy] -= 1;
+					new_assignments[picked_cell] = (cx + 2, cy);
 				}
-			}
-			let (cx, cy) = new_assignments[picked_cell];
-			if new_block_counts[cx + 2][cy] < max_density {
-				new_block_counts[cx + 2][cy] += 1;
-				new_block_counts[cx][cy] -= 1;
-				new_assignments[picked_cell] = (cx + 2, cy);
 			}
 		}
 	}
