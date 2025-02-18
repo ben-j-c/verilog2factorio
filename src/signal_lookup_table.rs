@@ -372,7 +372,12 @@ pub fn lookup_str(id: i32) -> (&'static str, Option<&'static str>) {
 
 pub fn lookup_id(mapped_name: &str) -> Option<i32> {
 	let id_name = mapped_name.replace("_", "-");
-	SIGNAL_MAP.1.get(id_name.as_str()).map(|x| x.0)
+	for (key, value) in &SIGNAL_MAP.1 {
+		if id_name.starts_with(*key) {
+			return Some(value.0);
+		}
+	}
+	None
 }
 
 pub fn n_ids() -> i32 {

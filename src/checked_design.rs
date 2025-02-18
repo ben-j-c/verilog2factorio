@@ -243,7 +243,7 @@ impl CheckedDesign {
 			} else {
 				panic!(
 					"{:?} on top level design doesn't match a named game signal",
-					port
+					name
 				)
 			}
 		});
