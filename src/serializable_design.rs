@@ -514,12 +514,12 @@ impl ArithmeticOperator {
 
 fn resolve_network(val: (bool, bool)) -> Option<HashMap<String, bool>> {
 	let mut ret = HashMap::new();
-	if val.0 == true && val.1 == true {
+	if val.0 && val.1 {
 		return None;
 	}
 	ret.insert("red".to_owned(), val.0);
 	ret.insert("green".to_owned(), val.1);
-	return Some(ret);
+	Some(ret)
 }
 
 #[cfg(test)]

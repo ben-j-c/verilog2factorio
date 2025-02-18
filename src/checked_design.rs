@@ -159,6 +159,12 @@ impl Node {
 	}
 }
 
+impl Default for CheckedDesign {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CheckedDesign {
 	pub fn new() -> Self {
 		Self {

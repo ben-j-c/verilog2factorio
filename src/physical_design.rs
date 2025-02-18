@@ -233,7 +233,7 @@ impl PhysicalDesign {
 		for (idx, c) in self.combs.iter().enumerate() {
 			ret[idx] = (c.position.0.round() as usize + 1, c.position.1 as usize);
 		}
-		self.save_svg(logical, format!("./svg/internal_cavg.svg").as_str());
+		self.save_svg(logical, "./svg/internal_cavg.svg");
 		self.reset_place_route();
 		Ok(ret)
 	}
@@ -264,7 +264,7 @@ impl PhysicalDesign {
 					x += 2;
 					y = 0;
 				}
-				initial1[c.0] = (x, y as usize);
+				initial1[c.0] = (x, y);
 				y += 1;
 			}
 		}
@@ -292,7 +292,7 @@ impl PhysicalDesign {
 					x += 2;
 					y = 0;
 				}
-				initial3[c] = (x, y as usize);
+				initial3[c] = (x, y);
 				y += 1;
 			}
 		}
@@ -314,10 +314,7 @@ impl PhysicalDesign {
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale 1.3");
 							println!("WARN: {}", e.0);
-							match self.place_combs_physical_dense(&e.1, logical) {
-								Ok(_) => {}
-								Err(_) => {}
-							}
+							self.place_combs_physical_dense(&e.1, logical).is_ok();
 							self.connect_combs(logical);
 							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
 							panic!("failed to place");
@@ -325,7 +322,6 @@ impl PhysicalDesign {
 					};
 				self.place_combs_physical_dense(&comb_positions, logical)
 					.unwrap();
-				return;
 			}
 		}
 	}
@@ -401,8 +397,8 @@ impl PhysicalDesign {
 					cost += r2distance.sqrt() / 10.0;
 				}
 			}
-			for (_x, block_y) in block_counts.iter().enumerate() {
-				for (_y, count) in block_y.iter().enumerate() {
+			for block_y in block_counts.iter() {
+				for count in block_y.iter() {
 					if *count > 1 {
 						sat = false;
 						cost += *count as f64 * 10.0;
@@ -471,7 +467,7 @@ impl PhysicalDesign {
 
 		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
 			for (x, block_y) in block_counts.iter().enumerate() {
-				for (_y, count) in block_y.iter().enumerate() {
+				for count in block_y.iter() {
 					if *count > max_density {
 						assert!(false);
 					}
@@ -576,7 +572,7 @@ impl PhysicalDesign {
 				assignments_cost = best_cost;
 				best_block_counts = block_counts.clone();
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
-				if !final_stage && iterations - step < iterations * 1 / 10 {
+				if !final_stage && iterations - step < iterations / 10 {
 					println!("Boosting iterations {}", best_cost.0);
 					iterations = iterations * 25 / 20;
 					temp *= 1.12;
@@ -1520,54 +1516,52 @@ fn crack_in_two_method(
 				}
 			}
 		}
+	} else if rng.random_bool(0.5) {
+		let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
+		let mut ripup_cells = Vec::new();
+		for cell in 0..num_cells {
+			let (cx, cy) = new_assignments[cell];
+			if cx == 0 {
+				continue;
+			}
+			if cx > line_x {
+				ripup_cells.push(cell);
+				new_block_counts[cx][cy] -= 1;
+			}
+		}
+		ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+
+		for cell in ripup_cells {
+			let (cx, cy) = new_assignments[cell];
+			if new_block_counts[cx - 2][cy] < max_density {
+				new_block_counts[cx - 2][cy] += 1;
+				new_assignments[cell] = (cx - 2, cy);
+			} else {
+				new_block_counts[cx][cy] += 1;
+			}
+		}
 	} else {
-		if rng.random_bool(0.5) {
-			let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == 0 {
-					continue;
-				}
-				if cx > line_x {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
+		let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
+		let mut ripup_cells = Vec::new();
+		for cell in 0..num_cells {
+			let (cx, cy) = new_assignments[cell];
+			if cx == side_length - 1 {
+				continue;
 			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+			if cx < line_x {
+				ripup_cells.push(cell);
+				new_block_counts[cx][cy] -= 1;
+			}
+		}
+		ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
 
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx - 2][cy] < max_density {
-					new_block_counts[cx - 2][cy] += 1;
-					new_assignments[cell] = (cx - 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-		} else {
-			let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == side_length - 1 {
-					continue;
-				}
-				if cx < line_x {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx + 2][cy] < max_density {
-					new_block_counts[cx + 2][cy] += 1;
-					new_assignments[cell] = (cx + 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
+		for cell in ripup_cells {
+			let (cx, cy) = new_assignments[cell];
+			if new_block_counts[cx + 2][cy] < max_density {
+				new_block_counts[cx + 2][cy] += 1;
+				new_assignments[cell] = (cx + 2, cy);
+			} else {
+				new_block_counts[cx][cy] += 1;
 			}
 		}
 	}
@@ -1634,54 +1628,52 @@ fn slide_puzzle_method(
 				}
 			}
 		}
+	} else if rng.random_bool(0.5) {
+		let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
+		let mut ripup_cells = Vec::new();
+		for cell in 0..num_cells {
+			let (cx, cy) = new_assignments[cell];
+			if cx == 0 {
+				continue;
+			}
+			if cx > line_x && cy >= start && cy < end {
+				ripup_cells.push(cell);
+				new_block_counts[cx][cy] -= 1;
+			}
+		}
+		ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+
+		for cell in ripup_cells {
+			let (cx, cy) = new_assignments[cell];
+			if new_block_counts[cx - 2][cy] < max_density {
+				new_block_counts[cx - 2][cy] += 1;
+				new_assignments[cell] = (cx - 2, cy);
+			} else {
+				new_block_counts[cx][cy] += 1;
+			}
+		}
 	} else {
-		if rng.random_bool(0.5) {
-			let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == 0 {
-					continue;
-				}
-				if cx > line_x && cy >= start && cy < end {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
+		let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
+		let mut ripup_cells = Vec::new();
+		for cell in 0..num_cells {
+			let (cx, cy) = new_assignments[cell];
+			if cx == side_length - 1 {
+				continue;
 			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+			if cx < line_x && cy >= start && cy < end {
+				ripup_cells.push(cell);
+				new_block_counts[cx][cy] -= 1;
+			}
+		}
+		ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
 
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx - 2][cy] < max_density {
-					new_block_counts[cx - 2][cy] += 1;
-					new_assignments[cell] = (cx - 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-		} else {
-			let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
-			let mut ripup_cells = Vec::new();
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cx == side_length - 1 {
-					continue;
-				}
-				if cx < line_x && cy >= start && cy < end {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx + 2][cy] < max_density {
-					new_block_counts[cx + 2][cy] += 1;
-					new_assignments[cell] = (cx + 2, cy);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
+		for cell in ripup_cells {
+			let (cx, cy) = new_assignments[cell];
+			if new_block_counts[cx + 2][cy] < max_density {
+				new_block_counts[cx + 2][cy] += 1;
+				new_assignments[cell] = (cx + 2, cy);
+			} else {
+				new_block_counts[cx][cy] += 1;
 			}
 		}
 	}
