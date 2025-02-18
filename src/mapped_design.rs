@@ -357,7 +357,7 @@ impl<'de> Deserialize<'de> for Bit {
 		D: Deserializer<'de>,
 	{
 		struct BitVisitor;
-		impl<'de> Visitor<'de> for BitVisitor {
+		impl Visitor<'_> for BitVisitor {
 			type Value = Bit;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -560,7 +560,7 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		parameters: cell.parameters,
 		attributes: cell.attributes,
 		port_directions: directions,
-		connections: connections,
+		connections,
 	}
 }
 

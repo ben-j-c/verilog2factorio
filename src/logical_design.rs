@@ -315,6 +315,12 @@ impl std::fmt::Debug for LogicalDesign {
 }
 
 #[allow(dead_code)]
+impl Default for LogicalDesign {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogicalDesign {
 	/// New blank design.
 	pub fn new() -> Self {
@@ -1273,7 +1279,7 @@ impl LogicalDesign {
 				return true;
 			}
 		}
-		return false;
+		false
 	}
 
 	pub(crate) fn get_connected_combs(&self, ldid: NodeId) -> Vec<NodeId> {
@@ -1304,7 +1310,7 @@ impl LogicalDesign {
 				self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}
-		return retval;
+		retval
 	}
 
 	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
@@ -1316,7 +1322,7 @@ impl LogicalDesign {
 				self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}
-		return retval;
+		retval
 	}
 
 	fn get_wire_colour(&self, nodeid: NodeId) -> WireColour {
