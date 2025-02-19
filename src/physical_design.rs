@@ -240,8 +240,10 @@ impl PhysicalDesign {
 
 	fn get_initializations(&self, logical: &LogicalDesign) -> Vec<Vec<(usize, usize)>> {
 		let side_length = (self.combs.len() as f64 * 2.0).sqrt().ceil() as usize;
-		let mut initial0 = vec![(0, 0); self.combs.len()];
+		let mut retval = vec![];
+		retval.push(vec![(0, 0); self.combs.len()]);
 		{
+			let initial0 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y: isize = 0;
 			let mut ydir = 1;
@@ -255,8 +257,9 @@ impl PhysicalDesign {
 				y += ydir;
 			}
 		}
-		let mut initial1 = vec![(0, 0); self.combs.len()];
+		retval.push(vec![(0, 0); self.combs.len()]);
 		{
+			let initial1 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
 			for c in &self.get_bfs_order(CombinatorId(0), logical) {
@@ -268,8 +271,9 @@ impl PhysicalDesign {
 				y += 1;
 			}
 		}
-		let mut initial2 = vec![(0, 0); self.combs.len()];
+		retval.push(vec![(0, 0); self.combs.len()]);
 		{
+			let initial2 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y: isize = 0;
 			let mut ydir = 1;
@@ -283,8 +287,9 @@ impl PhysicalDesign {
 				y += ydir;
 			}
 		}
-		let mut initial3 = vec![(0, 0); self.combs.len()];
+		retval.push(vec![(0, 0); self.combs.len()]);
 		{
+			let initial3 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
 			for c in 0..self.combs.len() {
@@ -296,7 +301,29 @@ impl PhysicalDesign {
 				y += 1;
 			}
 		}
-		vec![initial0, initial1, initial2, initial3]
+		retval.push(vec![(0, 0); self.combs.len()]);
+		{
+			let initial = retval.last_mut().unwrap();
+			let mut x = 0;
+			let mut y = 0;
+			let mut ydir = false;
+			for c in &self.get_bfs_order(CombinatorId(0), logical) {
+				initial[c.0] = (x, y as usize);
+				x += 2;
+				if (x / 2) % 3 == 0 {
+					x -= 4;
+					if y == 0 && ydir || y == side_length - 1 && !ydir {
+						ydir = !ydir;
+					}
+					if ydir {
+						y -= 1;
+					} else {
+						y += 1;
+					}
+				}
+			}
+		}
+		retval
 	}
 
 	fn place_combs(&mut self, logical: &LogicalDesign, placement_strategy: PlacementStrategy) {
