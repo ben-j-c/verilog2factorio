@@ -285,6 +285,14 @@ pub struct MemoryPortReadFilled {
 	pub rst_wire: Option<NodeId>,
 }
 
+#[derive(Debug)]
+pub struct MemoryPortWriteFilled {
+	pub addr_wire: NodeId,
+	pub data_wire: NodeId,
+	pub clk_wire: Option<NodeId>,
+	pub en_wire: Option<NodeId>,
+}
+
 /// Performance? never heard of her.
 #[allow(dead_code)]
 struct LogicalDesignCache {
@@ -316,9 +324,9 @@ impl std::fmt::Debug for LogicalDesign {
 
 #[allow(dead_code)]
 impl Default for LogicalDesign {
-    fn default() -> Self {
-        Self::new()
-    }
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl LogicalDesign {
@@ -554,6 +562,15 @@ impl LogicalDesign {
 		_en: Signal,
 		_output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
+		todo!()
+	}
+
+	pub fn add_ram(
+		&mut self,
+		read_ports: Vec<MemoryReadPort>,
+		write_ports: Vec<MemoryWritePort>,
+		density: Option<i32>,
+	) -> (Vec<MemoryPortReadFilled>, Vec<MemoryPortWriteFilled>) {
 		todo!()
 	}
 

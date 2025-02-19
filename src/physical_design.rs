@@ -344,7 +344,7 @@ impl PhysicalDesign {
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale 1.3");
 							println!("WARN: {}", e.0);
-							self.place_combs_physical_dense(&e.1, logical).is_ok();
+							let _ = self.place_combs_physical_dense(&e.1, logical);
 							self.connect_combs(logical);
 							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
 							panic!("failed to place");
@@ -362,10 +362,7 @@ impl PhysicalDesign {
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale 1.3");
 							println!("WARN: {}", e.0);
-							match self.place_combs_physical_dense(&e.1, logical) {
-								Ok(_) => {}
-								Err(_) => {}
-							}
+							let _ = self.place_combs_physical_dense(&e.1, logical);
 							self.connect_combs(logical);
 							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
 							panic!("failed to place");
@@ -1398,7 +1395,7 @@ impl PhysicalDesign {
 
 	fn validate_against(&self, ld: &LogicalDesign) {
 		return;
-		todo!();
+		unreachable!();
 		for c in &self.combs {
 			let ld_comb = ld.get_node(c.logic);
 			if ld_comb.is_constant() {
@@ -2313,8 +2310,8 @@ mod test {
 
 	#[test]
 	fn synthetic_n_mcmc_dense_parallel() {
-		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(200);
+		let mut _p = PhysicalDesign::new();
+		let _l = get_large_logical_design(200);
 		//p.build_from(&l, PlacementStrategy::MCMCSADenseParallel);
 		//p.save_svg(&l, "svg/synthetic_n_mcmc_dense_parallel.svg");
 	}
