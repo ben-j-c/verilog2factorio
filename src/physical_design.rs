@@ -304,8 +304,8 @@ impl PhysicalDesign {
 				y += 1;
 			}
 		}
-		retval.push(vec![(0, 0); self.combs.len()]);
-		{
+		if self.combs.len() > 100 {
+			retval.push(vec![(0, 0); self.combs.len()]);
 			let initial = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
