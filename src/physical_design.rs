@@ -1,4 +1,5 @@
-use core::{f64, panic};
+use core::{f64, num, panic};
+use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::os::unix::raw::blksize_t;
@@ -9,6 +10,7 @@ use std::{
 	hash::Hash,
 	vec,
 };
+use std::{isize, usize};
 
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
@@ -20,7 +22,6 @@ pub enum PlacementStrategy {
 	ConnectivityAveraging,
 	#[default]
 	MCMCSADense,
-	MCMCSADenseParallel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -353,25 +354,6 @@ impl PhysicalDesign {
 				self.place_combs_physical_dense(&comb_positions, logical)
 					.unwrap();
 			}
-			PlacementStrategy::MCMCSADenseParallel => {
-				let initializations = self.get_initializations(logical);
-				self.reset_place_route();
-				let comb_positions =
-					match self.solve_as_mcmc_dense_parallel(logical, 1.5, &initializations, None) {
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: MCMC failed to place with scale 1.3");
-							println!("WARN: {}", e.0);
-							let _ = self.place_combs_physical_dense(&e.1, logical);
-							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
-							panic!("failed to place");
-						}
-					};
-				self.place_combs_physical_dense(&comb_positions, logical)
-					.unwrap();
-				return;
-			}
 		}
 	}
 
@@ -380,11 +362,15 @@ impl PhysicalDesign {
 		comb_positions: &Vec<(usize, usize)>,
 		logical: &LogicalDesign,
 	) -> Result<(), ()> {
+		let mut failure = Ok(());
 		for (idx, (x, y)) in comb_positions.iter().enumerate() {
 			let p = (*x as f64, *y as f64);
-			self.place_comb_physical(p, CombinatorId(idx), logical)?;
+			let res2 = self.place_comb_physical(p, CombinatorId(idx), logical);
+			if failure.is_ok() {
+				failure = res2;
+			}
 		}
-		Ok(())
+		failure
 	}
 
 	fn place_combs_physical_coarse15(
@@ -424,6 +410,11 @@ impl PhysicalDesign {
 		let num_cells = self.combs.len();
 
 		let connections = self.get_connectivity_as_edges(ld, true);
+		let connections_per_node = self
+			.get_connectivity_as_vec(ld)
+			.into_iter()
+			.map(|x| x.into_iter().map(|c| c.0).collect_vec())
+			.collect_vec();
 
 		let compute_cost = |assign: &Vec<(usize, usize)>,
 		                    block_counts: &Vec<Vec<i32>>,
@@ -514,17 +505,27 @@ impl PhysicalDesign {
 		let cooling_rate = 1.0 - 1E-7;
 		let mut iterations = 20_000_000;
 
-		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
-			for (x, block_y) in block_counts.iter().enumerate() {
+		let check_invariant_density = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
+			for (_x, block_y) in block_counts.iter().enumerate() {
 				for count in block_y.iter() {
 					if *count > max_density {
 						assert!(false);
 					}
+				}
+			}
+		};
+		let check_invariant_position = |block_counts: &Vec<Vec<i32>>| {
+			for (x, block_y) in block_counts.iter().enumerate() {
+				for count in block_y.iter() {
 					if *count > 0 && x % 2 == 1 {
 						assert!(false);
 					}
 				}
 			}
+		};
+		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
+			check_invariant_density(block_counts, max_density);
+			check_invariant_position(block_counts);
 		};
 
 		let mut final_stage = false;
@@ -552,6 +553,7 @@ impl PhysicalDesign {
 					block_counts: &Vec<Vec<i32>>,
 					new_assignments: &mut Vec<(usize, usize)>,
 					new_block_counts: &mut Vec<Vec<i32>>,
+					connections_per_node: &Vec<Vec<usize>>,
 					side_length: usize,
 					max_density: i32,
 				),
@@ -560,10 +562,11 @@ impl PhysicalDesign {
 				(200, true, swap_local_method),
 				//(15, false, swap_random_method),
 				(25, false, ripup_range_method),
-				(350, false, crack_in_two_method),
+				(200, false, crack_in_two_method),
 				(50, false, slide_puzzle_method),
 				(100, false, slide_puzzle_method_worst_cells),
 				(100, false, overflowing_cells_swap_local_method),
+				(10, false, simulated_spring_method),
 			];
 
 			// Select weighted method
@@ -588,6 +591,7 @@ impl PhysicalDesign {
 							&block_counts,
 							&mut new_assignments,
 							&mut new_block_counts,
+							&connections_per_node,
 							side_length,
 							max_density,
 						);
@@ -595,6 +599,7 @@ impl PhysicalDesign {
 					}
 				}
 			}
+			check_invariant_position(&new_block_counts);
 
 			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
 			let delta = new_cost.0 - best_cost.0;
@@ -661,303 +666,6 @@ impl PhysicalDesign {
 		}
 
 		Ok(best_assign)
-	}
-
-	pub fn solve_as_mcmc_dense_parallel(
-		&self,
-		ld: &LogicalDesign,
-		scale_factor: f64,
-		initializations: &Vec<Vec<(usize, usize)>>,
-		init_temp: Option<f64>,
-	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
-		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
-		let num_cells = self.combs.len();
-
-		let connections = self.get_connectivity_as_edges(ld, true);
-
-		let compute_cost = |assign: &Vec<(usize, usize)>,
-		                    block_counts: &Vec<Vec<i32>>,
-		                    max_density: i32|
-		 -> (f64, bool, i32) {
-			let mut cost = 0.0;
-			let mut sat_count = 0;
-			let mut sat = true;
-			for &(i, j) in &connections {
-				let (x_i, y_i) = assign[i];
-				let (x_j, y_j) = assign[j];
-				let dx = (x_i as isize - x_j as isize).abs() as f64;
-				let dy = (y_i as isize - y_j as isize).abs() as f64;
-				let r2distance = dx.powi(2) + dy.powi(2);
-				if r2distance > (64.0 + 81.0) / 2.0 {
-					cost += r2distance.sqrt();
-					sat_count += 1;
-					sat = false;
-				} else {
-					cost += r2distance.sqrt() / 10.0;
-				}
-			}
-			for (_x, block_y) in block_counts.iter().enumerate() {
-				for (_y, count) in block_y.iter().enumerate() {
-					if *count > 1 {
-						sat = false;
-						cost += *count as f64 * 10.0;
-						sat_count += *count - max_density;
-					}
-				}
-			}
-			(cost, sat, sat_count)
-		};
-
-		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
-		let mut assignments = vec![(0, 0); num_cells];
-		let mut block_counts = vec![vec![0; side_length]; side_length];
-
-		let max_density_init = 15;
-
-		if initializations.is_empty() {
-			for cell in 0..num_cells {
-				loop {
-					let (cx, cy) = (
-						rng.random_range(0..side_length) / 2 * 2,
-						rng.random_range(0..side_length),
-					);
-					if block_counts[cx][cy] < max_density_init {
-						assignments[cell] = (cx, cy);
-						block_counts[cx][cy] += 1;
-						break;
-					}
-				}
-			}
-		} else {
-			let mut min_score = (f64::INFINITY, false, i32::MAX);
-			let mut min_idx = 0;
-			for (idx, init) in initializations.iter().enumerate() {
-				block_counts = vec![vec![0; side_length]; side_length];
-				for (cx, cy) in init {
-					block_counts[*cx][*cy] += 1;
-				}
-				let cost = compute_cost(init, &block_counts, max_density_init);
-				if min_score.1 && min_score.2 == 0 {
-					if cost.1 && cost.2 == 0 && cost.0 < min_score.0 {
-						min_score = cost;
-						min_idx = idx;
-					}
-				} else if cost.0 < min_score.0 {
-					min_score = cost;
-					min_idx = idx;
-				}
-			}
-			println!("Selecting initialization number {min_idx}");
-			assignments = initializations[min_idx].clone();
-			block_counts = vec![vec![0; side_length]; side_length];
-			for (cx, cy) in &assignments {
-				block_counts[*cx][*cy] += 1;
-			}
-		}
-
-		struct Best {
-			assignments: Vec<(usize, usize)>,
-			block_counts: Vec<Vec<i32>>,
-			cost: (f64, bool, i32),
-			max_density: i32,
-		}
-
-		let best = Arc::from(RwLock::new(Best {
-			assignments: assignments.clone(),
-			block_counts: block_counts.clone(),
-			cost: compute_cost(&assignments, &block_counts, max_density_init),
-			max_density: max_density_init,
-		}));
-
-		let cooling_rate = 1.0 - 1E-7;
-
-		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
-			for (x, block_y) in block_counts.iter().enumerate() {
-				for (_y, count) in block_y.iter().enumerate() {
-					if *count > max_density {
-						assert!(false);
-					}
-					if *count > 0 && x % 2 == 1 {
-						assert!(false);
-					}
-				}
-			}
-		};
-
-		let n_threads = 2; //std::thread::available_parallelism().unwrap().get();
-		let pool = rayon::ThreadPoolBuilder::new()
-			.num_threads(n_threads)
-			.build()
-			.unwrap();
-
-		pool.scope(|s| {
-			for i in 0..n_threads {
-				let best = Arc::clone(&best);
-				s.spawn(move |_| {
-					let mut rng = StdRng::seed_from_u64(i as u64);
-					let (mut assignments, mut block_counts, mut assignments_cost) = {
-						let tmpbest = best.read().unwrap();
-						(
-							tmpbest.assignments.clone(),
-							tmpbest.block_counts.clone(),
-							tmpbest.cost.clone(),
-						)
-					};
-
-					let mut temp = init_temp.unwrap_or(20.0 + 10.0 * (num_cells as f64));
-					let mut iterations = 20_000_000;
-					let mut final_stage = false;
-					let mut step = 0;
-					while step < iterations {
-						{
-							let tmpbest = best.read().unwrap();
-							if tmpbest.cost.1 && !final_stage {
-								check_invariants(&block_counts, 1);
-								final_stage = true;
-								iterations = (step as f64 * 1.2) as i32;
-								println!("Entering final compacting stage.");
-								if tmpbest.cost.0 <= 0.0 {
-									break;
-								}
-							}
-						}
-
-						let max_density = best.read().unwrap().max_density;
-						let mut new_block_counts = block_counts.clone();
-						let mut new_assignments = assignments.clone();
-
-						const METHODS: &[(
-							usize,
-							bool,
-							fn(
-								rng: &mut StdRng,
-								assignments: &Vec<(usize, usize)>,
-								block_counts: &Vec<Vec<i32>>,
-								new_assignments: &mut Vec<(usize, usize)>,
-								new_block_counts: &mut Vec<Vec<i32>>,
-								side_length: usize,
-								max_density: i32,
-							),
-						)] = &[
-							(650, true, ripup_replace_method),
-							(200, true, swap_local_method),
-							//(15, false, swap_random_method),
-							(25, false, ripup_range_method),
-							(350, false, crack_in_two_method),
-							(50, false, slide_puzzle_method),
-							(100, false, slide_puzzle_method_worst_cells),
-							(100, false, overflowing_cells_swap_local_method),
-						];
-
-						// Select weighted method
-						{
-							let total_weight: usize = METHODS
-								.iter()
-								.filter(|(_, can_run_if_final, _)| {
-									!final_stage || *can_run_if_final
-								})
-								.map(|(weight, _, _)| *weight)
-								.sum();
-
-							let pick = rng.random_range(0..total_weight);
-							let mut cumulative = 0;
-							for (weight, can_run_if_final, func) in METHODS {
-								if final_stage && !can_run_if_final {
-									continue;
-								}
-								cumulative += weight;
-								if pick < cumulative {
-									func(
-										&mut rng,
-										&assignments,
-										&block_counts,
-										&mut new_assignments,
-										&mut new_block_counts,
-										side_length,
-										max_density,
-									);
-									break;
-								}
-							}
-						}
-
-						let new_cost =
-							compute_cost(&new_assignments, &new_block_counts, max_density);
-
-						{
-							let best_cost = best.read().unwrap().cost.clone();
-							let delta = new_cost.0 - best_cost.0;
-
-							if new_cost.2 <= best_cost.2
-								&& (!final_stage && (delta < 0.0 || new_cost.1)
-									|| final_stage && (delta < 0.0 && new_cost.1))
-							{
-								let mut tmpbest = best.write().unwrap();
-								if new_cost.2 <= 0 && max_density > 1 {
-									tmpbest.max_density -= 1;
-									println!("Reducing max density to {}", tmpbest.max_density);
-								}
-								let delta = new_cost.0 - tmpbest.cost.0;
-								if !final_stage && (delta < 0.0 || new_cost.1)
-									|| final_stage && (delta < 0.0 && new_cost.1)
-								{
-									tmpbest.cost = new_cost;
-									tmpbest.assignments = new_assignments.clone();
-									assignments = new_assignments;
-									block_counts = new_block_counts;
-									assignments_cost = tmpbest.cost;
-									tmpbest.block_counts = block_counts.clone();
-									println!(
-										"Best cost {} ({}), max_density {}, temp {}",
-										tmpbest.cost.0, tmpbest.cost.2, max_density, temp
-									);
-									if !final_stage && iterations - step < iterations * 1 / 10 {
-										println!("Boosting iterations {}", tmpbest.cost.0);
-										iterations = iterations * 25 / 20;
-										temp *= 1.12;
-									}
-								}
-							} else {
-								let p = f64::exp(-delta / temp);
-								if p >= 1.0 || rng.random_bool(p) {
-									assignments = new_assignments;
-									block_counts = new_block_counts;
-									assignments_cost = new_cost;
-								}
-							}
-						}
-
-						let tmpbest = best.read().unwrap();
-						if assignments_cost.0 / tmpbest.cost.0 > 2.0 {
-							assignments = tmpbest.assignments.clone();
-							block_counts = tmpbest.block_counts.clone();
-							assignments_cost = tmpbest.cost;
-						}
-
-						temp *= cooling_rate;
-						if temp < 1e-3 {
-							temp = 1e-3;
-						}
-						step += 1;
-					}
-				});
-			}
-		});
-
-		//check_invariants(&block_counts, max_density);
-
-		let best = best.read().unwrap();
-		if !best.cost.1 {
-			return Err((
-				format!(
-					"Could not satisfy distance requirements, lowest cost: {}",
-					best.cost.0
-				),
-				best.assignments.clone(),
-			));
-		}
-
-		Ok(best.assignments.clone())
 	}
 
 	pub fn max_allowable_distance(
@@ -1644,6 +1352,7 @@ fn ripup_replace_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
@@ -1684,6 +1393,7 @@ fn swap_local_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	_max_density: i32,
 ) {
@@ -1740,6 +1450,7 @@ fn swap_random_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	_new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	_side_length: usize,
 	_max_density: i32,
 ) {
@@ -1770,6 +1481,7 @@ fn ripup_range_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
@@ -1810,6 +1522,7 @@ fn crack_in_two_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
@@ -1919,6 +1632,7 @@ fn slide_puzzle_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
@@ -2031,6 +1745,7 @@ fn slide_puzzle_method_worst_cells(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
@@ -2181,6 +1896,7 @@ fn overflowing_cells_swap_local_method(
 	_block_counts: &Vec<Vec<i32>>,
 	new_assignments: &mut Vec<(usize, usize)>,
 	new_block_counts: &mut Vec<Vec<i32>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	_max_density: i32,
 ) {
@@ -2223,6 +1939,155 @@ fn overflowing_cells_swap_local_method(
 				new_block_counts[cx][cy] -= 1;
 			}
 			break;
+		}
+	}
+}
+
+fn simulated_spring_method(
+	rng: &mut StdRng,
+	_assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	connections_per_node: &Vec<Vec<usize>>,
+	side_length: usize,
+	max_density: i32,
+) {
+	let num_cells = new_assignments.len();
+	let iters = rng.random_range(1..100);
+	for _ in 0..iters {
+		let mut force = new_assignments
+			.iter()
+			.enumerate()
+			.map(|(idx, (x0, y0))| {
+				(
+					idx,
+					connections_per_node[idx]
+						.iter()
+						.map(|idx2| {
+							let (x1, y1) = new_assignments[*idx2];
+							let dx = x1 as isize - *x0 as isize;
+							let dy = y1 as isize - *y0 as isize;
+							(dx * dx * dx.signum(), dy * dy * dy.signum())
+						})
+						.reduce(|(x0, y0), (x1, y1)| (x0 + x1, y0 + y1))
+						.unwrap_or((0, 0)),
+				)
+			})
+			.collect_vec();
+		force.sort_by(|(_, fa), (_, fb)| {
+			(fa.0 * fa.0 + fa.1 * fa.1)
+				.cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
+				.reverse()
+		});
+		let mut pos_map: HashMap<(isize, isize), HashSet<usize>> = HashMap::new();
+		for (idx, cxcy) in new_assignments.iter().enumerate() {
+			match pos_map.entry((cxcy.0 as isize, cxcy.1 as isize)) {
+				std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
+					occupied_entry.get_mut().insert(idx);
+				}
+				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+					vacant_entry.insert(HashSet::from_iter(vec![idx]));
+				}
+			};
+		}
+		let swap_count = rng.random_range(1..num_cells / 4);
+		for (idx1, f1) in force.iter().take(swap_count) {
+			let (fx, fy) = f1;
+			if *fx == 0 && *fy == 0 {
+				continue;
+			}
+			let offset = if 2 * fx.abs() < fy.abs() {
+				match *fy > 0 {
+					true => (0, 1),
+					false => (0, -1),
+				}
+			} else if 2 * fy.abs() < fx.abs() {
+				match *fx > 0 {
+					true => (2, 0),
+					false => (-2, 0),
+				}
+			} else {
+				match (*fx > 0, *fy > 0) {
+					(true, true) => (2, 1),
+					(true, false) => (2, -1),
+					(false, true) => (-2, 1),
+					(false, false) => (-2, -1),
+				}
+			};
+			let (cx, cy) = new_assignments[*idx1];
+			let want_assignment = (
+				(cx as isize + offset.0) as usize,
+				(cy as isize + offset.1) as usize,
+			);
+			let want_assignmentisize = ((cx as isize + offset.0), (cy as isize + offset.1));
+			let mut got_want = false;
+			let mut kicked_out = usize::MAX;
+			match pos_map.entry(want_assignmentisize) {
+				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+					vacant_entry.insert(HashSet::new());
+				}
+				_ => {}
+			};
+			if want_assignmentisize.0 < 0
+				|| want_assignmentisize.0 >= side_length as isize
+				|| want_assignmentisize.1 < 0
+				|| want_assignmentisize.1 >= side_length as isize
+			{
+				continue;
+			}
+			if new_block_counts[want_assignment.0][want_assignment.1] < (max_density - 1).max(1) {
+				new_assignments[*idx1] = want_assignment;
+				new_block_counts[cx][cy] -= 1;
+				new_block_counts[want_assignment.0][want_assignment.1] += 1;
+				got_want = true;
+			} else {
+				match pos_map.get_mut(&want_assignmentisize) {
+					Some(idx2s) => {
+						let mut min_force = isize::MAX;
+						let f_incoming = f1.0 * f1.0 + f1.1 * f1.1;
+						for idx2 in idx2s.iter() {
+							let (_, f2) = force[*idx2];
+							let f_current = f2.0 * f2.0 + f2.1 * f2.1;
+							if f_incoming > f_current && f_current < min_force {
+								new_assignments[*idx1] = want_assignment;
+								got_want = true;
+								kicked_out = *idx2;
+								min_force = f_current;
+							}
+						}
+						if (got_want) {
+							new_assignments[kicked_out] = (cx, cy);
+						}
+					}
+					None => {
+						new_assignments[*idx1] = want_assignment;
+						new_block_counts[cx][cy] -= 1;
+						new_block_counts[want_assignment.0][want_assignment.1] += 1;
+						got_want = true;
+					}
+				}
+			}
+			if got_want {
+				pos_map
+					.get_mut(&want_assignmentisize)
+					.unwrap()
+					.insert(*idx1);
+				pos_map
+					.get_mut(&(cx as isize, cy as isize))
+					.unwrap()
+					.remove(&idx1);
+				if kicked_out != usize::MAX {
+					pos_map
+						.get_mut(&want_assignmentisize)
+						.unwrap()
+						.remove(&kicked_out);
+					pos_map
+						.get_mut(&(cx as isize, cy as isize))
+						.unwrap()
+						.insert(kicked_out);
+				}
+			}
 		}
 	}
 }
@@ -2281,7 +2146,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(1_000);
+		let l = ld::get_large_memory_test_design(2_000);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
@@ -2303,16 +2168,8 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(200);
+		let l = get_large_logical_design(300);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
-	}
-
-	#[test]
-	fn synthetic_n_mcmc_dense_parallel() {
-		let mut _p = PhysicalDesign::new();
-		let _l = get_large_logical_design(200);
-		//p.build_from(&l, PlacementStrategy::MCMCSADenseParallel);
-		//p.save_svg(&l, "svg/synthetic_n_mcmc_dense_parallel.svg");
 	}
 }

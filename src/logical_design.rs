@@ -450,7 +450,7 @@ impl LogicalDesign {
 	/** Inputs are returned as wires, outputs are retured as combinators. */
 	///
 	/// The returned tuple is (D wire id, CLK wire id, Output combinator id)
-	pub fn add_latch(&mut self, data: Signal, clk: Signal) -> (NodeId, NodeId, NodeId) {
+	pub(crate) fn add_latch(&mut self, data: Signal, clk: Signal) -> (NodeId, NodeId, NodeId) {
 		let in_control = {
 			let ic = self.add_decider_comb();
 			self.add_decider_comb_input(
@@ -486,7 +486,7 @@ impl LogicalDesign {
 
 	/** Create a standard D-Flip-Flop in this design. Returned NodeIds match the order of the function signature.
 	Inputs are returned as wires, outputs are retured as combinators. */
-	pub fn add_dff(
+	pub(crate) fn add_dff(
 		&mut self,
 		input: Signal,
 		clk: Signal,
@@ -511,7 +511,7 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn add_adffe(
+	pub(crate) fn add_adffe(
 		&mut self,
 		_input: Signal,
 		_clk: Signal,
@@ -522,7 +522,7 @@ impl LogicalDesign {
 		todo!()
 	}
 
-	pub fn add_dffe(
+	pub(crate) fn add_dffe(
 		&mut self,
 		input: Signal,
 		clk: Signal,
@@ -554,7 +554,7 @@ impl LogicalDesign {
 		(d_wire, clk_in_wire, en_wire, q)
 	}
 
-	pub fn add_sdffe(
+	pub(crate) fn add_sdffe(
 		&mut self,
 		_input: Signal,
 		_clk: Signal,
@@ -565,16 +565,48 @@ impl LogicalDesign {
 		todo!()
 	}
 
-	pub fn add_ram(
+	pub(crate) fn add_ram(
 		&mut self,
 		read_ports: Vec<MemoryReadPort>,
 		write_ports: Vec<MemoryWritePort>,
-		density: Option<i32>,
+		size: u32,
 	) -> (Vec<MemoryPortReadFilled>, Vec<MemoryPortWriteFilled>) {
+		//let mut addresses_ret = vec![];
+		//let mut data_ret = vec![];
+		//let mut en_ret = vec![];
+		//let mut clk_ret = vec![];
+		//let mut rst_ret = vec![];
+
+		assert!(!read_ports.is_empty());
+		assert!(!write_ports.is_empty());
+		assert!(write_ports
+			.iter()
+			.map(|p| p.clk)
+			.all(|s| s == write_ports[0].clk));
+
+		let mut preferred_output = None;
+		for p in &read_ports {
+			preferred_output = match preferred_output {
+				Some(o) => Some(o),
+				None => Some(p.data),
+			}
+		}
+		let preferred_output = preferred_output.unwrap();
+
+		let mut memory_cell_output = Vec::with_capacity(size as usize);
+
+		for _ in 0..size {
+			memory_cell_output.push(self.add_dffe(
+				write_ports[0].data,
+				write_ports[0].clk,
+				Signal::Id(0),
+				preferred_output,
+			));
+		}
 		todo!()
 	}
 
-	pub fn add_rom(
+	pub(crate) fn add_rom(
 		&mut self,
 		ports: Vec<MemoryReadPort>,
 		rom_values: Vec<i32>,
