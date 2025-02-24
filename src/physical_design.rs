@@ -1710,6 +1710,9 @@ fn slide_puzzle_method(
 	side_length: usize,
 	max_density: i32,
 ) {
+	if side_length < 10 {
+		return;
+	}
 	let num_cells = assignments.len();
 	let start = rng.random_range(1..side_length - 3);
 	let end = rng.random_range(3..side_length - 3);
