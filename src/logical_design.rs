@@ -1334,7 +1334,7 @@ impl LogicalDesign {
 	pub(crate) fn get_connected_combs(&self, ldid: NodeId) -> Vec<NodeId> {
 		self.assert_is_not_wire_sum(ldid);
 		let node = &self.nodes[ldid.0];
-		let mut ret = HashSet::new();
+		let mut ret = BTreeSet::new();
 		for wire in node.iter_fanin_both().chain(node.iter_fanout_both()) {
 			let wire_node = &self.nodes[wire.0];
 			for connected in wire_node
@@ -1350,24 +1350,24 @@ impl LogicalDesign {
 		ret.into_iter().collect_vec()
 	}
 
-	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
+	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> BTreeSet<NodeId> {
 		let node = &self.nodes[ldid.0];
-		let mut retval = HashSet::new();
+		let mut retval = BTreeSet::new();
 		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanin(colour) {
-			let localio: HashSet<NodeId> =
+			let localio: BTreeSet<NodeId> =
 				self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}
 		retval
 	}
 
-	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashSet<NodeId> {
+	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> BTreeSet<NodeId> {
 		let node = &self.nodes[ldid.0];
-		let mut retval = HashSet::new();
+		let mut retval = BTreeSet::new();
 		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanout(colour) {
-			let localio: HashSet<NodeId> =
+			let localio: BTreeSet<NodeId> =
 				self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}

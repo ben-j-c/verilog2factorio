@@ -2,6 +2,7 @@ use core::{f64, num, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::collections::BTreeSet;
 use std::os::unix::raw::blksize_t;
 use std::sync::{Arc, RwLock};
 use std::{
@@ -351,8 +352,23 @@ impl PhysicalDesign {
 							panic!("failed to place");
 						}
 					};
-				self.place_combs_physical_dense(&comb_positions, logical)
-					.unwrap();
+				if let Err(_) = self.place_combs_physical_dense(&comb_positions, logical) {
+					println!("Failed to place all cells. Here was the assignments:");
+					for (idx, p) in comb_positions.iter().enumerate() {
+						println!("{idx}: {:?}", p);
+					}
+					for (i, p_i) in comb_positions.iter().enumerate() {
+						for (j, p_j) in comb_positions.iter().enumerate() {
+							if j <= i {
+								continue;
+							}
+							if p_i == p_j {
+								println!("Found that {i} has the same assignment as {j}");
+							}
+						}
+					}
+					panic!("Have to bail due to failure in placement");
+				}
 			}
 		}
 	}
@@ -361,11 +377,17 @@ impl PhysicalDesign {
 		&mut self,
 		comb_positions: &Vec<(usize, usize)>,
 		logical: &LogicalDesign,
-	) -> Result<(), ()> {
+	) -> Result<(), String> {
 		let mut failure = Ok(());
 		for (idx, (x, y)) in comb_positions.iter().enumerate() {
 			let p = (*x as f64, *y as f64);
 			let res2 = self.place_comb_physical(p, CombinatorId(idx), logical);
+			match res2.clone() {
+				Ok(_) => {}
+				Err(e) => {
+					println!("Failed to place cell {idx} at position {:?}. {}", p, e);
+				}
+			}
 			if failure.is_ok() {
 				failure = res2;
 			}
@@ -501,7 +523,7 @@ impl PhysicalDesign {
 		let mut best_cost = compute_cost(&assignments, &block_counts, max_density);
 		let mut assignments_cost = best_cost;
 
-		let mut temp = init_temp.unwrap_or(20.0 + 10.0 * (num_cells as f64));
+		let mut temp = init_temp.unwrap_or(20.0 + 5.0 * (num_cells as f64));
 		let cooling_rate = 1.0 - 1E-7;
 		let mut iterations = 20_000_000;
 
@@ -514,27 +536,41 @@ impl PhysicalDesign {
 				}
 			}
 		};
-		let check_invariant_position = |block_counts: &Vec<Vec<i32>>| {
-			for (x, block_y) in block_counts.iter().enumerate() {
-				for count in block_y.iter() {
-					if *count > 0 && x % 2 == 1 {
-						assert!(false);
-					}
+		let check_invariant_unique_position = |assignments: &Vec<(usize, usize)>| {
+			let mut seen = HashMap::new();
+			for (idx, (x, y)) in assignments.iter().enumerate() {
+				if let Some(idx_prior) = seen.insert((x, y), idx) {
+					println!("Found that {idx} == {idx_prior}");
 				}
+				assert!(x % 2 == 0);
 			}
 		};
-		let check_invariants = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
-			check_invariant_density(block_counts, max_density);
-			check_invariant_position(block_counts);
-		};
+		let check_invariant_position =
+			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>| {
+				for (x, block_y) in block_counts.iter().enumerate() {
+					for count in block_y.iter() {
+						if *count > 0 && x % 2 == 1 {
+							assert!(false);
+						}
+					}
+				}
+				for (x, _) in assignments.iter() {
+					assert!(x % 2 == 0);
+				}
+			};
+		let check_invariants =
+			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>, max_density: i32| {
+				check_invariant_density(block_counts, max_density);
+				check_invariant_position(block_counts, assignments);
+			};
 
 		let mut final_stage = false;
 		let mut step = 0;
 		while step < iterations {
 			if best_cost.1 && !final_stage {
-				check_invariants(&block_counts, 1);
+				check_invariants(&block_counts, &assignments, 1);
 				final_stage = true;
-				iterations = (step as f64 * 1.2) as i32;
+				iterations = (step as f64 * 1.3) as i32;
 				println!("Entering final compacting stage.");
 				if best_cost.0 <= 0.0 {
 					break;
@@ -545,8 +581,8 @@ impl PhysicalDesign {
 			let mut new_assignments = assignments.clone();
 
 			const METHODS: &[(
-				usize,
-				bool,
+				usize, //weight
+				bool,  //final_stage
 				fn(
 					rng: &mut StdRng,
 					assignments: &Vec<(usize, usize)>,
@@ -558,15 +594,16 @@ impl PhysicalDesign {
 					max_density: i32,
 				),
 			)] = &[
-				(650, true, ripup_replace_method),
+				(650, false, ripup_replace_method),
 				(200, true, swap_local_method),
-				//(15, false, swap_random_method),
+				//(15, false, swap_random_method,),
 				(25, false, ripup_range_method),
 				(200, false, crack_in_two_method),
-				(50, false, slide_puzzle_method),
+				(50, true, slide_puzzle_method),
 				(100, false, slide_puzzle_method_worst_cells),
 				(100, false, overflowing_cells_swap_local_method),
 				(10, false, simulated_spring_method),
+				(20, false, slide_puzzle_method_on_violations),
 			];
 
 			// Select weighted method
@@ -599,7 +636,8 @@ impl PhysicalDesign {
 					}
 				}
 			}
-			check_invariant_position(&new_block_counts);
+			// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
+			check_invariant_position(&new_block_counts, &new_assignments);
 
 			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
 			let delta = new_cost.0 - best_cost.0;
@@ -611,7 +649,7 @@ impl PhysicalDesign {
 
 			if step % 1000000 == 0 {
 				println!(
-					"Current cost {} ({}), temp {}",
+					"Current cost {} ({}), temp {}, step {step}/{iterations}",
 					assignments_cost.0, assignments_cost.2, temp
 				);
 			}
@@ -631,9 +669,13 @@ impl PhysicalDesign {
 					iterations = iterations * 25 / 20;
 					temp *= 1.12;
 				}
+
+				if final_stage {
+					check_invariant_unique_position(&best_assign);
+				}
 			} else {
 				let p = f64::exp(-delta / temp);
-				if rng.random_bool(p) {
+				if p > 1.0 || rng.random_bool(p) {
 					assignments = new_assignments;
 					block_counts = new_block_counts;
 					assignments_cost = new_cost;
@@ -702,7 +744,7 @@ impl PhysicalDesign {
 		position: (f64, f64),
 		id_to_place: CombinatorId,
 		logical: &LogicalDesign,
-	) -> Result<(), ()> {
+	) -> Result<(), String> {
 		let pos_start = (position.0 as i32, position.1 as i32);
 		let comb_to_place = &mut self.combs[id_to_place.0];
 		let ld_node = logical.get_node(comb_to_place.logic);
@@ -711,7 +753,9 @@ impl PhysicalDesign {
 			for y in 0..hop_spec.dim.1 {
 				let key = (pos_start.0 + x, pos_start.1 + y);
 				if self.space.contains_key(&key) {
-					return Result::Err(());
+					return Result::Err(format!(
+						"Sub-cell ({x}, {y}) overlaps with an existing cell."
+					));
 				}
 			}
 		}
@@ -1954,7 +1998,7 @@ fn simulated_spring_method(
 	max_density: i32,
 ) {
 	let num_cells = new_assignments.len();
-	let iters = rng.random_range(1..100);
+	let iters = rng.random_range(1..200);
 	for _ in 0..iters {
 		let mut force = new_assignments
 			.iter()
@@ -1980,18 +2024,18 @@ fn simulated_spring_method(
 				.cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
 				.reverse()
 		});
-		let mut pos_map: HashMap<(isize, isize), HashSet<usize>> = HashMap::new();
+		let mut pos_map: HashMap<(isize, isize), BTreeSet<usize>> = HashMap::new();
 		for (idx, cxcy) in new_assignments.iter().enumerate() {
 			match pos_map.entry((cxcy.0 as isize, cxcy.1 as isize)) {
 				std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
 					occupied_entry.get_mut().insert(idx);
 				}
 				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
-					vacant_entry.insert(HashSet::from_iter(vec![idx]));
+					vacant_entry.insert(BTreeSet::from_iter(vec![idx]));
 				}
 			};
 		}
-		let swap_count = rng.random_range(1..num_cells / 4);
+		let swap_count = rng.random_range(1..num_cells / 3);
 		for (idx1, f1) in force.iter().take(swap_count) {
 			let (fx, fy) = f1;
 			if *fx == 0 && *fy == 0 {
@@ -2025,7 +2069,7 @@ fn simulated_spring_method(
 			let mut kicked_out = usize::MAX;
 			match pos_map.entry(want_assignmentisize) {
 				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
-					vacant_entry.insert(HashSet::new());
+					vacant_entry.insert(BTreeSet::new());
 				}
 				_ => {}
 			};
@@ -2087,6 +2131,168 @@ fn simulated_spring_method(
 						.unwrap()
 						.insert(kicked_out);
 				}
+			}
+		}
+	}
+}
+
+fn slide_puzzle_method_on_violations(
+	rng: &mut StdRng,
+	assignments: &Vec<(usize, usize)>,
+	_block_counts: &Vec<Vec<i32>>,
+	new_assignments: &mut Vec<(usize, usize)>,
+	new_block_counts: &mut Vec<Vec<i32>>,
+	connections_per_node: &Vec<Vec<usize>>,
+	side_length: usize,
+	max_density: i32,
+) {
+	let num_cells = assignments.len();
+	let iters = 1;
+	for _ in 0..iters {
+		let mut interesting_cells = BTreeSet::new();
+		for (i, js) in connections_per_node.iter().enumerate() {
+			for j in js {
+				if *j < i {
+					continue;
+				}
+				let (x_i, y_i) = new_assignments[i];
+				let (x_j, y_j) = new_assignments[*j];
+				let dx = (x_i as isize - x_j as isize).abs() as f64;
+				let dy = (y_i as isize - y_j as isize).abs() as f64;
+				let r2distance = dx.powi(2) + dy.powi(2);
+				if r2distance > (64.0 + 81.0) / 2.0 {
+					interesting_cells.insert(i);
+					interesting_cells.insert(*j);
+				}
+			}
+		}
+		for picked_cell in interesting_cells {
+			let curr_assignment = new_assignments[picked_cell];
+			let want_assignment = connections_per_node[picked_cell]
+				.iter()
+				.map(|idx2| {
+					let (x1, y1) = new_assignments[*idx2];
+					(x1, y1)
+				})
+				.reduce(|(x0, y0), (x1, y1)| (x0 + x1, y0 + y1))
+				.map(|(x, y)| {
+					(
+						(x / connections_per_node[picked_cell].len()) / 2 * 2,
+						y / connections_per_node[picked_cell].len(),
+					)
+				});
+			let want_assignment = if let Some(assignment) = want_assignment {
+				assignment
+			} else {
+				continue;
+			};
+
+			if new_assignments[picked_cell].1 != 0
+				&& new_assignments[picked_cell].1 != side_length - 1
+				&& rng.random_bool(0.5)
+			{
+				let line_y = want_assignment.1;
+				if rng.random_bool(0.5) {
+					let mut ripup_cells = vec![];
+					for cell in 0..num_cells {
+						let (cx, cy) = new_assignments[cell];
+						if cy == 0 {
+							continue;
+						}
+						if cy <= line_y && cx == want_assignment.0 {
+							ripup_cells.push(cell);
+							new_block_counts[cx][cy] -= 1;
+						}
+					}
+					ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
+					for cell in ripup_cells {
+						let (cx, cy) = new_assignments[cell];
+						if new_block_counts[cx][cy - 1] < max_density {
+							new_block_counts[cx][cy - 1] += 1;
+							new_assignments[cell] = (cx, cy - 1);
+						} else {
+							new_block_counts[cx][cy] += 1;
+						}
+					}
+				} else {
+					let mut ripup_cells = vec![];
+					for cell in 0..num_cells {
+						let (cx, cy) = new_assignments[cell];
+						if cy == side_length - 1 {
+							continue;
+						}
+						if cy >= line_y && cx == want_assignment.0 {
+							ripup_cells.push(cell);
+							new_block_counts[cx][cy] -= 1;
+						}
+					}
+					ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
+					for cell in ripup_cells {
+						let (cx, cy) = new_assignments[cell];
+						if new_block_counts[cx][cy + 1] < max_density {
+							new_block_counts[cx][cy + 1] += 1;
+							new_assignments[cell] = (cx, cy + 1);
+						} else {
+							new_block_counts[cx][cy] += 1;
+						}
+					}
+				}
+			} else if new_assignments[picked_cell].0 != 0
+				&& new_assignments[picked_cell].0 < side_length - 2
+			{
+				let line_x = want_assignment.0;
+				if rng.random_bool(0.5) {
+					let mut ripup_cells = Vec::new();
+					for cell in 0..num_cells {
+						let (cx, cy) = new_assignments[cell];
+						if cx == 0 {
+							continue;
+						}
+						if cx >= line_x && cy == want_assignment.1 {
+							ripup_cells.push(cell);
+							new_block_counts[cx][cy] -= 1;
+						}
+					}
+					ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
+
+					for cell in ripup_cells {
+						let (cx, cy) = new_assignments[cell];
+						if new_block_counts[cx - 2][cy] < max_density {
+							new_block_counts[cx - 2][cy] += 1;
+							new_assignments[cell] = (cx - 2, cy);
+						} else {
+							new_block_counts[cx][cy] += 1;
+						}
+					}
+				} else {
+					let mut ripup_cells = Vec::new();
+					for cell in 0..num_cells {
+						let (cx, cy) = new_assignments[cell];
+						if cx == side_length - 1 {
+							continue;
+						}
+						if cx <= line_x && cy == want_assignment.1 {
+							ripup_cells.push(cell);
+							new_block_counts[cx][cy] -= 1;
+						}
+					}
+					ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
+
+					for cell in ripup_cells {
+						let (cx, cy) = new_assignments[cell];
+						if new_block_counts[cx + 2][cy] < max_density {
+							new_block_counts[cx + 2][cy] += 1;
+							new_assignments[cell] = (cx + 2, cy);
+						} else {
+							new_block_counts[cx][cy] += 1;
+						}
+					}
+				}
+			}
+			if new_block_counts[want_assignment.0][want_assignment.1] < max_density {
+				new_block_counts[want_assignment.0][want_assignment.1] += 1;
+				new_block_counts[curr_assignment.0][curr_assignment.1] -= 1;
+				new_assignments[picked_cell] = want_assignment;
 			}
 		}
 	}
@@ -2168,7 +2374,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(300);
+		let l = get_large_logical_design(400);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
