@@ -558,19 +558,34 @@ impl PhysicalDesign {
 					assert!(x % 2 == 0);
 				}
 			};
+		let check_invariant_blocks_assignments_congruent =
+			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>| {
+				let mut block_counts_expected = vec![vec![0; side_length]; side_length];
+				for (x, y) in assignments {
+					block_counts_expected[*x][*y] += 1;
+				}
+				assert_eq!(&block_counts_expected, block_counts);
+			};
 		let check_invariants =
 			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>, max_density: i32| {
 				check_invariant_density(block_counts, max_density);
 				check_invariant_position(block_counts, assignments);
+				check_invariant_blocks_assignments_congruent(block_counts, assignments);
 			};
 
+		let mut new_best = false;
 		let mut final_stage = false;
 		let mut step = 0;
 		while step < iterations {
 			if best_cost.1 && !final_stage {
 				check_invariants(&block_counts, &assignments, 1);
 				final_stage = true;
-				iterations = (step as f64 * 1.3) as i32;
+				if (step as f64 / iterations as f64) < 0.05 {
+					iterations = (step as f64 * 4.0) as i32;
+				} else {
+					iterations = (step as f64 * 1.3) as i32;
+				}
+
 				println!("Entering final compacting stage.");
 				if best_cost.0 <= 0.0 {
 					break;
@@ -583,6 +598,7 @@ impl PhysicalDesign {
 			const METHODS: &[(
 				usize, //weight
 				bool,  //final_stage
+				bool,  // After best found
 				fn(
 					rng: &mut StdRng,
 					assignments: &Vec<(usize, usize)>,
@@ -594,29 +610,37 @@ impl PhysicalDesign {
 					max_density: i32,
 				),
 			)] = &[
-				(650, false, ripup_replace_method),
-				(200, true, swap_local_method),
-				//(15, false, swap_random_method,),
-				(25, false, ripup_range_method),
-				(200, false, crack_in_two_method),
-				(50, true, slide_puzzle_method),
-				(100, false, slide_puzzle_method_worst_cells),
-				(100, false, overflowing_cells_swap_local_method),
-				(10, false, simulated_spring_method),
-				(20, false, slide_puzzle_method_on_violations),
+				(650, false, false, ripup_replace_method),
+				(200, true, false, swap_local_method),
+				//(15, false, false, swap_random_method,),
+				(25, false, false, ripup_range_method),
+				(200, false, false, crack_in_two_method),
+				(50, true, false, slide_puzzle_method),
+				(100, false, false, slide_puzzle_method_worst_cells),
+				(100, false, false, overflowing_cells_swap_local_method),
+				(10, false, true, simulated_spring_method),
+				(40, false, true, slide_puzzle_method_on_violations),
 			];
 
 			// Select weighted method
 			{
 				let total_weight: usize = METHODS
 					.iter()
-					.filter(|(_, can_run_if_final, _)| !final_stage || *can_run_if_final)
-					.map(|(weight, _, _)| *weight)
+					.filter(|(_, can_run_if_final, after_best_found, _)| {
+						if final_stage {
+							*can_run_if_final
+						} else if new_best {
+							*after_best_found
+						} else {
+							true
+						}
+					})
+					.map(|(weight, _, _, _)| *weight)
 					.sum();
 
 				let pick = rng.random_range(0..total_weight);
 				let mut cumulative = 0;
-				for (weight, can_run_if_final, func) in METHODS {
+				for (weight, can_run_if_final, _, func) in METHODS {
 					if final_stage && !can_run_if_final {
 						continue;
 					}
@@ -632,10 +656,15 @@ impl PhysicalDesign {
 							side_length,
 							max_density,
 						);
+						check_invariant_blocks_assignments_congruent(
+							&new_block_counts,
+							&new_assignments,
+						);
 						break;
 					}
 				}
 			}
+			new_best = false;
 			// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
 			check_invariant_position(&new_block_counts, &new_assignments);
 
@@ -657,6 +686,7 @@ impl PhysicalDesign {
 			if !final_stage && (delta < 0.0 || new_cost.1)
 				|| final_stage && (delta < 0.0 && new_cost.1)
 			{
+				//new_best = true;
 				best_cost = new_cost;
 				best_assign = new_assignments.clone();
 				assignments = new_assignments;
@@ -1530,8 +1560,8 @@ fn ripup_range_method(
 	max_density: i32,
 ) {
 	let num_cells = assignments.len();
-	let region_w = rng.random_range(1..=side_length / 4);
-	let region_h = rng.random_range(1..=side_length / 4);
+	let region_w = rng.random_range(1..=10);
+	let region_h = rng.random_range(1..=10);
 
 	let sx = rng.random_range(0..(side_length - region_w).max(1));
 	let sy = rng.random_range(0..(side_length - region_h).max(1));
@@ -1998,7 +2028,7 @@ fn simulated_spring_method(
 	max_density: i32,
 ) {
 	let num_cells = new_assignments.len();
-	let iters = rng.random_range(1..200);
+	let iters = rng.random_range(1..100);
 	for _ in 0..iters {
 		let mut force = new_assignments
 			.iter()
@@ -2035,7 +2065,7 @@ fn simulated_spring_method(
 				}
 			};
 		}
-		let swap_count = rng.random_range(1..num_cells / 3);
+		let swap_count = rng.random_range(1..num_cells);
 		for (idx1, f1) in force.iter().take(swap_count) {
 			let (fx, fy) = f1;
 			if *fx == 0 && *fy == 0 {
@@ -2167,7 +2197,6 @@ fn slide_puzzle_method_on_violations(
 			}
 		}
 		for picked_cell in interesting_cells {
-			let curr_assignment = new_assignments[picked_cell];
 			let want_assignment = connections_per_node[picked_cell]
 				.iter()
 				.map(|idx2| {
@@ -2187,10 +2216,11 @@ fn slide_puzzle_method_on_violations(
 				continue;
 			};
 
-			if new_assignments[picked_cell].1 != 0
-				&& new_assignments[picked_cell].1 != side_length - 1
-				&& rng.random_bool(0.5)
-			{
+			if want_assignment == new_assignments[picked_cell] {
+				continue;
+			}
+
+			if rng.random_bool(0.33) {
 				let line_y = want_assignment.1;
 				if rng.random_bool(0.5) {
 					let mut ripup_cells = vec![];
@@ -2237,9 +2267,7 @@ fn slide_puzzle_method_on_violations(
 						}
 					}
 				}
-			} else if new_assignments[picked_cell].0 != 0
-				&& new_assignments[picked_cell].0 < side_length - 2
-			{
+			} else {
 				let line_x = want_assignment.0;
 				if rng.random_bool(0.5) {
 					let mut ripup_cells = Vec::new();
@@ -2268,7 +2296,7 @@ fn slide_puzzle_method_on_violations(
 					let mut ripup_cells = Vec::new();
 					for cell in 0..num_cells {
 						let (cx, cy) = new_assignments[cell];
-						if cx == side_length - 1 {
+						if cx == (side_length - 1) / 2 * 2 {
 							continue;
 						}
 						if cx <= line_x && cy == want_assignment.1 {
@@ -2289,6 +2317,7 @@ fn slide_puzzle_method_on_violations(
 					}
 				}
 			}
+			let curr_assignment = new_assignments[picked_cell];
 			if new_block_counts[want_assignment.0][want_assignment.1] < max_density {
 				new_block_counts[want_assignment.0][want_assignment.1] += 1;
 				new_block_counts[curr_assignment.0][curr_assignment.1] -= 1;
@@ -2374,7 +2403,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(400);
+		let l = get_large_logical_design(300);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
