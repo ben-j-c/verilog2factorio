@@ -183,6 +183,9 @@ pub(crate) fn crack_in_two_method(
 	side_length: usize,
 	max_density: i32,
 ) {
+	if side_length < 6 {
+		return;
+	}
 	let num_cells = assignments.len();
 	if rng.random_bool(0.5) {
 		if rng.random_bool(0.5) {
@@ -616,6 +619,17 @@ pub(crate) fn simulated_spring_method(
 	let num_cells = new_assignments.len();
 	let iters = rng.random_range(1..100);
 	for _ in 0..iters {
+		let mut pos_map: HashMap<(isize, isize), BTreeSet<usize>> = HashMap::new();
+		for (idx, cxcy) in new_assignments.iter().enumerate() {
+			match pos_map.entry((cxcy.0 as isize, cxcy.1 as isize)) {
+				std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
+					occupied_entry.get_mut().insert(idx);
+				}
+				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+					vacant_entry.insert(BTreeSet::from_iter(vec![idx]));
+				}
+			};
+		}
 		let mut force = new_assignments
 			.iter()
 			.enumerate()
@@ -635,22 +649,30 @@ pub(crate) fn simulated_spring_method(
 				)
 			})
 			.collect_vec();
+		for (x, y) in new_assignments.iter() {
+			let offsets = vec![-4, -2, 0, 2, 4]
+				.into_iter()
+				.cartesian_product(vec![-2, -1, 0, 1, 2])
+				.collect_vec();
+			for (dx, dy) in offsets {
+				if dx == 0 && dy == 0 {
+					continue;
+				}
+				for cell2 in pos_map
+					.entry((*x as isize + dx, *y as isize + dy))
+					.or_default()
+					.iter()
+				{
+					let (idx, (fx, fy)) = force[*cell2];
+					force[*cell2] = (idx, (fx + dx.signum() * 10, fy + dy.signum() * 10));
+				}
+			}
+		}
 		force.sort_by(|(_, fa), (_, fb)| {
 			(fa.0 * fa.0 + fa.1 * fa.1)
 				.cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
 				.reverse()
 		});
-		let mut pos_map: HashMap<(isize, isize), BTreeSet<usize>> = HashMap::new();
-		for (idx, cxcy) in new_assignments.iter().enumerate() {
-			match pos_map.entry((cxcy.0 as isize, cxcy.1 as isize)) {
-				std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
-					occupied_entry.get_mut().insert(idx);
-				}
-				std::collections::hash_map::Entry::Vacant(vacant_entry) => {
-					vacant_entry.insert(BTreeSet::from_iter(vec![idx]));
-				}
-			};
-		}
 		let swap_count = rng.random_range(1..num_cells);
 		for (idx1, f1) in force.iter().take(swap_count) {
 			let (fx, fy) = f1;
@@ -806,7 +828,7 @@ pub(crate) fn slide_puzzle_method_on_violations(
 				continue;
 			}
 
-			if rng.random_bool(0.33) {
+			if rng.random_bool(0.5) {
 				let line_y = want_assignment.1;
 				if rng.random_bool(0.5) {
 					let mut ripup_cells = vec![];

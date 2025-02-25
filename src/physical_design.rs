@@ -592,7 +592,7 @@ impl PhysicalDesign {
 				}
 			}
 
-			if false && !stage_2 && best_cost.2 * 100 < num_cells as i32 && max_density == 1 {
+			if !stage_2 && best_cost.2 * 50 < num_cells as i32 && max_density <= 1 {
 				stage_2 = true;
 				assignments = best_assign.clone();
 				block_counts = best_block_counts.clone();
@@ -630,33 +630,37 @@ impl PhysicalDesign {
 				(40, false, true, slide_puzzle_method_on_violations),
 			];
 			const METHODS_2: &[METHOD] = &[
-				(10, false, false, ripup_replace_method),
-				(200, true, false, swap_local_method),
-				//(15, false, false, swap_random_method,),
-				(1, false, false, ripup_range_method),
+				(100, false, false, ripup_replace_method),
+				(100, true, false, swap_local_method),
+				(100, false, false, swap_random_method),
+				(100, false, false, ripup_range_method),
 				(100, false, false, crack_in_two_method),
-				(50, true, false, slide_puzzle_method),
-				(10, false, false, slide_puzzle_method_worst_cells),
-				(10, false, false, overflowing_cells_swap_local_method),
+				(100, true, false, slide_puzzle_method),
+				(100, false, false, slide_puzzle_method_worst_cells),
+				(100, false, false, overflowing_cells_swap_local_method),
 				(100, false, true, simulated_spring_method),
-				(200, false, true, slide_puzzle_method_on_violations),
+				(1000, false, true, slide_puzzle_method_on_violations),
 			];
 
 			// Select weighted method
 			{
-				let total_weight: usize = if stage_2 { METHODS_2 } else { METHODS }
-					.iter()
-					.filter(|(_, can_run_if_final, after_best_found, _)| {
-						if final_stage {
-							*can_run_if_final
-						} else if new_best {
-							*after_best_found
-						} else {
-							true
-						}
-					})
-					.map(|(weight, _, _, _)| *weight)
-					.sum();
+				let total_weight: usize = if stage_2 && !final_stage {
+					METHODS_2
+				} else {
+					METHODS
+				}
+				.iter()
+				.filter(|(_, can_run_if_final, after_best_found, _)| {
+					if final_stage {
+						*can_run_if_final
+					} else if new_best {
+						*after_best_found
+					} else {
+						true
+					}
+				})
+				.map(|(weight, _, _, _)| *weight)
+				.sum();
 
 				let pick = rng.random_range(0..total_weight);
 				let mut cumulative = 0;
@@ -1501,9 +1505,19 @@ mod test {
 	}
 
 	#[test]
+	fn synthetic_n_mcmc_dense_sweep() {
+		for x in (20..=200).step_by(20) {
+			println!("==============={x}===============");
+			let mut p = PhysicalDesign::new();
+			let l = get_large_logical_design(x);
+			p.build_from(&l, PlacementStrategy::MCMCSADense);
+		}
+	}
+
+	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(500);
+		let l = get_large_logical_design(400);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
