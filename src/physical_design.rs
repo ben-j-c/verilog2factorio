@@ -576,6 +576,7 @@ impl PhysicalDesign {
 		let mut stage_2 = false;
 		let mut final_stage = false;
 		let mut step = 0;
+		let mut trend_of_bests = vec![];
 		while step < iterations {
 			if best_cost.1 && !final_stage {
 				check_invariants(&block_counts, &assignments, 1);
@@ -592,7 +593,7 @@ impl PhysicalDesign {
 				}
 			}
 
-			if !stage_2 && best_cost.2 * 50 < num_cells as i32 && max_density <= 1 {
+			if !stage_2 && best_cost.2 * 100 < num_cells as i32 && max_density <= 1 {
 				stage_2 = true;
 				assignments = best_assign.clone();
 				block_counts = best_block_counts.clone();
@@ -700,11 +701,33 @@ impl PhysicalDesign {
 				println!("Reducing max density to {max_density}");
 			}
 
-			if step % 1000000 == 0 {
+			if step % 3000 == 0 {
 				println!(
 					"Current cost {} ({}), temp {}, step {step}/{iterations}",
 					assignments_cost.0, assignments_cost.2, temp
 				);
+				let mut graph = SVG::new();
+				graph.make_chart(
+					trend_of_bests
+						.iter()
+						.map(|b: &(f64, bool, i32)| b.2)
+						.collect_vec(),
+					"Sat count over time",
+					"Number",
+					"Count",
+				);
+				graph.save("svg/sat_count.svg").unwrap();
+				let mut graph = SVG::new();
+				graph.make_chart(
+					trend_of_bests
+						.iter()
+						.map(|b: &(f64, bool, i32)| b.0 as i32)
+						.collect_vec(),
+					"Sat count over time",
+					"Number",
+					"Count",
+				);
+				graph.save("svg/cost.svg").unwrap();
 			}
 
 			if !final_stage && (delta < 0.0 || new_cost.1)
@@ -717,6 +740,7 @@ impl PhysicalDesign {
 				assignments_cost = best_cost;
 				best_block_counts = block_counts.clone();
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
+				trend_of_bests.push(best_cost);
 				if !final_stage && iterations - step < iterations / 10 {
 					println!("Boosting iterations {}", best_cost.0);
 					iterations = iterations * 25 / 20;

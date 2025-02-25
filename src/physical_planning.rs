@@ -649,10 +649,10 @@ pub(crate) fn simulated_spring_method(
 				)
 			})
 			.collect_vec();
-		for (x, y) in new_assignments.iter() {
-			let offsets = vec![-4, -2, 0, 2, 4]
+		for (cell1, (x, y)) in new_assignments.iter().enumerate() {
+			let offsets = vec![-2, 0, 2]
 				.into_iter()
-				.cartesian_product(vec![-2, -1, 0, 1, 2])
+				.cartesian_product(vec![-1, 0, 1])
 				.collect_vec();
 			for (dx, dy) in offsets {
 				if dx == 0 && dy == 0 {
@@ -663,8 +663,13 @@ pub(crate) fn simulated_spring_method(
 					.or_default()
 					.iter()
 				{
+					if connections_per_node[cell1].contains(cell2) {
+						continue;
+					}
 					let (idx, (fx, fy)) = force[*cell2];
-					force[*cell2] = (idx, (fx + dx.signum() * 10, fy + dy.signum() * 10));
+					let dfx = dx.signum() * (1 - dx.abs() / 2 + 1) * 15;
+					let dfy = dy.signum() * (1 - dy.abs() + 1) * 15;
+					force[*cell2] = (idx, (fx + dfx, fy + dfy));
 				}
 			}
 		}
