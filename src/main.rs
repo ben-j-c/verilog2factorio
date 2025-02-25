@@ -17,6 +17,8 @@ pub mod signal_lookup_table;
 
 mod svg;
 
+mod physical_planning;
+
 /// Verilog to Factorio combinator compiler (v2f)
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
