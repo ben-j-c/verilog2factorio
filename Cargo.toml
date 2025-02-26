@@ -12,3 +12,7 @@ rand = "0.9.0"
 rayon = "1.10.0"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
+
+[profile.perf]
+inherits = "release"
+debug = true
