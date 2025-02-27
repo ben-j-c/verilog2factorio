@@ -1,7 +1,22 @@
-use std::collections::{BTreeSet, HashMap};
+use std::{
+	collections::{BTreeSet, HashMap, HashSet},
+	hash::{BuildHasherDefault, DefaultHasher},
+	mem::swap,
+};
 
+use hashers::fnv::FNV1aHasher64;
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng};
+
+use crate::ndarr::Arr2;
+
+fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
+	HashSet::default()
+}
+
+fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64>> {
+	HashMap::default()
+}
 
 pub(crate) fn ripup_replace_method(
 	rng: &mut StdRng,
@@ -950,4 +965,53 @@ pub(crate) fn exponential_distr_sample(u: f64, median: f64, num_cells: usize) ->
 		r = num_cells as isize;
 	}
 	r as usize
+}
+
+type Num = usize;
+pub(crate) struct Placement {
+	pub assignments: Vec<(Num, Num)>,
+	pub block_counts: Arr2<Num>,
+	pub pos_map: Arr2<HashSet<Num, BuildHasherDefault<FNV1aHasher64>>>,
+}
+
+impl Placement {
+	pub(crate) fn from_initialization(assignments: Vec<(Num, Num)>, side_length: Num) -> Self {
+		let mut ret = Self {
+			assignments,
+			block_counts: Arr2::new([side_length, side_length]),
+			pos_map: Arr2::new([side_length, side_length]),
+		};
+		for (id, (x, y)) in ret.assignments.iter().enumerate() {
+			ret.block_counts[*x][*y] += 1;
+			ret.pos_map[*x][*y].insert(id);
+		}
+		ret
+	}
+
+	pub(crate) fn ripup(&mut self, id: Num) {
+		let (x, y) = self.assignment(id);
+		self.block_counts[x][y] -= 1;
+		self.pos_map[x][y].remove(&id);
+	}
+
+	pub(crate) fn ripup_loc(
+		&mut self,
+		assignment: (Num, Num),
+	) -> HashSet<usize, BuildHasherDefault<FNV1aHasher64>> {
+		let (x, y) = assignment;
+		let mut to_ripup = hash_set();
+		swap(&mut to_ripup, &mut self.pos_map[x][y]);
+		self.block_counts[x][y] -= to_ripup.len();
+		to_ripup
+	}
+
+	pub(crate) fn place(id: Num, assignment: (Num, Num)) {}
+
+	pub(crate) fn density(&self, assignment: (Num, Num)) -> Num {
+		self.block_counts[assignment.0][assignment.1]
+	}
+
+	pub(crate) fn assignment(&self, id: Num) -> (Num, Num) {
+		self.assignments[id]
+	}
 }

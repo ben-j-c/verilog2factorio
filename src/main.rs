@@ -15,6 +15,7 @@ mod physical_design;
 mod serializable_design;
 pub mod signal_lookup_table;
 
+mod ndarr;
 mod svg;
 
 mod physical_planning;

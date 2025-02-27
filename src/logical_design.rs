@@ -571,11 +571,11 @@ impl LogicalDesign {
 		write_ports: Vec<MemoryWritePort>,
 		size: u32,
 	) -> (Vec<MemoryPortReadFilled>, Vec<MemoryPortWriteFilled>) {
-		//let mut addresses_ret = vec![];
-		//let mut data_ret = vec![];
-		//let mut en_ret = vec![];
-		//let mut clk_ret = vec![];
-		//let mut rst_ret = vec![];
+		//let mut wr_addresses_ret = vec![];
+		//let mut wr_data_ret = vec![];
+		//let mut wr_en_ret = vec![];
+		//let mut wr_clk_ret = vec![];
+		//let mut wr_rst_ret = vec![];
 
 		assert!(!read_ports.is_empty());
 		assert!(!write_ports.is_empty());
@@ -593,15 +593,86 @@ impl LogicalDesign {
 		}
 		let preferred_output = preferred_output.unwrap();
 
-		let mut memory_cell_output = Vec::with_capacity(size as usize);
-
+		// Make physical memory cells
+		let mut memory_cells = Vec::with_capacity(size as usize);
 		for _ in 0..size {
-			memory_cell_output.push(self.add_dffe(
+			memory_cells.push(self.add_dffe(
 				write_ports[0].data,
 				write_ports[0].clk,
 				Signal::Id(0),
 				preferred_output,
 			));
+		}
+
+		// Make data select
+		let mut wr_data_select_1hots = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		for (i, wport) in write_ports.iter().enumerate() {
+			for physical_address in 0..size {
+				let one_hot = self.add_decider_comb();
+				self.add_decider_comb_input(
+					one_hot,
+					(
+						wport.addr,
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					DeciderRowConjDisj::FirstRow,
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				for (j, wport2) in write_ports.iter().enumerate() {
+					if j <= i {
+						continue;
+					}
+					self.add_decider_comb_input(
+						one_hot,
+						(wport.addr, DeciderOperator::NotEqual, wport2.addr),
+						DeciderRowConjDisj::And,
+						NET_RED_GREEN,
+						NET_RED_GREEN,
+					);
+				}
+				self.add_decider_comb_output(one_hot, wport.data, true, NET_RED_GREEN);
+				wr_data_select_1hots[i].push(one_hot);
+			}
+		}
+		let mut wr_enable_1hots = Vec::with_capacity(size as usize);
+		for physical_address in 0..size {
+			let one_hot = self.add_decider_comb();
+			for (i, wport) in write_ports.iter().enumerate() {
+				self.add_decider_comb_input(
+					one_hot,
+					(
+						wport.addr,
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					if i == 0 {
+						DeciderRowConjDisj::FirstRow
+					} else {
+						DeciderRowConjDisj::Or
+					},
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				if let Some(en_signal) = wport.en {
+					self.add_decider_comb_input(
+						one_hot,
+						(en_signal, DeciderOperator::Equal, Signal::Constant(1)),
+						DeciderRowConjDisj::And,
+						NET_RED_GREEN,
+						NET_RED_GREEN,
+					);
+				}
+			}
+			self.add_decider_comb_output(one_hot, Signal::Id(1), false, NET_RED_GREEN);
+			wr_enable_1hots.push(one_hot);
+		}
+		let mut wr_data_nop = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		for _ in 0..size {
+			for (i, wport) in write_ports.iter().enumerate() {
+				wr_data_nop[i].push(self.add_nop(wport.data, Signal::Id(0)));
+			}
 		}
 		todo!()
 	}
