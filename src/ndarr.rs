@@ -19,6 +19,20 @@ impl<T> IndexMut<usize> for Arr2<T> {
 	}
 }
 
+impl<T> Index<(usize, usize)> for Arr2<T> {
+	type Output = T;
+
+	fn index(&self, index: (usize, usize)) -> &Self::Output {
+		&self.data[index.0 * self.dims[1] + index.1]
+	}
+}
+
+impl<T> IndexMut<(usize, usize)> for Arr2<T> {
+	fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+		&mut self.data[index.0 * self.dims[1] + index.1]
+	}
+}
+
 impl<T> Arr2<T>
 where
 	T: Default + Clone,

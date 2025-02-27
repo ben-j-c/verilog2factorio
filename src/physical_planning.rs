@@ -997,21 +997,61 @@ impl Placement {
 	pub(crate) fn ripup_loc(
 		&mut self,
 		assignment: (Num, Num),
-	) -> HashSet<usize, BuildHasherDefault<FNV1aHasher64>> {
-		let (x, y) = assignment;
+	) -> HashSet<Num, BuildHasherDefault<FNV1aHasher64>> {
 		let mut to_ripup = hash_set();
-		swap(&mut to_ripup, &mut self.pos_map[x][y]);
-		self.block_counts[x][y] -= to_ripup.len();
+		swap(&mut to_ripup, &mut self.pos_map[assignment]);
+		self.block_counts[assignment] -= to_ripup.len();
 		to_ripup
 	}
 
-	pub(crate) fn place(id: Num, assignment: (Num, Num)) {}
+	pub(crate) fn place(&mut self, id: Num, assignment: (Num, Num)) {
+		self.assignments[id] = assignment;
+		self.block_counts[assignment] += 1;
+		self.pos_map[assignment].insert(id);
+	}
+
+	pub(crate) fn mov(&mut self, id: Num, assignment: (Num, Num)) {
+		self.ripup(id);
+		self.place(id, assignment);
+	}
+
+	pub(crate) fn swap(&mut self, id_a: Num, id_b: Num) {
+		let assignment_a = self.assignment(id_a);
+		let assignment_b = self.assignment(id_b);
+		self.ripup(id_a);
+		self.ripup(id_b);
+		self.place(id_a, assignment_b);
+		self.place(id_b, assignment_a);
+	}
+
+	pub(crate) fn swap_loc(&mut self, assignment_a: (Num, Num), assignment_b: (Num, Num)) {
+		let mut tmp = hash_set();
+		swap(&mut self.pos_map[assignment_a], &mut tmp);
+		swap(&mut self.pos_map[assignment_b], &mut tmp);
+		swap(&mut self.pos_map[assignment_a], &mut tmp);
+		let tmp = self.block_counts[assignment_a];
+		self.block_counts[assignment_a] = self.block_counts[assignment_b];
+		self.block_counts[assignment_b] = tmp;
+		for id in &self.pos_map[assignment_a] {
+			self.assignments[*id] = assignment_a;
+		}
+		for id in &self.pos_map[assignment_b] {
+			self.assignments[*id] = assignment_b;
+		}
+	}
 
 	pub(crate) fn density(&self, assignment: (Num, Num)) -> Num {
-		self.block_counts[assignment.0][assignment.1]
+		self.block_counts[assignment]
 	}
 
 	pub(crate) fn assignment(&self, id: Num) -> (Num, Num) {
 		self.assignments[id]
+	}
+
+	pub(crate) fn id_at(
+		&self,
+		assignment: (Num, Num),
+	) -> &HashSet<Num, BuildHasherDefault<FNV1aHasher64>> {
+		&self.pos_map[assignment]
 	}
 }
