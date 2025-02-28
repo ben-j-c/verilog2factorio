@@ -27,6 +27,7 @@ use std::{
 	cmp::max,
 	collections::{BTreeSet, HashMap, HashSet, LinkedList},
 	fmt::Display,
+	fs::read,
 	hash::Hash,
 	slice::Iter,
 	usize, vec,
@@ -593,7 +594,7 @@ impl LogicalDesign {
 		}
 		let preferred_output = preferred_output.unwrap();
 
-		// Make physical memory cells
+		// Make physical memory cells.
 		let mut memory_cells = Vec::with_capacity(size as usize);
 		for _ in 0..size {
 			memory_cells.push(self.add_dffe(
@@ -604,7 +605,7 @@ impl LogicalDesign {
 			));
 		}
 
-		// Make data select
+		// Address decoding write data and priority selecting.
 		let mut wr_data_select_1hots = vec![Vec::with_capacity(size as usize); write_ports.len()];
 		for (i, wport) in write_ports.iter().enumerate() {
 			for physical_address in 0..size {
@@ -636,6 +637,8 @@ impl LogicalDesign {
 				wr_data_select_1hots[i].push(one_hot);
 			}
 		}
+
+		// Address decoding write enable.
 		let mut wr_enable_1hots = Vec::with_capacity(size as usize);
 		for physical_address in 0..size {
 			let one_hot = self.add_decider_comb();
@@ -668,12 +671,118 @@ impl LogicalDesign {
 			self.add_decider_comb_output(one_hot, Signal::Id(1), false, NET_RED_GREEN);
 			wr_enable_1hots.push(one_hot);
 		}
+
+		// Used to transform the input data signals into a common format.
+		// OPTIMIZATION: Can remove this if theres only 1 write port.
 		let mut wr_data_nop = vec![Vec::with_capacity(size as usize); write_ports.len()];
 		for _ in 0..size {
 			for (i, wport) in write_ports.iter().enumerate() {
 				wr_data_nop[i].push(self.add_nop(wport.data, Signal::Id(0)));
 			}
 		}
+
+		// Now for reading side
+
+		let mut addresses_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_data_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_en_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_clk_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_rst_ret = Vec::with_capacity(read_ports.len());
+
+		let mut mux1s = vec![Vec::with_capacity(size as usize); read_ports.len()];
+		for physical_address in 0..size {
+			for (i, rdport) in read_ports.iter().enumerate() {
+				let mux = self.add_decider_comb();
+				mux1s[i].push(mux);
+				self.add_decider_comb_input(
+					mux,
+					(
+						rdport.addr,
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					DeciderRowConjDisj::FirstRow,
+					NET_RED,
+					NET_RED_GREEN,
+				);
+				self.add_decider_comb_output(mux, Signal::Everything, true, NET_GREEN);
+			}
+		}
+
+		// buffering
+		for (i, p) in read_ports.iter().enumerate() {
+			if let Some(clk) = p.clk {
+				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
+					ResetSpec::Sync(rst) => self.add_sdffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						rst,
+						p.data,
+					),
+					ResetSpec::Async(rst) => self.add_adffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						rst,
+						p.data,
+					),
+					ResetSpec::Disabled => {
+						if let Some(en) = p.en {
+							let (d_wire, clk_wire, en_wire, q) =
+								self.add_dffe(p.data, clk, en, p.data);
+							(d_wire, clk_wire, en_wire, NodeId(usize::MAX), q)
+						} else {
+							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
+							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
+						}
+					}
+				};
+				if p.en.is_some() {
+					rd_en_ret.push(Some(en_wire));
+				} else {
+					rd_en_ret.push(None);
+				}
+				rd_clk_ret.push(Some(clk_wire));
+				self.connect_red(rd_data_ret[i], d_wire);
+				rd_data_ret[i] = q;
+				if p.rst != ResetSpec::Disabled {
+					rd_rst_ret.push(Some(rst_wire));
+				} else {
+					rd_rst_ret.push(None);
+				}
+			} else {
+				rd_clk_ret.push(None);
+				rd_rst_ret.push(None);
+				rd_en_ret.push(None);
+			}
+		}
+
+		// Wiring up read side
+
+		for physical_addr in 0..size as usize {
+			let (_, _, _, q) = memory_cells[physical_addr];
+			let mux1 = mux1s[physical_addr][0];
+			self.add_wire_green(vec![q], vec![mux1]);
+			// Daisy chain down read port muxes
+			for i in 1..read_ports.len() {
+				let mux1_i = mux1s[physical_addr][i];
+				let mux1_i_m1 = mux1s[physical_addr][i - 1];
+				self.add_wire_green(vec![], vec![mux1_i_m1, mux1_i]);
+			}
+		}
+		for i in 0..read_ports.len() {
+			let address_wire = self.add_wire_red(vec![], vec![mux1s[0][i]]);
+			addresses_ret.push(address_wire);
+			// Daisy chain up port address muxes
+			for physical_addr in 1..size as usize {
+				self.add_wire_red(
+					vec![],
+					vec![mux1s[physical_addr - 1][i], mux1s[physical_addr][i]],
+				);
+			}
+		}
+
 		todo!()
 	}
 
@@ -825,14 +934,14 @@ impl LogicalDesign {
 					ResetSpec::Sync(rst) => self.add_sdffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)),
+						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
 						rst,
 						p.data,
 					),
 					ResetSpec::Async(rst) => self.add_adffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)),
+						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
 						rst,
 						p.data,
 					),
