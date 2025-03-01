@@ -710,20 +710,21 @@ impl LogicalDesign {
 		}
 
 		// buffering
+		let mut port_buffer_in_wires = Vec::with_capacity(read_ports.len());
 		for (i, p) in read_ports.iter().enumerate() {
 			if let Some(clk) = p.clk {
 				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
 					ResetSpec::Sync(rst) => self.add_sdffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
 					),
 					ResetSpec::Async(rst) => self.add_adffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
 					),
@@ -744,8 +745,8 @@ impl LogicalDesign {
 					rd_en_ret.push(None);
 				}
 				rd_clk_ret.push(Some(clk_wire));
-				self.connect_red(rd_data_ret[i], d_wire);
-				rd_data_ret[i] = q;
+				port_buffer_in_wires.push(Some(d_wire));
+				rd_data_ret.push(q);
 				if p.rst != ResetSpec::Disabled {
 					rd_rst_ret.push(Some(rst_wire));
 				} else {
@@ -758,8 +759,8 @@ impl LogicalDesign {
 			}
 		}
 
-		// Wiring up read side
-
+		// Wiring up read side.
+		// Wire memory_cells to read address decoders
 		for physical_addr in 0..size as usize {
 			let (_, _, _, q) = memory_cells[physical_addr];
 			let mux1 = mux1s[physical_addr][0];
@@ -771,6 +772,7 @@ impl LogicalDesign {
 				self.add_wire_green(vec![], vec![mux1_i_m1, mux1_i]);
 			}
 		}
+		// Wire the address decode up and down on both sides
 		for i in 0..read_ports.len() {
 			let address_wire = self.add_wire_red(vec![], vec![mux1s[0][i]]);
 			addresses_ret.push(address_wire);
@@ -779,6 +781,10 @@ impl LogicalDesign {
 				self.add_wire_red(
 					vec![],
 					vec![mux1s[physical_addr - 1][i], mux1s[physical_addr][i]],
+				);
+				self.add_wire_red(
+					vec![mux1s[physical_addr - 1][i], mux1s[physical_addr][i]],
+					vec![],
 				);
 			}
 		}
@@ -934,14 +940,14 @@ impl LogicalDesign {
 					ResetSpec::Sync(rst) => self.add_sdffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
 					),
 					ResetSpec::Async(rst) => self.add_adffe(
 						p.data,
 						clk,
-						p.en.unwrap_or(Signal::Constant(1)), // I think this is wrong
+						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
 					),
