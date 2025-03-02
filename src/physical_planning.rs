@@ -7,6 +7,7 @@ use std::{
 use hashers::fnv::FNV1aHasher64;
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng};
+use rayon::iter::plumbing::UnindexedConsumer;
 
 use crate::ndarr::Arr2;
 
@@ -20,15 +21,13 @@ fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64>> {
 
 pub(crate) fn ripup_replace_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
-	let num_cells = assignments.len();
+	let num_cells = new.num_cells();
 	let ripup = exponential_distr_sample(rng.random(), 0.02, num_cells);
 	let mut ripup_cells = vec![];
 	while ripup_cells.len() != ripup {
@@ -40,19 +39,17 @@ pub(crate) fn ripup_replace_method(
 	}
 
 	for cell in &ripup_cells {
-		let ass = assignments[*cell];
-		new_block_counts[ass.0][ass.1] -= 1;
+		new.ripup(*cell);
 	}
 
 	for cell in &ripup_cells {
 		loop {
-			let (cx, cy) = (
+			let cxcy = (
 				rng.random_range(0..side_length) / 2 * 2,
 				rng.random_range(0..side_length),
 			);
-			if new_block_counts[cx][cy] < max_density {
-				new_assignments[*cell] = (cx, cy);
-				new_block_counts[cx][cy] += 1;
+			if new.density(cxcy) < max_density {
+				new.place(*cell, cxcy);
 				break;
 			}
 		}
@@ -61,15 +58,13 @@ pub(crate) fn ripup_replace_method(
 
 pub(crate) fn swap_local_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	_max_density: i32,
 ) {
-	let num_cells = assignments.len();
+	let num_cells = new.num_cells();
 	let n_swap = exponential_distr_sample(rng.random(), 0.02, num_cells);
 	let mut swap_cells = vec![];
 	while swap_cells.len() != n_swap {
@@ -81,35 +76,26 @@ pub(crate) fn swap_local_method(
 	}
 
 	for cell in &swap_cells {
-		let (cx, cy) = new_assignments[*cell];
+		let cxcy = new.assignment(*cell);
 		loop {
 			let pick_x: i32 = rng.random_range(0..=1) * 2;
 			let pick_y: i32 = rng.random_range(-1..=1);
-			let want_x = cx as isize + pick_x as isize;
-			let want_y = cy as isize + pick_y as isize;
-			let want_assignment = (want_x, want_y);
-			if (cx as isize, cy as isize) == want_assignment
-				|| want_assignment.0 < 0
-				|| want_assignment.0 >= side_length as isize
-				|| want_assignment.1 < 0
-				|| want_assignment.1 >= side_length as isize
+			let want_x = cxcy.0 as isize + pick_x as isize;
+			let want_y = cxcy.1 as isize + pick_y as isize;
+			if want_x < 0
+				|| want_x >= side_length as isize
+				|| want_y < 0
+				|| want_y >= side_length as isize
 			{
 				continue;
 			}
 			let want_assignment = (want_x as usize, want_y as usize);
-			let mut did_swap = false;
-			for (cell2, cxy2) in new_assignments.iter().enumerate() {
-				if *cxy2 != want_assignment {
-					continue;
-				}
-				did_swap = true;
-				new_assignments.swap(*cell, cell2);
-				break;
-			}
-			if !did_swap {
-				new_assignments[*cell] = want_assignment;
-				new_block_counts[want_assignment.0][want_assignment.1] += 1;
-				new_block_counts[cx][cy] -= 1;
+			let candidates = new.id_at(want_assignment).iter().collect_vec();
+			if candidates.is_empty() {
+				new.mov(*cell, want_assignment);
+			} else {
+				let pick_cell = candidates[rng.random_range(0..candidates.len())];
+				new.swap(*cell, *pick_cell);
 			}
 			break;
 		}
@@ -118,15 +104,13 @@ pub(crate) fn swap_local_method(
 
 pub(crate) fn swap_random_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	_new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	_side_length: usize,
 	_max_density: i32,
 ) {
-	let num_cells = assignments.len();
+	let num_cells = new.num_cells();
 	let swap_count = exponential_distr_sample(rng.random(), 0.02, num_cells) / 2 * 2;
 	let mut picked = vec![];
 
@@ -140,24 +124,19 @@ pub(crate) fn swap_random_method(
 	for i in (0..swap_count).step_by(2) {
 		let c1 = picked[i];
 		let c2 = picked[i + 1];
-		let (x1, y1) = new_assignments[c1];
-		let (x2, y2) = new_assignments[c2];
-		new_assignments[c1] = (x2, y2);
-		new_assignments[c2] = (x1, y1);
+		new.swap(c1, c2);
 	}
 }
 
 pub(crate) fn ripup_range_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
-	let num_cells = assignments.len();
+	let num_cells = new.num_cells();
 	let region_w = rng.random_range(1..=10);
 	let region_h = rng.random_range(1..=10);
 
@@ -165,24 +144,20 @@ pub(crate) fn ripup_range_method(
 	let sy = rng.random_range(0..(side_length - region_h).max(1));
 
 	let mut ripup_cells = vec![];
-	for cell in 0..num_cells {
-		let (cx, cy) = new_assignments[cell];
-		if cx >= sx && cx < sx + region_w && cy >= sy && cy < sy + region_h {
-			ripup_cells.push(cell);
-			new_block_counts[cx][cy] -= 1;
+	for x in sx..sx + region_w {
+		for y in sy..sy + region_h {
+			ripup_cells.extend(new.ripup_loc((x, y)));
 		}
 	}
 
 	for cell in &ripup_cells {
 		loop {
-			let (cx, cy) = (
+			let assignment = (
 				rng.random_range(0..side_length) / 2 * 2,
 				rng.random_range(0..side_length),
 			);
-			if new_block_counts[cx][cy] < max_density {
-				new_assignments[*cell] = (cx, cy);
-				new_block_counts[cx][cy] += 1;
-				break;
+			if new.density(assignment) < max_density {
+				new.place(*cell, assignment);
 			}
 		}
 	}
@@ -190,10 +165,8 @@ pub(crate) fn ripup_range_method(
 
 pub(crate) fn crack_in_two_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
@@ -201,218 +174,132 @@ pub(crate) fn crack_in_two_method(
 	if side_length < 6 {
 		return;
 	}
-	let num_cells = assignments.len();
-	if rng.random_bool(0.5) {
-		if rng.random_bool(0.5) {
-			let line_y = rng.random_range(3..side_length - 3);
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == 0 {
-					continue;
-				}
-				if cy < line_y {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
+	let num_cells = new.num_cells();
+	let selection = (
+		rng.random_range(4..side_length - 4) / 2 * 2,
+		rng.random_range(3..side_length - 3),
+	);
+	let (offset, corner1, corner2, sorter) = match (rng.random_bool(0.5), rng.random_bool(0.5)) {
+		(true, true) => ((-2, 0), (0, 0), (selection.0, side_length), 1),
+		(true, false) => ((0, -1), (0, 0), (side_length, selection.1), 2),
+		(false, true) => ((2, 0), (selection.0, 0), (side_length, side_length), 3),
+		(false, false) => (
+			(0, 1),
+			(side_length, selection.1),
+			(side_length, side_length),
+			4,
+		),
+	};
+
+	let mut ripup_cells = Vec::with_capacity(num_cells);
+	for x in (0..side_length).step_by(2) {
+		for y in 0..side_length {
+			if x < corner1.0 || x > corner2.0 || y < corner1.1 || y > corner2.1 {
+				continue;
 			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx][cy - 1] < max_density {
-					new_block_counts[cx][cy - 1] += 1;
-					new_assignments[cell] = (cx, cy - 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
+			ripup_cells.extend(new.ripup_loc((x, y)));
+		}
+	}
+
+	match sorter {
+		1 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*a).0.cmp(&new.assignment(*b).0)),
+		2 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*a).1.cmp(&new.assignment(*b).1)),
+		3 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*b).0.cmp(&new.assignment(*a).0)),
+		4 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
+		_ => {
+			unreachable!()
+		}
+	};
+
+	for cell in ripup_cells {
+		let assignment = new.assignment(cell);
+		let want_assignment = (
+			(assignment.0 as isize + offset.0) as usize,
+			(assignment.1 as isize + offset.1) as usize,
+		);
+		if want_assignment.0 >= side_length
+			|| want_assignment.1 >= side_length && new.density(want_assignment) < max_density
+		{
+			new.place(cell, assignment);
 		} else {
-			let line_y = rng.random_range(3..side_length - 3);
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == side_length - 1 {
-					continue;
-				}
-				if cy > line_y {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx][cy + 1] < max_density {
-					new_block_counts[cx][cy + 1] += 1;
-					new_assignments[cell] = (cx, cy + 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-		}
-	} else if rng.random_bool(0.5) {
-		let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
-		let mut ripup_cells = Vec::new();
-		for cell in 0..num_cells {
-			let (cx, cy) = new_assignments[cell];
-			if cx == 0 {
-				continue;
-			}
-			if cx > line_x {
-				ripup_cells.push(cell);
-				new_block_counts[cx][cy] -= 1;
-			}
-		}
-		ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
-
-		for cell in ripup_cells {
-			let (cx, cy) = new_assignments[cell];
-			if new_block_counts[cx - 2][cy] < max_density {
-				new_block_counts[cx - 2][cy] += 1;
-				new_assignments[cell] = (cx - 2, cy);
-			} else {
-				new_block_counts[cx][cy] += 1;
-			}
-		}
-	} else {
-		let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
-		let mut ripup_cells = Vec::new();
-		for cell in 0..num_cells {
-			let (cx, cy) = new_assignments[cell];
-			if cx == side_length - 1 {
-				continue;
-			}
-			if cx < line_x {
-				ripup_cells.push(cell);
-				new_block_counts[cx][cy] -= 1;
-			}
-		}
-		ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-		for cell in ripup_cells {
-			let (cx, cy) = new_assignments[cell];
-			if new_block_counts[cx + 2][cy] < max_density {
-				new_block_counts[cx + 2][cy] += 1;
-				new_assignments[cell] = (cx + 2, cy);
-			} else {
-				new_block_counts[cx][cy] += 1;
-			}
+			new.place(cell, want_assignment);
 		}
 	}
 }
 
 pub(crate) fn slide_puzzle_method(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
+	_curr: &Placement,
+	new: &mut Placement,
 	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
-	if side_length < 10 {
+	if side_length < 6 {
 		return;
 	}
-	let num_cells = assignments.len();
-	let start = rng.random_range(1..side_length - 3);
-	let end = rng.random_range(3..side_length - 3);
-	let (start, end) = (start.min(end), start.max(end));
-	if rng.random_bool(0.5) {
-		if rng.random_bool(0.5) {
-			let line_y = rng.random_range(3..side_length - 3);
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == 0 {
-					continue;
-				}
-				if cy < line_y && cx >= start && cx < end {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
+	let num_cells = new.num_cells();
+	let selection = (
+		rng.random_range(4..side_length - 4) / 2 * 2,
+		rng.random_range(3..side_length - 3),
+	);
+	let (offset, corner1, corner2, sorter) = match (rng.random_bool(0.5), rng.random_bool(0.5)) {
+		(true, true) => ((-2, 0), (0, selection.1), (selection.0, selection.1), 1),
+		(true, false) => ((0, -1), (selection.0, 0), (selection.0, selection.1), 2),
+		(false, true) => (
+			(2, 0),
+			(selection.0, selection.1),
+			(side_length, selection.1),
+			3,
+		),
+		(false, false) => (
+			(0, 1),
+			(selection.0, selection.1),
+			(selection.0, side_length),
+			4,
+		),
+	};
+
+	let mut ripup_cells = Vec::with_capacity(num_cells);
+	for x in (0..side_length).step_by(2) {
+		for y in 0..side_length {
+			if x < corner1.0 || x > corner2.0 || y < corner1.1 || y > corner2.1 {
+				continue;
 			}
-			ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx][cy - 1] < max_density {
-					new_block_counts[cx][cy - 1] += 1;
-					new_assignments[cell] = (cx, cy - 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
+			ripup_cells.extend(new.ripup_loc((x, y)));
+		}
+	}
+
+	match sorter {
+		1 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*a).0.cmp(&new.assignment(*b).0)),
+		2 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*a).1.cmp(&new.assignment(*b).1)),
+		3 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*b).0.cmp(&new.assignment(*a).0)),
+		4 => ripup_cells
+			.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
+		_ => {
+			unreachable!()
+		}
+	};
+
+	for cell in ripup_cells {
+		let assignment = new.assignment(cell);
+		let want_assignment = (
+			(assignment.0 as isize + offset.0) as usize,
+			(assignment.1 as isize + offset.1) as usize,
+		);
+		if want_assignment.0 >= side_length
+			|| want_assignment.1 >= side_length && new.density(want_assignment) < max_density
+		{
+			new.place(cell, assignment);
 		} else {
-			let line_y = rng.random_range(3..side_length - 3);
-			let mut ripup_cells = vec![];
-			for cell in 0..num_cells {
-				let (cx, cy) = new_assignments[cell];
-				if cy == side_length - 1 {
-					continue;
-				}
-				if cy > line_y && cx >= start && cx < end {
-					ripup_cells.push(cell);
-					new_block_counts[cx][cy] -= 1;
-				}
-			}
-			ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
-			for cell in ripup_cells {
-				let (cx, cy) = new_assignments[cell];
-				if new_block_counts[cx][cy + 1] < max_density {
-					new_block_counts[cx][cy + 1] += 1;
-					new_assignments[cell] = (cx, cy + 1);
-				} else {
-					new_block_counts[cx][cy] += 1;
-				}
-			}
-		}
-	} else if rng.random_bool(0.5) {
-		let line_x = rng.random_range(4..side_length - 4) / 2 * 2;
-		let mut ripup_cells = Vec::new();
-		for cell in 0..num_cells {
-			let (cx, cy) = new_assignments[cell];
-			if cx == 0 {
-				continue;
-			}
-			if cx > line_x && cy >= start && cy < end {
-				ripup_cells.push(cell);
-				new_block_counts[cx][cy] -= 1;
-			}
-		}
-		ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
-
-		for cell in ripup_cells {
-			let (cx, cy) = new_assignments[cell];
-			if new_block_counts[cx - 2][cy] < max_density {
-				new_block_counts[cx - 2][cy] += 1;
-				new_assignments[cell] = (cx - 2, cy);
-			} else {
-				new_block_counts[cx][cy] += 1;
-			}
-		}
-	} else {
-		let line_x = rng.random_range(4..(side_length - 4)) / 2 * 2;
-		let mut ripup_cells = Vec::new();
-		for cell in 0..num_cells {
-			let (cx, cy) = new_assignments[cell];
-			if cx == side_length - 1 {
-				continue;
-			}
-			if cx < line_x && cy >= start && cy < end {
-				ripup_cells.push(cell);
-				new_block_counts[cx][cy] -= 1;
-			}
-		}
-		ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-		for cell in ripup_cells {
-			let (cx, cy) = new_assignments[cell];
-			if new_block_counts[cx + 2][cy] < max_density {
-				new_block_counts[cx + 2][cy] += 1;
-				new_assignments[cell] = (cx + 2, cy);
-			} else {
-				new_block_counts[cx][cy] += 1;
-			}
+			new.place(cell, want_assignment);
 		}
 	}
 }
@@ -1040,12 +927,16 @@ impl Placement {
 		}
 	}
 
-	pub(crate) fn density(&self, assignment: (Num, Num)) -> Num {
-		self.block_counts[assignment]
+	pub(crate) fn density(&self, assignment: (Num, Num)) -> i32 {
+		self.block_counts[assignment] as i32
 	}
 
 	pub(crate) fn assignment(&self, id: Num) -> (Num, Num) {
 		self.assignments[id]
+	}
+
+	pub fn num_cells(&self) -> Num {
+		self.assignments.len()
 	}
 
 	pub(crate) fn id_at(

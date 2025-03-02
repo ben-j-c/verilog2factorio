@@ -28,11 +28,12 @@ use std::{
 	collections::{BTreeSet, HashMap, HashSet, LinkedList},
 	fmt::Display,
 	fs::read,
-	hash::Hash,
+	hash::{BuildHasherDefault, Hash},
 	slice::Iter,
 	usize, vec,
 };
 
+use hashers::fnv::FNV1aHasher64;
 use itertools::{izip, Itertools};
 
 use crate::{
@@ -40,6 +41,14 @@ use crate::{
 	connected_design::CoarseExpr,
 	mapped_design::{BitSliceOps, MappedDesign},
 };
+
+fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
+	HashSet::default()
+}
+
+fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64>> {
+	HashMap::default()
+}
 
 pub const NET_RED_GREEN: (bool, bool) = (true, true);
 pub const NET_RED: (bool, bool) = (true, false);
@@ -1520,7 +1529,7 @@ impl LogicalDesign {
 	pub(crate) fn get_connected_combs(&self, ldid: NodeId) -> Vec<NodeId> {
 		self.assert_is_not_wire_sum(ldid);
 		let node = &self.nodes[ldid.0];
-		let mut ret = BTreeSet::new();
+		let mut ret = hash_set();
 		for wire in node.iter_fanin_both().chain(node.iter_fanout_both()) {
 			let wire_node = &self.nodes[wire.0];
 			for connected in wire_node
@@ -1536,25 +1545,31 @@ impl LogicalDesign {
 		ret.into_iter().collect_vec()
 	}
 
-	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> BTreeSet<NodeId> {
+	pub(crate) fn get_fanin_network(
+		&self,
+		ldid: NodeId,
+		colour: WireColour,
+	) -> HashSet<NodeId, BuildHasherDefault<FNV1aHasher64>> {
 		let node = &self.nodes[ldid.0];
-		let mut retval = BTreeSet::new();
+		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanin(colour) {
-			let localio: BTreeSet<NodeId> =
-				self.get_local_cell_io_network(*wire).into_iter().collect();
+			let localio = self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}
 		retval
 	}
 
-	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> BTreeSet<NodeId> {
+	pub(crate) fn get_fanout_network(
+		&self,
+		ldid: NodeId,
+		colour: WireColour,
+	) -> HashSet<NodeId, BuildHasherDefault<FNV1aHasher64>> {
 		let node = &self.nodes[ldid.0];
-		let mut retval = BTreeSet::new();
+		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
 		for wire in node.iter_fanout(colour) {
-			let localio: BTreeSet<NodeId> =
-				self.get_local_cell_io_network(*wire).into_iter().collect();
+			let localio = self.get_local_cell_io_network(*wire).into_iter().collect();
 			retval = retval.union(&localio).copied().collect();
 		}
 		retval

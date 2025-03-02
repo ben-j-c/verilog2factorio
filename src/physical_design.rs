@@ -609,10 +609,8 @@ impl PhysicalDesign {
 				bool,  // After best found
 				fn(
 					rng: &mut StdRng,
-					assignments: &Vec<(usize, usize)>,
-					block_counts: &Vec<Vec<i32>>,
-					new_assignments: &mut Vec<(usize, usize)>,
-					new_block_counts: &mut Vec<Vec<i32>>,
+					curr: &Placement,
+					new: &mut Placement,
 					connections_per_node: &Vec<Vec<usize>>,
 					side_length: usize,
 					max_density: i32,
@@ -1317,7 +1315,7 @@ impl PhysicalDesign {
 		let connections = self.get_connectivity_as_vec(ld);
 		let mut queue = LinkedList::new();
 		let mut seen_comb: HashSet<CombinatorId> = HashSet::new();
-		let mut retval = vec![];
+		let mut retval = Vec::with_capacity(self.combs.len());
 		queue.push_back(coid);
 		retval.push(coid);
 		while !queue.is_empty() {
