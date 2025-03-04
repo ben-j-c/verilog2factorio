@@ -1,3 +1,4 @@
+use core::num;
 use std::{
 	collections::{BTreeSet, HashMap, HashSet},
 	hash::{BuildHasherDefault, DefaultHasher},
@@ -306,164 +307,41 @@ pub(crate) fn slide_puzzle_method(
 
 pub(crate) fn slide_puzzle_method_worst_cells(
 	rng: &mut StdRng,
-	assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
-	_connections_per_node: &Vec<Vec<usize>>,
+	curr: &Placement,
+	new: &mut Placement,
+	connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
 	max_density: i32,
 ) {
-	let num_cells = assignments.len();
 	let mut interesting_cells = vec![];
 	let mut interesting_cells_assignment = vec![];
-	for (idx, (cx, cy)) in new_assignments.iter().enumerate() {
-		if new_block_counts[*cx][*cy] > max_density
-			&& interesting_cells_assignment.last() != Some(&(cx, cy))
-		{
+	for (idx, cass) in new.assignments.iter().enumerate() {
+		if new.density(*cass) > max_density && interesting_cells_assignment.last() != Some(&cass) {
 			interesting_cells.push(idx);
-			interesting_cells_assignment.push((cx, cy));
+			interesting_cells_assignment.push(cass);
 		}
 	}
 	for picked_cell in interesting_cells {
-		if new_assignments[picked_cell].1 != 0
-			&& new_assignments[picked_cell].1 != side_length - 1
-			&& rng.random_bool(0.5)
-		{
-			let line_y = new_assignments[picked_cell].1;
-			if rng.random_bool(0.5) {
-				let mut ripup_cells = vec![];
-				for cell in 0..num_cells {
-					let (cx, cy) = new_assignments[cell];
-					if cy == 0 {
-						continue;
-					}
-					if cy < line_y && cx == assignments[picked_cell].0 {
-						ripup_cells.push(cell);
-						new_block_counts[cx][cy] -= 1;
-					}
-				}
-				ripup_cells.sort_by(|a, b| new_assignments[*a].1.cmp(&new_assignments[*b].1));
-				for cell in ripup_cells {
-					let (cx, cy) = new_assignments[cell];
-					if new_block_counts[cx][cy - 1] < max_density {
-						new_block_counts[cx][cy - 1] += 1;
-						new_assignments[cell] = (cx, cy - 1);
-					} else {
-						new_block_counts[cx][cy] += 1;
-					}
-				}
-				let (cx, cy) = new_assignments[picked_cell];
-				if new_block_counts[cx][cy - 1] < max_density {
-					new_block_counts[cx][cy - 1] += 1;
-					new_block_counts[cx][cy] -= 1;
-					new_assignments[picked_cell] = (cx, cy - 1);
-				}
-			} else {
-				let mut ripup_cells = vec![];
-				for cell in 0..num_cells {
-					let (cx, cy) = new_assignments[cell];
-					if cy == side_length - 1 {
-						continue;
-					}
-					if cy > line_y && cx == assignments[picked_cell].0 {
-						ripup_cells.push(cell);
-						new_block_counts[cx][cy] -= 1;
-					}
-				}
-				ripup_cells.sort_by(|a, b| new_assignments[*b].1.cmp(&new_assignments[*a].1));
-				for cell in ripup_cells {
-					let (cx, cy) = new_assignments[cell];
-					if new_block_counts[cx][cy + 1] < max_density {
-						new_block_counts[cx][cy + 1] += 1;
-						new_assignments[cell] = (cx, cy + 1);
-					} else {
-						new_block_counts[cx][cy] += 1;
-					}
-				}
-				let (cx, cy) = new_assignments[picked_cell];
-				if new_block_counts[cx][cy + 1] < max_density {
-					new_block_counts[cx][cy + 1] += 1;
-					new_block_counts[cx][cy] -= 1;
-					new_assignments[picked_cell] = (cx, cy + 1);
-				}
-			}
-		} else if new_assignments[picked_cell].0 != 0
-			&& new_assignments[picked_cell].0 < side_length - 2
-		{
-			let line_x = new_assignments[picked_cell].0;
-			if rng.random_bool(0.5) {
-				let mut ripup_cells = Vec::new();
-				for cell in 0..num_cells {
-					let (cx, cy) = new_assignments[cell];
-					if cx == 0 {
-						continue;
-					}
-					if cx > line_x && cy == assignments[picked_cell].1 {
-						ripup_cells.push(cell);
-						new_block_counts[cx][cy] -= 1;
-					}
-				}
-				ripup_cells.sort_by(|a, b| new_assignments[*b].0.cmp(&new_assignments[*a].0));
-
-				for cell in ripup_cells {
-					let (cx, cy) = new_assignments[cell];
-					if new_block_counts[cx - 2][cy] < max_density {
-						new_block_counts[cx - 2][cy] += 1;
-						new_assignments[cell] = (cx - 2, cy);
-					} else {
-						new_block_counts[cx][cy] += 1;
-					}
-				}
-				let (cx, cy) = new_assignments[picked_cell];
-				if new_block_counts[cx - 2][cy] < max_density {
-					new_block_counts[cx - 2][cy] += 1;
-					new_block_counts[cx][cy] -= 1;
-					new_assignments[picked_cell] = (cx - 2, cy);
-				}
-			} else {
-				let mut ripup_cells = Vec::new();
-				for cell in 0..num_cells {
-					let (cx, cy) = new_assignments[cell];
-					if cx == side_length - 1 {
-						continue;
-					}
-					if cx < line_x && cy == assignments[picked_cell].1 {
-						ripup_cells.push(cell);
-						new_block_counts[cx][cy] -= 1;
-					}
-				}
-				ripup_cells.sort_by(|a, b| new_assignments[*a].0.cmp(&new_assignments[*b].0));
-
-				for cell in ripup_cells {
-					let (cx, cy) = new_assignments[cell];
-					if new_block_counts[cx + 2][cy] < max_density {
-						new_block_counts[cx + 2][cy] += 1;
-						new_assignments[cell] = (cx + 2, cy);
-					} else {
-						new_block_counts[cx][cy] += 1;
-					}
-				}
-				let (cx, cy) = new_assignments[picked_cell];
-				if new_block_counts[cx + 2][cy] < max_density {
-					new_block_counts[cx + 2][cy] += 1;
-					new_block_counts[cx][cy] -= 1;
-					new_assignments[picked_cell] = (cx + 2, cy);
-				}
-			}
+		let cass = new.assignment(picked_cell);
+		new.slide(
+			cass,
+			max_density,
+			rng.random_bool(0.5),
+			rng.random_bool(0.5),
+		);
+		if new.density(cass) < max_density {
+			new.mov(picked_cell, cass);
 		}
 	}
 }
 
 pub(crate) fn overflowing_cells_swap_local_method(
 	rng: &mut StdRng,
-	_assignments: &Vec<(usize, usize)>,
-	_block_counts: &Vec<Vec<i32>>,
-	new_assignments: &mut Vec<(usize, usize)>,
-	new_block_counts: &mut Vec<Vec<i32>>,
-	_connections_per_node: &Vec<Vec<usize>>,
+	curr: &Placement,
+	new: &mut Placement,
+	connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
-	_max_density: i32,
+	max_density: i32,
 ) {
 	let mut swap_cells = vec![];
 	for (idx, (cx, cy)) in new_assignments.iter().enumerate() {
@@ -859,6 +737,7 @@ pub(crate) struct Placement {
 	pub assignments: Vec<(Num, Num)>,
 	pub block_counts: Arr2<Num>,
 	pub pos_map: Arr2<HashSet<Num, BuildHasherDefault<FNV1aHasher64>>>,
+	pub side_length: Num,
 }
 
 impl Placement {
@@ -867,6 +746,7 @@ impl Placement {
 			assignments,
 			block_counts: Arr2::new([side_length, side_length]),
 			pos_map: Arr2::new([side_length, side_length]),
+			side_length,
 		};
 		for (id, (x, y)) in ret.assignments.iter().enumerate() {
 			ret.block_counts[*x][*y] += 1;
@@ -924,6 +804,73 @@ impl Placement {
 		}
 		for id in &self.pos_map[assignment_b] {
 			self.assignments[*id] = assignment_b;
+		}
+	}
+
+	pub(crate) fn slide(
+		&mut self,
+		assignment: (Num, Num),
+		max_density: i32,
+		negative_direction: bool,
+		x_direction: bool,
+	) {
+		let selection = assignment;
+		let side_length = self.side_length;
+		let num_cells = self.assignments.len();
+		let (offset, corner1, corner2, sorter) = match (negative_direction, x_direction) {
+			(true, true) => ((-2, 0), (0, selection.1), (selection.0, selection.1), 1),
+			(true, false) => ((0, -1), (selection.0, 0), (selection.0, selection.1), 2),
+			(false, true) => (
+				(2, 0),
+				(selection.0, selection.1),
+				(side_length, selection.1),
+				3,
+			),
+			(false, false) => (
+				(0, 1),
+				(selection.0, selection.1),
+				(selection.0, side_length),
+				4,
+			),
+		};
+
+		let mut ripup_cells = Vec::with_capacity(num_cells);
+		for x in (0..side_length).step_by(2) {
+			for y in 0..side_length {
+				if x < corner1.0 || x > corner2.0 || y < corner1.1 || y > corner2.1 {
+					continue;
+				}
+				ripup_cells.extend(self.ripup_loc((x, y)));
+			}
+		}
+
+		match sorter {
+			1 => ripup_cells
+				.sort_by(|a: &usize, b: &usize| self.assignment(*a).0.cmp(&self.assignment(*b).0)),
+			2 => ripup_cells
+				.sort_by(|a: &usize, b: &usize| self.assignment(*a).1.cmp(&self.assignment(*b).1)),
+			3 => ripup_cells
+				.sort_by(|a: &usize, b: &usize| self.assignment(*b).0.cmp(&self.assignment(*a).0)),
+			4 => ripup_cells
+				.sort_by(|a: &usize, b: &usize| self.assignment(*b).1.cmp(&self.assignment(*a).1)),
+			_ => {
+				unreachable!()
+			}
+		};
+
+		for cell in ripup_cells {
+			let assignment = self.assignment(cell);
+			let want_assignment = (
+				(assignment.0 as isize + offset.0) as usize,
+				(assignment.1 as isize + offset.1) as usize,
+			);
+			if want_assignment.0 >= side_length
+				|| want_assignment.1 >= side_length && self.density(want_assignment) < max_density
+			{
+				self.place(cell, assignment);
+			} else {
+				self.place(cell, want_assignment);
+			}
 		}
 	}
 
