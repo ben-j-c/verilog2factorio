@@ -40,7 +40,7 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "complex_40_mcmc_dense",
+			"name": "debug single testcase",
 			"cargo": {
 				"args": [
 					"test",

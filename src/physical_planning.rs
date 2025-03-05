@@ -160,6 +160,7 @@ pub(crate) fn ripup_range_method(
 			);
 			if new.density(assignment) < max_density {
 				new.place(*cell, assignment);
+				break;
 			}
 		}
 	}
@@ -740,12 +741,13 @@ impl Placement {
 				(assignment.0 as isize + offset.0) as usize,
 				(assignment.1 as isize + offset.1) as usize,
 			);
-			if want_assignment.0 >= side_length
-				|| want_assignment.1 >= side_length && self.density(want_assignment) < max_density
+			if want_assignment.0 < side_length
+				&& want_assignment.1 < side_length
+				&& self.density(want_assignment) < max_density
 			{
-				self.place(cell, assignment);
-			} else {
 				self.place(cell, want_assignment);
+			} else {
+				self.place(cell, assignment);
 			}
 		}
 	}
