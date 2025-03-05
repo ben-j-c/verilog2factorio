@@ -83,7 +83,8 @@ pub(crate) fn swap_local_method(
 			let pick_y: i32 = rng.random_range(-1..=1);
 			let want_x = cxcy.0 as isize + pick_x as isize;
 			let want_y = cxcy.1 as isize + pick_y as isize;
-			if want_x < 0
+			if pick_x == 0 && pick_y == 0
+				|| want_x < 0
 				|| want_x >= side_length as isize
 				|| want_y < 0
 				|| want_y >= side_length as isize
@@ -222,12 +223,13 @@ pub(crate) fn crack_in_two_method(
 			(assignment.0 as isize + offset.0) as usize,
 			(assignment.1 as isize + offset.1) as usize,
 		);
-		if want_assignment.0 >= side_length
-			|| want_assignment.1 >= side_length && new.density(want_assignment) < max_density
+		if want_assignment.0 < side_length
+			&& want_assignment.1 < side_length
+			&& new.density(want_assignment) < max_density
 		{
-			new.place(cell, assignment);
-		} else {
 			new.place(cell, want_assignment);
+		} else {
+			new.place(cell, assignment);
 		}
 	}
 }
@@ -240,7 +242,7 @@ pub(crate) fn slide_puzzle_method(
 	side_length: usize,
 	max_density: i32,
 ) {
-	if side_length < 6 {
+	if side_length < 10 {
 		return;
 	}
 	let num_cells = new.num_cells();
@@ -295,12 +297,13 @@ pub(crate) fn slide_puzzle_method(
 			(assignment.0 as isize + offset.0) as usize,
 			(assignment.1 as isize + offset.1) as usize,
 		);
-		if want_assignment.0 >= side_length
-			|| want_assignment.1 >= side_length && new.density(want_assignment) < max_density
+		if want_assignment.0 < side_length
+			&& want_assignment.1 < side_length
+			&& new.density(want_assignment) < max_density
 		{
-			new.place(cell, assignment);
-		} else {
 			new.place(cell, want_assignment);
+		} else {
+			new.place(cell, assignment);
 		}
 	}
 }

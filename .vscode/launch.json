@@ -40,14 +40,16 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug unit tests in executable 'v2f'",
+			"name": "complex_40_mcmc_dense",
 			"cargo": {
 				"args": [
 					"test",
 					"--no-run",
 					"--bin=v2f",
 					"--package=v2f",
+					"physical_design::test::synthetic_n_mcmc_dense",
 					"--",
+					"--exact",
 					"--show-output"
 				],
 				"filter": {
