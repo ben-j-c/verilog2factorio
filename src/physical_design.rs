@@ -343,11 +343,11 @@ impl PhysicalDesign {
 					match self.solve_as_mcmc_dense(logical, 1.5, &initializations, None) {
 						Ok(pos) => pos,
 						Err(e) => {
-							println!("WARN: MCMC failed to place with scale 1.3");
+							println!("WARN: MCMC failed to place with scale 1.6");
 							println!("WARN: {}", e.0);
 							let _ = self.place_combs_physical_dense(&e.1, logical);
 							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", 1.3).as_str());
+							self.save_svg(logical, format!("./svg/failed{}.svg", 2.0).as_str());
 							panic!("failed to place");
 						}
 					};
@@ -1530,7 +1530,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(100);
+		let l = get_large_logical_design(400);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}

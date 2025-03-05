@@ -2,15 +2,17 @@ use core::num;
 use std::{
 	collections::{BTreeSet, HashMap, HashSet},
 	hash::{BuildHasherDefault, DefaultHasher},
+	isize,
 	mem::swap,
+	usize,
 };
 
 use hashers::fnv::FNV1aHasher64;
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng};
+use rand::{random_bool, rngs::StdRng, Rng};
 use rayon::iter::plumbing::UnindexedConsumer;
 
-use crate::ndarr::Arr2;
+use crate::{mapped_design::Integer, ndarr::Arr2};
 
 fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
 	HashSet::default()
@@ -392,6 +394,13 @@ pub(crate) fn simulated_spring_method(
 ) {
 	let num_cells = new.num_cells();
 	let iters = rng.random_range(1..100);
+	let mut offx = 2;
+	let mut offy = 1;
+	for _ in 0..5 {
+		let i: isize = random_01(rng, 0.01);
+		offx += 2 * i;
+		offy += i;
+	}
 	for _ in 0..iters {
 		let mut force = new
 			.assignments
@@ -450,28 +459,29 @@ pub(crate) fn simulated_spring_method(
 				continue;
 			}
 			let assignment1 = new.assignment(*idx1);
+			// candidates: (ids: hash_set<usize>, empty_positions: hash_set<(usize, usize)>)
 			let candidates = if *fx > 0 {
 				if *fy > 0 {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize + 6, assignment1.1 as isize + 3),
+						(assignment1.0 as isize + offx, assignment1.1 as isize + offy),
 					)
 				} else if *fy == 0 {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize + 6, assignment1.1 as isize),
+						(assignment1.0 as isize + offx, assignment1.1 as isize),
 					)
 				} else {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize + 6, assignment1.1 as isize - 3),
+						(assignment1.0 as isize + offx, assignment1.1 as isize - offy),
 					)
 				}
 			} else if *fx == 0 {
 				if *fy > 0 {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize, assignment1.1 as isize + 3),
+						(assignment1.0 as isize, assignment1.1 as isize + offy),
 					)
 				} else if *fy == 0 {
 					new.id_in_range_exclude_a1(
@@ -481,30 +491,69 @@ pub(crate) fn simulated_spring_method(
 				} else {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize, assignment1.1 as isize - 3),
+						(assignment1.0 as isize, assignment1.1 as isize - offy),
 					)
 				}
 			} else {
 				if *fy > 0 {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize - 6, assignment1.1 as isize + 3),
+						(assignment1.0 as isize - offx, assignment1.1 as isize + offy),
 					)
 				} else if *fy == 0 {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize - 6, assignment1.1 as isize),
+						(assignment1.0 as isize - offx, assignment1.1 as isize),
 					)
 				} else {
 					new.id_in_range_exclude_a1(
 						assignment1,
-						(assignment1.0 as isize - 6, assignment1.1 as isize - 3),
+						(assignment1.0 as isize - offx, assignment1.1 as isize - offy),
 					)
 				}
 			};
+			// Improvement: Look across all candidates and find the one that minimizes force/energy for this node.
 			if candidates.0.is_empty() && candidates.1.is_empty() {
 				continue;
 			}
+
+			/*
+			let mut min_cand = usize::MAX;
+			let mut min_pos = (usize::MAX, usize::MAX);
+			let mut min_sum = isize::MAX;
+			for cand in &candidates.0 {
+				let (fx2, fy2) = force_map[*cand].1;
+				if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
+					let mut sum = 0;
+					for idx2 in &connections_per_node[*idx1] {
+						let p1 = new.assignment(*cand);
+						let p2 = new.assignment(*idx2);
+						let dx = p2.0 as isize - p1.0 as isize;
+						let dy = p2.1 as isize - p1.1 as isize;
+						sum += dx * dx + dy * dy;
+					}
+					if sum <= min_sum {
+						min_cand = *cand;
+						min_sum = sum;
+					}
+				}
+			}
+
+			for cand in &candidates.1 {
+				let mut sum = 0;
+				for idx2 in &connections_per_node[*idx1] {
+					let p1 = *cand;
+					let p2 = new.assignment(*idx2);
+					let dx = p2.0 as isize - p1.0 as isize;
+					let dy = p2.1 as isize - p1.1 as isize;
+					sum += dx * dx + dy * dy;
+				}
+				if sum <= min_sum {
+					min_pos = *cand;
+					min_sum = sum;
+				}
+			}*/
+
 			if !candidates.1.is_empty() {
 				let candidates = candidates.1.iter().collect_vec();
 				let candidate = candidates[rng.random_range(0..candidates.len())];
@@ -522,7 +571,11 @@ pub(crate) fn simulated_spring_method(
 				let candidate = candidates[0];
 				let (fx2, fy2) = force_map[*candidate].1;
 				if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
-					new.swap(*idx1, *candidate);
+					if new.density(new.assignment(*candidate)) < (max_density - 1).max(1) {
+						new.mov(*idx1, new.assignment(*candidate));
+					} else {
+						new.swap(*idx1, *candidate);
+					}
 				}
 			}
 		}
@@ -592,6 +645,14 @@ pub(crate) fn slide_puzzle_method_on_violations(
 				}
 			}
 		}
+	}
+}
+
+pub(crate) fn random_01<T: Integer>(rng: &mut StdRng, p: f64) -> T {
+	if rng.random_bool(p) {
+		Integer::one()
+	} else {
+		Integer::zero()
 	}
 }
 

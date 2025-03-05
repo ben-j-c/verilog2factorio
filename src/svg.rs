@@ -241,6 +241,15 @@ impl SVG {
 			svg_w, svg_h
 		);
 
+		{
+			let color_str = color_to_string((255, 255, 255));
+			svg_data.push_str(&format!(
+				r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}">"#,
+				0, 0, svg_w, svg_h, color_str
+			));
+			svg_data.push_str("</rect>");
+		}
+
 		for shape in &self.shapes {
 			match shape {
 				Shape::Rect(r) => {
