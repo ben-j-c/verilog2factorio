@@ -437,16 +437,13 @@ impl PhysicalDesign {
 			.map(|x| x.into_iter().map(|c| c.0).collect_vec())
 			.collect_vec();
 
-		let compute_cost = |assign: &Vec<(usize, usize)>,
-		                    block_counts: &Vec<Vec<i32>>,
-		                    max_density: i32|
-		 -> (f64, bool, i32) {
+		let compute_cost = |plc: &Placement, max_density: i32| -> (f64, bool, i32) {
 			let mut cost = 0.0;
 			let mut sat_count = 0;
 			let mut sat = true;
 			for &(i, j) in &connections {
-				let (x_i, y_i) = assign[i];
-				let (x_j, y_j) = assign[j];
+				let (x_i, y_i) = plc.assignment(i);
+				let (x_j, y_j) = plc.assignment(j);
 				let dx = (x_i as isize - x_j as isize).abs() as f64;
 				let dy = (y_i as isize - y_j as isize).abs() as f64;
 				let r2distance = dx.powi(2) + dy.powi(2);
@@ -458,34 +455,31 @@ impl PhysicalDesign {
 					cost += r2distance.sqrt() / 10.0;
 				}
 			}
-			for block_y in block_counts.iter() {
-				for count in block_y.iter() {
-					if *count > 1 {
-						sat = false;
-						cost += *count as f64 * 10.0;
-						sat_count += *count - max_density;
-					}
+			for cell in 0..plc.num_cells() {
+				let count = plc.density(plc.assignment(cell));
+				if count > 1 {
+					sat = false;
+					cost += count as f64 * 10.0;
+					sat_count += count - max_density;
 				}
 			}
 			(cost, sat, sat_count)
 		};
 
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
-		let mut assignments = vec![(0, 0); num_cells];
-		let mut block_counts = vec![vec![0; side_length]; side_length];
+		let mut curr = Placement::from_initialization(vec![(0, 0); num_cells], side_length);
 
 		let mut max_density = 15;
 
 		if initializations.is_empty() {
 			for cell in 0..num_cells {
 				loop {
-					let (cx, cy) = (
+					let assignment = (
 						rng.random_range(0..side_length) / 2 * 2,
 						rng.random_range(0..side_length),
 					);
-					if block_counts[cx][cy] < max_density {
-						assignments[cell] = (cx, cy);
-						block_counts[cx][cy] += 1;
+					if curr.density(assignment) < max_density {
+						curr.mov(cell, assignment);
 						break;
 					}
 				}
@@ -494,11 +488,11 @@ impl PhysicalDesign {
 			let mut min_score = (f64::INFINITY, false, i32::MAX);
 			let mut min_idx = 0;
 			for (idx, init) in initializations.iter().enumerate() {
-				block_counts = vec![vec![0; side_length]; side_length];
-				for (cx, cy) in init {
-					block_counts[*cx][*cy] += 1;
+				let mut initplc = curr.clone();
+				for (idx, assignment) in init.iter().enumerate() {
+					initplc.mov(idx, *assignment);
 				}
-				let cost = compute_cost(init, &block_counts, max_density);
+				let cost = compute_cost(&initplc, max_density);
 				if min_score.1 && min_score.2 == 0 {
 					if cost.1 && cost.2 == 0 && cost.0 < min_score.0 {
 						min_score = cost;
@@ -510,67 +504,66 @@ impl PhysicalDesign {
 				}
 			}
 			println!("Selecting initialization number {min_idx}");
-			assignments = initializations[min_idx].clone();
-			block_counts = vec![vec![0; side_length]; side_length];
-			for (cx, cy) in &assignments {
-				block_counts[*cx][*cy] += 1;
-			}
+			curr = Placement::from_initialization(initializations[min_idx].clone(), side_length);
 		}
 
-		let mut best_assign = assignments.clone();
-		let mut best_block_counts = block_counts.clone();
-		let mut best_cost = compute_cost(&assignments, &block_counts, max_density);
+		let mut best = curr.clone();
+		let mut best_cost = compute_cost(&best, max_density);
 		let mut assignments_cost = best_cost;
 
 		let mut temp = init_temp.unwrap_or(20.0 + 5.0 * (num_cells as f64));
 		let cooling_rate = 1.0 - 1E-7;
 		let mut iterations = 20_000_000;
 
-		let check_invariant_density = |block_counts: &Vec<Vec<i32>>, max_density: i32| {
-			for (_x, block_y) in block_counts.iter().enumerate() {
-				for count in block_y.iter() {
-					if *count > max_density {
+		let check_invariant_density = |plc: &Placement, max_density: i32| {
+			for x in 0..plc.side_length {
+				for y in 0..plc.side_length {
+					let count = plc.density((x, y));
+					if count > max_density {
 						assert!(false);
 					}
 				}
 			}
 		};
-		let check_invariant_unique_position = |assignments: &Vec<(usize, usize)>| {
+		let check_invariant_unique_position = |plc: &Placement| {
 			let mut seen = HashMap::new();
-			for (idx, (x, y)) in assignments.iter().enumerate() {
+			for (idx, (x, y)) in plc.assignments.iter().enumerate() {
 				if let Some(idx_prior) = seen.insert((x, y), idx) {
 					assert!(false);
 				}
 				assert!(x % 2 == 0);
 			}
 		};
-		let check_invariant_position =
-			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>| {
-				for (x, block_y) in block_counts.iter().enumerate() {
-					for count in block_y.iter() {
-						if *count > 0 && x % 2 == 1 {
-							assert!(false);
-						}
+		let check_invariant_position = |plc: &Placement| {
+			for x in 0..plc.side_length {
+				for y in 0..plc.side_length {
+					let count = plc.density((x, y));
+					if count > 0 && x % 2 == 1 {
+						assert!(false);
 					}
 				}
-				for (x, _) in assignments.iter() {
-					assert!(x % 2 == 0);
+			}
+			for (x, _) in plc.assignments.iter() {
+				assert!(x % 2 == 0);
+			}
+		};
+		let check_invariant_blocks_assignments_congruent = |plc: &Placement| {
+			let mut block_counts_expected = vec![vec![0; side_length]; side_length];
+			for (x, y) in plc.assignments.iter() {
+				block_counts_expected[*x][*y] += 1;
+			}
+			for x in 0..plc.side_length {
+				for y in 0..plc.side_length {
+					let count = plc.density((x, y));
+					assert_eq!(block_counts_expected[x][y], count);
 				}
-			};
-		let check_invariant_blocks_assignments_congruent =
-			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>| {
-				let mut block_counts_expected = vec![vec![0; side_length]; side_length];
-				for (x, y) in assignments {
-					block_counts_expected[*x][*y] += 1;
-				}
-				assert_eq!(&block_counts_expected, block_counts);
-			};
-		let check_invariants =
-			|block_counts: &Vec<Vec<i32>>, assignments: &Vec<(usize, usize)>, max_density: i32| {
-				check_invariant_density(block_counts, max_density);
-				check_invariant_position(block_counts, assignments);
-				check_invariant_blocks_assignments_congruent(block_counts, assignments);
-			};
+			}
+		};
+		let check_invariants = |plc: &Placement, max_density: i32| {
+			check_invariant_density(plc, max_density);
+			check_invariant_position(plc);
+			check_invariant_blocks_assignments_congruent(plc);
+		};
 
 		let mut new_best = false;
 		let mut stage_2 = false;
@@ -579,7 +572,7 @@ impl PhysicalDesign {
 		let mut trend_of_bests = vec![];
 		while step < iterations {
 			if best_cost.1 && !final_stage {
-				check_invariants(&block_counts, &assignments, 1);
+				check_invariants(&curr, 1);
 				final_stage = true;
 				if (step as f64 / iterations as f64) < 0.05 {
 					iterations = (step as f64 * 4.0) as i32;
@@ -595,13 +588,12 @@ impl PhysicalDesign {
 
 			if !stage_2 && best_cost.2 * 100 < num_cells as i32 && max_density <= 1 {
 				stage_2 = true;
-				assignments = best_assign.clone();
-				block_counts = best_block_counts.clone();
+				curr = best.clone();
+				assignments_cost = best_cost;
 				println!("Entering stage 2");
 			}
 
-			let mut new_block_counts = block_counts.clone();
-			let mut new_assignments = assignments.clone();
+			let mut new = curr.clone();
 
 			type METHOD = (
 				usize, //weight
@@ -671,27 +663,22 @@ impl PhysicalDesign {
 					if pick < cumulative {
 						func(
 							&mut rng,
-							&assignments,
-							&block_counts,
-							&mut new_assignments,
-							&mut new_block_counts,
+							&curr,
+							&mut new,
 							&connections_per_node,
 							side_length,
 							max_density,
 						);
-						check_invariant_blocks_assignments_congruent(
-							&new_block_counts,
-							&new_assignments,
-						);
+						check_invariant_blocks_assignments_congruent(&new);
 						break;
 					}
 				}
 			}
 			new_best = false;
 			// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
-			check_invariant_position(&new_block_counts, &new_assignments);
+			check_invariant_position(&new);
 
-			let new_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
+			let new_cost = compute_cost(&new, max_density);
 			let delta = new_cost.0 - best_cost.0;
 
 			if new_cost.2 <= 0 && max_density > 1 {
@@ -731,12 +718,12 @@ impl PhysicalDesign {
 			if !final_stage && (delta < 0.0 || new_cost.1)
 				|| final_stage && (delta < 0.0 && new_cost.1)
 			{
-				best_cost = compute_cost(&new_assignments, &new_block_counts, max_density);
-				best_assign = new_assignments.clone();
-				assignments = new_assignments;
-				block_counts = new_block_counts;
+				best_cost = compute_cost(&new, max_density);
+				best = new.clone();
+				curr = new;
+				best_cost = new_cost;
+				assignments_cost = new_cost;
 				assignments_cost = best_cost;
-				best_block_counts = block_counts.clone();
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
 				trend_of_bests.push(best_cost);
 				if !final_stage && iterations - step < iterations / 10 {
@@ -746,20 +733,18 @@ impl PhysicalDesign {
 				}
 
 				if final_stage {
-					check_invariant_unique_position(&best_assign);
+					check_invariant_unique_position(&best);
 				}
 			} else {
 				let p = f64::exp(-delta / temp);
 				if p > 1.0 || rng.random_bool(p) {
-					assignments = new_assignments;
-					block_counts = new_block_counts;
+					curr = new;
 					assignments_cost = new_cost;
 				}
 			}
 
 			if assignments_cost.0 / best_cost.0 > 2.0 {
-				assignments = best_assign.clone();
-				block_counts = best_block_counts.clone();
+				curr = best.clone();
 				assignments_cost = best_cost;
 			}
 
@@ -778,11 +763,11 @@ impl PhysicalDesign {
 					"Could not satisfy distance requirements, lowest cost: {}",
 					best_cost.0
 				),
-				best_assign,
+				best.assignments,
 			));
 		}
 
-		Ok(best_assign)
+		Ok(best.assignments)
 	}
 
 	pub fn max_allowable_distance(

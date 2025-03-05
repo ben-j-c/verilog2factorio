@@ -1,5 +1,6 @@
 use std::ops::{Index, IndexMut};
 
+#[derive(Clone, Debug)]
 pub struct Arr2<T> {
 	data: Vec<T>,
 	dims: [usize; 2],

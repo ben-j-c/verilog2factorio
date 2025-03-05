@@ -498,20 +498,28 @@ pub(crate) fn simulated_spring_method(
 					)
 				}
 			};
-			if candidates.is_empty() {
+			if candidates.0.is_empty() && candidates.1.is_empty() {
 				continue;
 			}
-			let candidate = candidates
-				.iter()
-				.min_by(|a, b| {
-					let fa = force_map[**a].1;
-					let fb = force_map[**b].1;
-					(fa.0 * fa.0 + fa.1 * fa.1).cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
-				})
-				.unwrap();
-			let (fx2, fy2) = force_map[*candidate].1;
-			if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
-				new.swap(*idx1, *candidate);
+			if !candidates.1.is_empty() {
+				let candidates = candidates.1.iter().collect_vec();
+				let candidate = candidates[rng.random_range(0..candidates.len())];
+				new.mov(*idx1, *candidate);
+			} else {
+				let candidates = candidates
+					.0
+					.iter()
+					.sorted_by(|a, b| {
+						let fa = force_map[**a].1;
+						let fb = force_map[**b].1;
+						(fa.0 * fa.0 + fa.1 * fa.1).cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
+					})
+					.collect_vec();
+				let candidate = candidates[0];
+				let (fx2, fy2) = force_map[*candidate].1;
+				if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
+					new.swap(*idx1, *candidate);
+				}
 			}
 		}
 	}
@@ -596,6 +604,8 @@ pub(crate) fn exponential_distr_sample(u: f64, median: f64, num_cells: usize) ->
 }
 
 type Num = usize;
+
+#[derive(Clone, Debug)]
 pub(crate) struct Placement {
 	pub assignments: Vec<(Num, Num)>,
 	pub block_counts: Arr2<Num>,
@@ -753,7 +763,10 @@ impl Placement {
 		&self,
 		assignment1: (Num, Num),
 		assignment2: (isize, isize),
-	) -> HashSet<Num, BuildHasherDefault<FNV1aHasher64>> {
+	) -> (
+		HashSet<Num, BuildHasherDefault<FNV1aHasher64>>,
+		HashSet<(Num, Num), BuildHasherDefault<FNV1aHasher64>>,
+	) {
 		let assignment2 = (
 			assignment2
 				.0
@@ -766,15 +779,21 @@ impl Placement {
 		let max_x = assignment1.0.max(assignment2.0);
 		let max_y = assignment1.1.max(assignment2.1);
 		let mut ret = hash_set();
+		let mut ret2 = hash_set();
 		for x in min_x..=max_x {
 			for y in min_y..=max_y {
 				if x >= self.side_length || y >= self.side_length {
 					continue;
 				}
-				ret.extend(self.id_at((x, y)));
+				let block = self.id_at((x, y));
+				if block.is_empty() {
+					ret2.insert((x, y));
+				} else {
+					ret.extend(block);
+				}
 			}
 		}
-		ret
+		(ret, ret2)
 	}
 
 	pub(crate) fn id_at(
