@@ -397,7 +397,7 @@ pub(crate) fn simulated_spring_method(
 	let mut offx = 2;
 	let mut offy = 1;
 	for _ in 0..5 {
-		let i: isize = random_01(rng, 0.01);
+		let i: isize = random_01(rng, 0.05);
 		offx += 2 * i;
 		offy += i;
 	}
@@ -517,7 +517,6 @@ pub(crate) fn simulated_spring_method(
 				continue;
 			}
 
-			/*
 			let mut min_cand = usize::MAX;
 			let mut min_pos = (usize::MAX, usize::MAX);
 			let mut min_sum = isize::MAX;
@@ -550,33 +549,26 @@ pub(crate) fn simulated_spring_method(
 				}
 				if sum <= min_sum {
 					min_pos = *cand;
+					min_cand = usize::MAX;
 					min_sum = sum;
 				}
-			}*/
+			}
 
-			if !candidates.1.is_empty() {
-				let candidates = candidates.1.iter().collect_vec();
-				let candidate = candidates[rng.random_range(0..candidates.len())];
-				new.mov(*idx1, *candidate);
-			} else {
-				let candidates = candidates
-					.0
-					.iter()
-					.sorted_by(|a, b| {
-						let fa = force_map[**a].1;
-						let fb = force_map[**b].1;
-						(fa.0 * fa.0 + fa.1 * fa.1).cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
-					})
-					.collect_vec();
-				let candidate = candidates[0];
-				let (fx2, fy2) = force_map[*candidate].1;
-				if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
-					if new.density(new.assignment(*candidate)) < (max_density - 1).max(1) {
-						new.mov(*idx1, new.assignment(*candidate));
-					} else {
-						new.swap(*idx1, *candidate);
-					}
+			if min_cand == usize::MAX && min_pos.0 == usize::MAX {
+				continue;
+			}
+
+			if min_cand != usize::MAX {
+				if new.density(new.assignment(min_cand)) < (max_density - 1).max(1) {
+					new.mov(*idx1, new.assignment(min_cand));
+				} else {
+					new.swap(*idx1, min_cand);
 				}
+				continue;
+			}
+
+			if min_pos.0 != usize::MAX {
+				new.mov(*idx1, min_pos);
 			}
 		}
 	}
