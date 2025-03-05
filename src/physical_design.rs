@@ -607,30 +607,36 @@ impl PhysicalDesign {
 					side_length: usize,
 					max_density: i32,
 				),
+				&'static str,
 			);
+			macro_rules! mthd {
+				($a: expr, $b: expr, $c: expr, $d: expr) => {
+					($a, $b, $c, $d, stringify!($d))
+				};
+			}
 			const METHODS: &[METHOD] = &[
-				(650, false, false, ripup_replace_method),
-				(200, true, false, swap_local_method),
+				mthd!(650, false, false, ripup_replace_method),
+				mthd!(200, true, false, swap_local_method),
 				//(15, false, false, swap_random_method,),
-				(25, false, false, ripup_range_method),
-				(200, false, false, crack_in_two_method),
-				(50, true, false, slide_puzzle_method),
-				(100, false, false, slide_puzzle_method_worst_cells),
-				(100, false, false, overflowing_cells_swap_local_method),
-				(10, false, true, simulated_spring_method),
-				(40, false, true, slide_puzzle_method_on_violations),
+				mthd!(25, false, false, ripup_range_method),
+				mthd!(200, false, false, crack_in_two_method),
+				mthd!(50, true, false, slide_puzzle_method),
+				mthd!(100, false, false, slide_puzzle_method_worst_cells),
+				mthd!(100, false, false, overflowing_cells_swap_local_method),
+				mthd!(10, false, true, simulated_spring_method),
+				mthd!(40, false, true, slide_puzzle_method_on_violations),
 			];
 			const METHODS_2: &[METHOD] = &[
-				(100, false, false, ripup_replace_method),
-				(100, true, false, swap_local_method),
-				(100, false, false, swap_random_method),
-				(100, false, false, ripup_range_method),
-				(100, false, false, crack_in_two_method),
-				(100, true, false, slide_puzzle_method),
-				(100, false, false, slide_puzzle_method_worst_cells),
-				(100, false, false, overflowing_cells_swap_local_method),
-				(100, false, true, simulated_spring_method),
-				(1000, false, true, slide_puzzle_method_on_violations),
+				mthd!(100, false, false, ripup_replace_method),
+				mthd!(100, true, false, swap_local_method),
+				mthd!(100, false, false, swap_random_method),
+				mthd!(100, false, false, ripup_range_method),
+				mthd!(100, false, false, crack_in_two_method),
+				mthd!(100, true, false, slide_puzzle_method),
+				mthd!(100, false, false, slide_puzzle_method_worst_cells),
+				mthd!(100, false, false, overflowing_cells_swap_local_method),
+				mthd!(100, false, true, simulated_spring_method),
+				mthd!(1000, false, true, slide_puzzle_method_on_violations),
 			];
 
 			// Select weighted method
@@ -641,7 +647,7 @@ impl PhysicalDesign {
 					METHODS
 				}
 				.iter()
-				.filter(|(_, can_run_if_final, after_best_found, _)| {
+				.filter(|(_, can_run_if_final, after_best_found, _, _)| {
 					if final_stage {
 						*can_run_if_final
 					} else if new_best {
@@ -650,12 +656,12 @@ impl PhysicalDesign {
 						true
 					}
 				})
-				.map(|(weight, _, _, _)| *weight)
+				.map(|(weight, _, _, _, _)| *weight)
 				.sum();
 
 				let pick = rng.random_range(0..total_weight);
 				let mut cumulative = 0;
-				for (weight, can_run_if_final, _, func) in METHODS {
+				for (weight, can_run_if_final, _, func, method_name) in METHODS {
 					if final_stage && !can_run_if_final {
 						continue;
 					}
@@ -670,13 +676,13 @@ impl PhysicalDesign {
 							max_density,
 						);
 						check_invariant_blocks_assignments_congruent(&new);
+						// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
+						check_invariant_position(&new);
 						break;
 					}
 				}
 			}
 			new_best = false;
-			// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
-			check_invariant_position(&new);
 
 			let new_cost = compute_cost(&new, max_density);
 			let delta = new_cost.0 - best_cost.0;

@@ -649,6 +649,9 @@ impl Placement {
 	}
 
 	pub(crate) fn place(&mut self, id: Num, assignment: (Num, Num)) {
+		assert!(assignment.0 % 2 == 0, "Found odd x");
+		assert!(assignment.0 < self.side_length, "Found OOB x");
+		assert!(assignment.1 < self.side_length, "Found OOB y");
 		self.assignments[id] = assignment;
 		self.block_counts[assignment] += 1;
 		self.pos_map[assignment].insert(id);
@@ -785,7 +788,7 @@ impl Placement {
 		let max_y = assignment1.1.max(assignment2.1);
 		let mut ret = hash_set();
 		let mut ret2 = hash_set();
-		for x in min_x..=max_x {
+		for x in (min_x..=max_x).step_by(2) {
 			for y in min_y..=max_y {
 				if x >= self.side_length || y >= self.side_length {
 					continue;
