@@ -340,14 +340,14 @@ impl PhysicalDesign {
 				let initializations = self.get_initializations(logical);
 				self.reset_place_route();
 				let comb_positions =
-					match self.solve_as_mcmc_dense(logical, 10.0, &initializations, None) {
+					match self.solve_as_mcmc_dense(logical, 4.0, &initializations, None) {
 						Ok(pos) => pos,
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale 1.6");
 							println!("WARN: {}", e.0);
 							let _ = self.place_combs_physical_dense(&e.1, logical);
 							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", "XXX").as_str());
+							self.save_svg(logical, format!("./svg/failed{}.svg", 4.0).as_str());
 							panic!("failed to place");
 						}
 					};
@@ -1463,7 +1463,10 @@ mod test {
 
 	use std::{fs::File, io::Write};
 
-	use crate::{logical_design::get_large_logical_design, serializable_design};
+	use crate::{
+		logical_design::{get_large_logical_design, get_large_logical_design_2d},
+		serializable_design,
+	};
 
 	use super::*;
 	#[test]
@@ -1535,5 +1538,13 @@ mod test {
 		let l = get_large_logical_design(500);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
+	}
+
+	#[test]
+	fn synthetic_2d_n_mcmc_dense() {
+		let mut p = PhysicalDesign::new();
+		let l = get_large_logical_design_2d(50);
+		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}
 }

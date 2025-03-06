@@ -396,9 +396,9 @@ pub(crate) fn simulated_spring_method(
 	let num_cells = new.num_cells();
 	let iters = rng.random_range(1..100);
 	let mut offx = 2;
-	let mut offy = 2;
+	let mut offy = 1;
 	for _ in 0..0 {
-		let i: isize = random_01(rng, 0.5);
+		let i: isize = random_01(rng, 0.05);
 		offx += 2 * i;
 		offy += i;
 	}
@@ -441,8 +441,8 @@ pub(crate) fn simulated_spring_method(
 						continue;
 					}
 					let (idx, (fx, fy)) = force[*cell2];
-					let dfx = dx.signum() * (1 - dx.abs() / 2 + 1) * 15;
-					let dfy = dy.signum() * (1 - dy.abs() + 1) * 15;
+					let dfx = dx.signum() * (1 - dx.abs() / 2 + 1) * 10;
+					let dfy = dy.signum() * (1 - dy.abs() + 1) * 10;
 					force[*cell2] = (idx, (fx + dfx, fy + dfy));
 				}
 			}

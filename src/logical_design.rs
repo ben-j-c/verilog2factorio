@@ -1730,6 +1730,31 @@ pub(crate) fn get_large_logical_design(n: usize) -> LogicalDesign {
 }
 
 #[cfg(test)]
+pub(crate) fn get_large_logical_design_2d(n: usize) -> LogicalDesign {
+	use crate::logical_design;
+
+	let mut l = LogicalDesign::new();
+	let mut cells = vec![vec![]; n];
+	cells[0].push(l.add_nop(logical_design::Signal::Id(0), logical_design::Signal::Id(0)));
+	for i in 0..n {
+		for j in 0..n {
+			if i == 0 && j == 0 {
+				continue;
+			}
+			let c = l.add_nop(logical_design::Signal::Id(0), logical_design::Signal::Id(0));
+			if i != 0 {
+				l.add_wire_red(vec![cells[i - 1][j]], vec![c]);
+			}
+			if j != 0 {
+				l.add_wire_green(vec![cells[i][j - 1]], vec![c]);
+			}
+			cells[i].push(c);
+		}
+	}
+	l
+}
+
+#[cfg(test)]
 pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
 	let data = vec![0; n];
 	let mut d = LogicalDesign::new();
