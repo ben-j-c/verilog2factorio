@@ -4,6 +4,7 @@ use std::{
 	hash::{BuildHasherDefault, DefaultHasher},
 	isize,
 	mem::swap,
+	process::id,
 	usize,
 };
 
@@ -395,9 +396,9 @@ pub(crate) fn simulated_spring_method(
 	let num_cells = new.num_cells();
 	let iters = rng.random_range(1..100);
 	let mut offx = 2;
-	let mut offy = 1;
-	for _ in 0..5 {
-		let i: isize = random_01(rng, 0.05);
+	let mut offy = 2;
+	for _ in 0..0 {
+		let i: isize = random_01(rng, 0.5);
 		offx += 2 * i;
 		offy += i;
 	}
@@ -446,7 +447,6 @@ pub(crate) fn simulated_spring_method(
 				}
 			}
 		}
-		let force_map = force.clone();
 		force.sort_by(|(_, fa), (_, fb)| {
 			(fa.0 * fa.0 + fa.1 * fa.1)
 				.cmp(&(fb.0 * fb.0 + fb.1 * fb.1))
@@ -521,36 +521,26 @@ pub(crate) fn simulated_spring_method(
 			let mut min_pos = (usize::MAX, usize::MAX);
 			let mut min_sum = isize::MAX;
 			for cand in &candidates.0 {
-				let (fx2, fy2) = force_map[*cand].1;
-				if fx2 * fx2 + fy2 * fy2 < fx * fx + fy * fy {
-					let mut sum = 0;
-					for idx2 in &connections_per_node[*idx1] {
-						let p1 = new.assignment(*cand);
-						let p2 = new.assignment(*idx2);
-						let dx = p2.0 as isize - p1.0 as isize;
-						let dy = p2.1 as isize - p1.1 as isize;
-						sum += dx * dx + dy * dy;
-					}
-					if sum <= min_sum {
-						min_cand = *cand;
-						min_sum = sum;
-					}
+				let e_before = (new.energy(*idx1, connections_per_node) / 2
+					+ new.energy(*cand, connections_per_node)) as isize
+					/ 2;
+				let e_after =
+					(new.energy_if_mov(*idx1, new.assignment(*cand), connections_per_node) / 2
+						+ new.energy_if_mov(*cand, new.assignment(*idx1), connections_per_node))
+						as isize / 2;
+				if e_after - e_before < min_sum {
+					min_cand = *cand;
+					min_sum = e_after - e_before;
 				}
 			}
 
 			for cand in &candidates.1 {
-				let mut sum = 0;
-				for idx2 in &connections_per_node[*idx1] {
-					let p1 = *cand;
-					let p2 = new.assignment(*idx2);
-					let dx = p2.0 as isize - p1.0 as isize;
-					let dy = p2.1 as isize - p1.1 as isize;
-					sum += dx * dx + dy * dy;
-				}
-				if sum <= min_sum {
+				let e_diff = new.energy_if_mov(*idx1, *cand, connections_per_node) as isize
+					- new.energy(*idx1, connections_per_node) as isize;
+				if e_diff <= min_sum {
 					min_pos = *cand;
 					min_cand = usize::MAX;
-					min_sum = sum;
+					min_sum = e_diff;
 				}
 			}
 

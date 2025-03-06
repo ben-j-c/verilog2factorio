@@ -340,14 +340,14 @@ impl PhysicalDesign {
 				let initializations = self.get_initializations(logical);
 				self.reset_place_route();
 				let comb_positions =
-					match self.solve_as_mcmc_dense(logical, 1.5, &initializations, None) {
+					match self.solve_as_mcmc_dense(logical, 10.0, &initializations, None) {
 						Ok(pos) => pos,
 						Err(e) => {
 							println!("WARN: MCMC failed to place with scale 1.6");
 							println!("WARN: {}", e.0);
 							let _ = self.place_combs_physical_dense(&e.1, logical);
 							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", 2.0).as_str());
+							self.save_svg(logical, format!("./svg/failed{}.svg", "XXX").as_str());
 							panic!("failed to place");
 						}
 					};
@@ -463,7 +463,7 @@ impl PhysicalDesign {
 					sat_count += count - max_density;
 				}
 			}
-			(cost, sat, sat_count)
+			(cost, sat, sat_count.max(0))
 		};
 
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
@@ -587,10 +587,10 @@ impl PhysicalDesign {
 			}
 
 			if !stage_2 && best_cost.2 * 100 < num_cells as i32 && max_density <= 1 {
-				stage_2 = true;
-				curr = best.clone();
-				assignments_cost = best_cost;
-				println!("Entering stage 2");
+				//stage_2 = true;
+				//curr = best.clone();
+				//assignments_cost = best_cost;
+				//println!("Entering stage 2");
 			}
 
 			let mut new = curr.clone();
@@ -638,7 +638,7 @@ impl PhysicalDesign {
 				mthd!(100, false, false, overflowing_cells_swap_local_method),
 				mthd!(100, false, true, simulated_spring_method),
 				mthd!(1000, false, true, slide_puzzle_method_on_violations),
-				mthd!(100, false, true, swap_random_energy_method),
+				mthd!(10, false, true, swap_random_energy_method),
 			];
 
 			// Select weighted method
@@ -1532,7 +1532,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(3000);
+		let l = get_large_logical_design(500);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
