@@ -640,6 +640,42 @@ pub(crate) fn slide_puzzle_method_on_violations(
 	}
 }
 
+pub(crate) fn swap_random_energy_method(
+	rng: &mut StdRng,
+	_curr: &Placement,
+	new: &mut Placement,
+	connections_per_node: &Vec<Vec<usize>>,
+	_side_length: usize,
+	_max_density: i32,
+) {
+	let num_cells = new.num_cells();
+	let swap_count = exponential_distr_sample(rng.random(), 0.05, num_cells) / 2 * 2;
+	let mut picked = vec![];
+
+	while picked.len() < swap_count {
+		let c = rng.random_range(0..num_cells);
+		if !picked.contains(&c) {
+			picked.push(c);
+		}
+	}
+
+	for i in (0..swap_count).step_by(2) {
+		let c1 = picked[i];
+		let c2 = picked[i + 1];
+		let e_before = new.energy(c1, connections_per_node) as f64
+			+ new.energy(c2, connections_per_node) as f64;
+		new.swap(c1, c2);
+		let e_after = new.energy(c1, connections_per_node) as f64
+			+ new.energy(c2, connections_per_node) as f64;
+		if e_after > e_before {
+			let acceptance = f64::exp(-(e_after - e_before) / e_before).min(1.0);
+			if !rng.random_bool(acceptance) {
+				new.swap(c1, c2);
+			}
+		}
+	}
+}
+
 pub(crate) fn random_01<T: Integer>(rng: &mut StdRng, p: f64) -> T {
 	if rng.random_bool(p) {
 		Integer::one()
@@ -862,5 +898,34 @@ impl Placement {
 		assignment: (Num, Num),
 	) -> &HashSet<Num, BuildHasherDefault<FNV1aHasher64>> {
 		&self.pos_map[assignment]
+	}
+
+	pub(crate) fn energy(&self, id: Num, connections_per_node: &Vec<Vec<usize>>) -> Num {
+		let mut retval = 0;
+		let (x1, y1) = self.assignment(id);
+		for neighbor in &connections_per_node[id] {
+			let (x2, y2) = self.assignment(*neighbor);
+			let dx = x1.abs_diff(x2);
+			let dy = y1.abs_diff(y2);
+			retval += dx * dx + dy * dy;
+		}
+		retval
+	}
+
+	pub(crate) fn energy_if_mov(
+		&self,
+		id: Num,
+		assignment: (Num, Num),
+		connections_per_node: &Vec<Vec<usize>>,
+	) -> Num {
+		let mut retval = 0;
+		let (x1, y1) = assignment;
+		for neighbor in &connections_per_node[id] {
+			let (x2, y2) = self.assignment(*neighbor);
+			let dx = x1.abs_diff(x2);
+			let dy = y1.abs_diff(y2);
+			retval += dx * dx + dy * dy;
+		}
+		retval
 	}
 }

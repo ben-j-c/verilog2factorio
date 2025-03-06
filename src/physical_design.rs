@@ -625,6 +625,7 @@ impl PhysicalDesign {
 				mthd!(100, false, false, overflowing_cells_swap_local_method),
 				mthd!(10, false, true, simulated_spring_method),
 				mthd!(40, false, true, slide_puzzle_method_on_violations),
+				mthd!(10, false, true, swap_random_energy_method),
 			];
 			const METHODS_2: &[METHOD] = &[
 				mthd!(100, false, false, ripup_replace_method),
@@ -637,6 +638,7 @@ impl PhysicalDesign {
 				mthd!(100, false, false, overflowing_cells_swap_local_method),
 				mthd!(100, false, true, simulated_spring_method),
 				mthd!(1000, false, true, slide_puzzle_method_on_violations),
+				mthd!(100, false, true, swap_random_energy_method),
 			];
 
 			// Select weighted method
@@ -1518,7 +1520,7 @@ mod test {
 	}
 
 	#[test]
-	fn synthetic_n_mcmc_dense_sweep() {
+	fn sweep_synthetic_n_mcmc_dense() {
 		for x in (20..=200).step_by(20) {
 			println!("==============={x}===============");
 			let mut p = PhysicalDesign::new();
@@ -1530,7 +1532,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(500);
+		let l = get_large_logical_design(3000);
 		p.build_from(&l, PlacementStrategy::MCMCSADense);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
