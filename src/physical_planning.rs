@@ -918,4 +918,37 @@ impl Placement {
 		}
 		retval
 	}
+
+	pub(crate) fn compute_cost(
+		&self,
+		connections: &Vec<(usize, usize)>,
+		max_density: i32,
+	) -> (f64, bool, i32) {
+		let mut cost = 0.0;
+		let mut sat_count = 0;
+		let mut sat = true;
+		for &(i, j) in connections {
+			let (x_i, y_i) = self.assignment(i);
+			let (x_j, y_j) = self.assignment(j);
+			let dx = (x_i as isize - x_j as isize).abs() as f64;
+			let dy = (y_i as isize - y_j as isize).abs() as f64;
+			let r2distance = dx.powi(2) + dy.powi(2);
+			if r2distance > (64.0 + 81.0) / 2.0 {
+				cost += r2distance.sqrt();
+				sat_count += 1;
+				sat = false;
+			} else {
+				cost += r2distance.sqrt() / 10.0;
+			}
+		}
+		for cell in 0..self.num_cells() {
+			let count = self.density(self.assignment(cell));
+			if count > 1 {
+				sat = false;
+				cost += count as f64 * 10.0;
+				sat_count += count - max_density;
+			}
+		}
+		(cost, sat, sat_count.max(0))
+	}
 }

@@ -437,35 +437,6 @@ impl PhysicalDesign {
 			.map(|x| x.into_iter().map(|c| c.0).collect_vec())
 			.collect_vec();
 
-		let compute_cost = |plc: &Placement, max_density: i32| -> (f64, bool, i32) {
-			let mut cost = 0.0;
-			let mut sat_count = 0;
-			let mut sat = true;
-			for &(i, j) in &connections {
-				let (x_i, y_i) = plc.assignment(i);
-				let (x_j, y_j) = plc.assignment(j);
-				let dx = (x_i as isize - x_j as isize).abs() as f64;
-				let dy = (y_i as isize - y_j as isize).abs() as f64;
-				let r2distance = dx.powi(2) + dy.powi(2);
-				if r2distance > (64.0 + 81.0) / 2.0 {
-					cost += r2distance.sqrt();
-					sat_count += 1;
-					sat = false;
-				} else {
-					cost += r2distance.sqrt() / 10.0;
-				}
-			}
-			for cell in 0..plc.num_cells() {
-				let count = plc.density(plc.assignment(cell));
-				if count > 1 {
-					sat = false;
-					cost += count as f64 * 10.0;
-					sat_count += count - max_density;
-				}
-			}
-			(cost, sat, sat_count.max(0))
-		};
-
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
 		let mut curr = Placement::from_initialization(vec![(0, 0); num_cells], side_length);
 
@@ -492,7 +463,7 @@ impl PhysicalDesign {
 				for (idx, assignment) in init.iter().enumerate() {
 					initplc.mov(idx, *assignment);
 				}
-				let cost = compute_cost(&initplc, max_density);
+				let cost = initplc.compute_cost(&connections, max_density);
 				if min_score.1 && min_score.2 == 0 {
 					if cost.1 && cost.2 == 0 && cost.0 < min_score.0 {
 						min_score = cost;
@@ -508,7 +479,7 @@ impl PhysicalDesign {
 		}
 
 		let mut best = curr.clone();
-		let mut best_cost = compute_cost(&best, max_density);
+		let mut best_cost = best.compute_cost(&connections, max_density);
 		let mut assignments_cost = best_cost;
 
 		let mut temp = init_temp.unwrap_or(20.0 + 5.0 * (num_cells as f64));
@@ -686,7 +657,7 @@ impl PhysicalDesign {
 			}
 			new_best = false;
 
-			let new_cost = compute_cost(&new, max_density);
+			let new_cost = new.compute_cost(&connections, max_density);
 			let delta = new_cost.0 - best_cost.0;
 
 			if new_cost.2 <= 0 && max_density > 1 {
@@ -726,7 +697,7 @@ impl PhysicalDesign {
 			if !final_stage && (delta < 0.0 || new_cost.1)
 				|| final_stage && (delta < 0.0 && new_cost.1)
 			{
-				best_cost = compute_cost(&new, max_density);
+				best_cost = new.compute_cost(&connections, max_density);
 				best = new.clone();
 				curr = new;
 				best_cost = new_cost;
