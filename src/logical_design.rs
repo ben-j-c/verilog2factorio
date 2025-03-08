@@ -172,6 +172,10 @@ pub enum NodeFunction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
+impl NodeId {
+	const None: NodeId = NodeId(usize::MAX);
+}
+
 impl From<NodeId> for usize {
 	fn from(v: NodeId) -> Self {
 		v.0
@@ -540,6 +544,7 @@ impl LogicalDesign {
 		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
 		// If the compiler was aware of either green or red wires, then clk_buf could be eliminated.
+		// A problem that this could have is if `en` is not stable when clk is high, this is actually an important concern.
 		//
 		// en---r-----------------+
 		//                        |
@@ -581,11 +586,10 @@ impl LogicalDesign {
 		write_ports: Vec<MemoryWritePort>,
 		size: u32,
 	) -> (Vec<MemoryPortReadFilled>, Vec<MemoryPortWriteFilled>) {
-		//let mut wr_addresses_ret = vec![];
-		//let mut wr_data_ret = vec![];
-		//let mut wr_en_ret = vec![];
-		//let mut wr_clk_ret = vec![];
-		//let mut wr_rst_ret = vec![];
+		let mut wr_addr_ret = NodeId::None;
+		let mut wr_data_ret = NodeId::None;
+		let mut wr_en_ret = NodeId::None;
+		let mut wr_clk_ret = NodeId::None;
 
 		assert!(!read_ports.is_empty());
 		assert!(!write_ports.is_empty());
@@ -615,7 +619,7 @@ impl LogicalDesign {
 		}
 
 		// Address decoding write data and priority selecting.
-		let mut wr_data_select_1hots = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		let mut wr_data_select_decode = vec![Vec::with_capacity(size as usize); write_ports.len()];
 		for (i, wport) in write_ports.iter().enumerate() {
 			for physical_address in 0..size {
 				let one_hot = self.add_decider_comb();
@@ -643,12 +647,12 @@ impl LogicalDesign {
 					);
 				}
 				self.add_decider_comb_output(one_hot, wport.data, true, NET_RED_GREEN);
-				wr_data_select_1hots[i].push(one_hot);
+				wr_data_select_decode[i].push(one_hot);
 			}
 		}
 
 		// Address decoding write enable.
-		let mut wr_enable_1hots = Vec::with_capacity(size as usize);
+		let mut wr_enable_decode = Vec::with_capacity(size as usize);
 		for physical_address in 0..size {
 			let one_hot = self.add_decider_comb();
 			for (i, wport) in write_ports.iter().enumerate() {
@@ -678,21 +682,88 @@ impl LogicalDesign {
 				}
 			}
 			self.add_decider_comb_output(one_hot, Signal::Id(1), false, NET_RED_GREEN);
-			wr_enable_1hots.push(one_hot);
+			wr_enable_decode.push(one_hot);
 		}
 
 		// Used to transform the input data signals into a common format.
 		// OPTIMIZATION: Can remove this if theres only 1 write port.
-		let mut wr_data_nop = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		let mut wr_data_mapper = vec![Vec::with_capacity(size as usize); write_ports.len()];
 		for _ in 0..size {
 			for (i, wport) in write_ports.iter().enumerate() {
-				wr_data_nop[i].push(self.add_nop(wport.data, Signal::Id(0)));
+				wr_data_mapper[i].push(self.add_nop(wport.data, Signal::Id(0)));
+			}
+		}
+
+		// Wire up write side
+		for phy_addr in 0..size as usize {
+			let (data_wire, clk_wire, en_wire, _q) = memory_cells[phy_addr];
+			// Connect enable and data in
+			self.add_wire_red_simple(wr_enable_decode[phy_addr], en_wire);
+			self.connect_red(wr_data_mapper[0][phy_addr], data_wire);
+
+			// Clock daisy chain
+			if phy_addr == 0 {
+				wr_clk_ret = clk_wire;
+			} else {
+				let (_data, clk_wire_m1, _en, _q) = memory_cells[phy_addr - 1];
+				// Peer into the soul of the current DFF and make direct connection with the wire of the previous.
+				let clk_combs = self.get_fanout_red(clk_wire).iter().cloned().collect_vec();
+				for comb in clk_combs {
+					self.connect_red(clk_wire_m1, comb);
+				}
+			}
+
+			// data/en decoder daisy chaining.
+			{
+				self.add_wire_red(
+					vec![],
+					vec![
+						wr_enable_decode[phy_addr],
+						wr_data_select_decode[0][phy_addr],
+					],
+				);
+				if phy_addr == 0 {
+					let common_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_en_ret = common_ret;
+					wr_addr_ret = common_ret;
+					wr_data_ret = common_ret;
+				} else {
+					self.add_wire_red(
+						vec![],
+						vec![wr_enable_decode[phy_addr], wr_enable_decode[phy_addr - 1]],
+					);
+				}
+			}
+
+			// Data decode to mapper
+			for i in 0..write_ports.len() {
+				self.add_wire_red_simple(
+					wr_data_select_decode[i][phy_addr],
+					wr_data_mapper[i][phy_addr],
+				);
+			}
+
+			// Mapper and address decode daisy chain
+			for i in 1..write_ports.len() {
+				// Input side daisy chain
+				self.add_wire_red(
+					vec![],
+					vec![wr_data_mapper[i][phy_addr], wr_data_mapper[i - 1][phy_addr]],
+				);
+				// Output side daisy chain
+				self.add_wire_red(
+					vec![
+						wr_data_select_decode[i][phy_addr],
+						wr_data_select_decode[i - 1][phy_addr],
+					],
+					vec![],
+				);
 			}
 		}
 
 		// Now for reading side
 
-		let mut addresses_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_addr_ret = Vec::with_capacity(read_ports.len());
 		let mut rd_data_ret = Vec::with_capacity(read_ports.len());
 		let mut rd_en_ret = Vec::with_capacity(read_ports.len());
 		let mut rd_clk_ret = Vec::with_capacity(read_ports.len());
@@ -718,9 +789,9 @@ impl LogicalDesign {
 			}
 		}
 
-		// buffering
+		// read buffering
 		let mut port_buffer_in_wires = Vec::with_capacity(read_ports.len());
-		for (i, p) in read_ports.iter().enumerate() {
+		for p in read_ports.iter() {
 			if let Some(clk) = p.clk {
 				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
 					ResetSpec::Sync(rst) => self.add_sdffe(
@@ -784,7 +855,7 @@ impl LogicalDesign {
 		// Wire the address decode up and down on both sides
 		for i in 0..read_ports.len() {
 			let address_wire = self.add_wire_red(vec![], vec![mux1s[0][i]]);
-			addresses_ret.push(address_wire);
+			rd_addr_ret.push(address_wire);
 			// Daisy chain up port address muxes
 			for physical_addr in 1..size as usize {
 				self.add_wire_red(
@@ -798,7 +869,27 @@ impl LogicalDesign {
 			}
 		}
 
-		todo!()
+		let mut rd_ret = Vec::with_capacity(read_ports.capacity());
+		for i in 0..read_ports.len() {
+			rd_ret.push(MemoryPortReadFilled {
+				addr_wire: rd_addr_ret[i],
+				data: rd_data_ret[i],
+				clk_wire: rd_clk_ret[i],
+				en_wire: rd_en_ret[i],
+				rst_wire: rd_rst_ret[i],
+			});
+		}
+		let mut wr_ret = Vec::with_capacity(write_ports.capacity());
+		for i in 0..write_ports.len() {
+			wr_ret.push(MemoryPortWriteFilled {
+				addr_wire: wr_addr_ret,
+				data_wire: wr_data_ret,
+				clk_wire: if i == 0 { Some(wr_clk_ret) } else { None },
+				en_wire: write_ports[i].en.map(|_| wr_en_ret),
+			});
+		}
+
+		(rd_ret, wr_ret)
 	}
 
 	pub(crate) fn add_rom(
@@ -1199,6 +1290,36 @@ impl LogicalDesign {
 		for node_out in fanout {
 			self.connect_green(id, node_out);
 		}
+		id
+	}
+
+	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_red_simple(&mut self, fanin: NodeId, fanout: NodeId) -> NodeId {
+		assert!(!self.is_wire(fanin), "Can't add wires to wires.");
+		assert!(!self.is_wire(fanout), "Can't add wires to wires.");
+		let id = self.add_node(
+			NodeFunction::WireSum(WireColour::Green),
+			vec![Signal::Everything],
+		);
+		self.connect_red(fanin, id);
+		self.connect_red(id, fanout);
+		id
+	}
+
+	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_green_simple(&mut self, fanin: NodeId, fanout: NodeId) -> NodeId {
+		assert!(!self.is_wire(fanin), "Can't add wires to wires.");
+		assert!(!self.is_wire(fanout), "Can't add wires to wires.");
+		let id = self.add_node(
+			NodeFunction::WireSum(WireColour::Green),
+			vec![Signal::Everything],
+		);
+		self.connect_green(fanin, id);
+		self.connect_green(id, fanout);
 		id
 	}
 
@@ -1631,6 +1752,22 @@ impl LogicalDesign {
 
 	pub fn set_description_node(&mut self, id: NodeId, desc: String) {
 		self.nodes[id.0].description = Some(desc);
+	}
+
+	fn get_fanout_red(&self, id: NodeId) -> &[NodeId] {
+		self.nodes[id.0].fanout_red.as_slice()
+	}
+
+	fn get_fanout_green(&self, id: NodeId) -> &[NodeId] {
+		self.nodes[id.0].fanout_green.as_slice()
+	}
+
+	fn get_fanin_red(&self, id: NodeId) -> &[NodeId] {
+		self.nodes[id.0].fanin_red.as_slice()
+	}
+
+	fn get_fanin_green(&self, id: NodeId) -> &[NodeId] {
+		self.nodes[id.0].fanin_green.as_slice()
 	}
 }
 
