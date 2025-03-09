@@ -130,6 +130,14 @@ impl NodeType {
 			_ => false,
 		}
 	}
+
+	fn mapped_terminal_name(&self) -> &str {
+		match self {
+			NodeType::CellInput { port, .. } => &port,
+			NodeType::CellOutput { port, .. } => &port,
+			_ => panic!(),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,9 +168,9 @@ impl Node {
 }
 
 impl Default for CheckedDesign {
-    fn default() -> Self {
-        Self::new()
-    }
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl CheckedDesign {
@@ -947,7 +955,8 @@ impl CheckedDesign {
 				.iter()
 				.map(|fiid| depth[*fiid])
 				.max()
-				.unwrap_or(-1) + 1
+				.unwrap_or(-1)
+				+ 1
 		}
 		depth
 	}
@@ -1037,6 +1046,16 @@ impl CheckedDesign {
 							.iter()
 							.map(|foid| Signal::Id(self.signals[*foid].unwrap()))
 							.collect_vec();
+						let in_ports = node
+							.fanin
+							.iter()
+							.map(|fiid| self.nodes[*fiid].node_type.mapped_terminal_name())
+							.collect_vec();
+						let out_ports = node
+							.fanout
+							.iter()
+							.map(|fiid| self.nodes[*fiid].node_type.mapped_terminal_name())
+							.collect_vec();
 						let (ids_in, ids_out) = self.apply_multipart_op(
 							nodeid,
 							logical_design,
@@ -1047,6 +1066,8 @@ impl CheckedDesign {
 							mapped_design.get_cell_option(&node.mapped_id),
 							sig_in,
 							sig_out,
+							in_ports,
+							out_ports,
 						);
 						for (idx_common, fiid) in node.fanin.iter().enumerate() {
 							logic_map[*fiid] = Some(ids_in[idx_common]);
@@ -1110,6 +1131,8 @@ impl CheckedDesign {
 		mapped_cell: Option<&crate::mapped_design::Cell>,
 		sig_in: Vec<Signal>,
 		sig_out: Vec<Signal>,
+		mapped_in_port: Vec<&str>, //TODO: Incorporate memory
+		mapped_out_port: Vec<&str>,
 	) -> (Vec<logical_design::NodeId>, Vec<logical_design::NodeId>) {
 		let (input_wires, outputs) = match op {
 			ImplementableOp::DFF => {
@@ -1142,6 +1165,9 @@ impl CheckedDesign {
 						.unwrap(),
 				);
 				(input_wires, vec![output_comb])
+			}
+			ImplementableOp::Memory => {
+				todo!()
 			}
 			_ => unreachable!(),
 		};
