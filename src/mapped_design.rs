@@ -461,6 +461,10 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 	let width = cell.parameters["WIDTH"].from_bin_str().unwrap();
 	let wr_port_count = cell.parameters["WR_PORTS"].from_bin_str().unwrap();
 	assert!(
+		!cell.parameters["RD_TRANSPARENCY_MASK"].contains("1"),
+		"Currently memory doesn't support transparent reads."
+	);
+	assert!(
 		wr_port_count == 0 || no_init,
 		"The game doesn't support initial values for writeable memories. {:?}",
 		cell.attributes["src"]
@@ -519,10 +523,6 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		connections.insert(format!("RD_ADDR_{}", i), addr.clone());
 		directions.insert(format!("RD_DATA_{}", i), Direction::Output);
 		connections.insert(format!("RD_DATA_{}", i), data.clone());
-		if arst.is_connection() {
-			directions.insert(format!("RD_ARST_{}", i), Direction::Input);
-			connections.insert(format!("RD_ARST_{}", i), vec![**arst]);
-		}
 		if clk.is_connection() {
 			directions.insert(format!("RD_CLK_{}", i), Direction::Input);
 			connections.insert(format!("RD_CLK_{}", i), vec![**clk]);
@@ -531,10 +531,20 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 			directions.insert(format!("RD_EN_{}", i), Direction::Input);
 			connections.insert(format!("RD_EN_{}", i), vec![**en]);
 		}
+		if arst.is_connection() {
+			directions.insert(format!("RD_ARST_{}", i), Direction::Input);
+			connections.insert(format!("RD_ARST_{}", i), vec![**arst]);
+		}
 		if srst.is_connection() {
 			directions.insert(format!("RD_SRST_{}", i), Direction::Input);
 			connections.insert(format!("RD_SRST_{}", i), vec![**arst]);
 		}
+	}
+
+	for i in 1..wr_ports.len() {
+		let (_addr, _data, clk0, _en) = &wr_ports[i - 1];
+		let (_addr, _data, clk1, _en) = &wr_ports[i];
+		assert!(clk0 == clk1, "Can only have a single writer clock.");
 	}
 
 	for i in 0..wr_ports.len() {
@@ -543,7 +553,7 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		connections.insert(format!("WR_ADDR_{}", i), addr.clone());
 		directions.insert(format!("WR_DATA_{}", i), Direction::Input);
 		connections.insert(format!("WR_DATA_{}", i), data.clone());
-		if clk.is_connection() {
+		if i == 0 {
 			directions.insert(format!("WR_CLK_{}", i), Direction::Input);
 			connections.insert(format!("WR_CLK_{}", i), vec![**clk]);
 		}

@@ -1,5 +1,6 @@
 use std::{
 	collections::{BTreeSet, HashSet, LinkedList},
+	ops::Index,
 	usize, vec,
 };
 
@@ -9,7 +10,10 @@ use itertools::Itertools;
 
 use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
-	logical_design::{self, ArithmeticOperator, DeciderOperator, LogicalDesign, Signal},
+	logical_design::{
+		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
+		ResetSpec, Signal,
+	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
 };
@@ -1054,7 +1058,7 @@ impl CheckedDesign {
 						let out_ports = node
 							.fanout
 							.iter()
-							.map(|fiid| self.nodes[*fiid].node_type.mapped_terminal_name())
+							.map(|foid| self.nodes[*foid].node_type.mapped_terminal_name())
 							.collect_vec();
 						let (ids_in, ids_out) = self.apply_multipart_op(
 							nodeid,
@@ -1131,7 +1135,7 @@ impl CheckedDesign {
 		mapped_cell: Option<&crate::mapped_design::Cell>,
 		sig_in: Vec<Signal>,
 		sig_out: Vec<Signal>,
-		mapped_in_port: Vec<&str>, //TODO: Incorporate memory
+		mapped_in_port: Vec<&str>,
 		mapped_out_port: Vec<&str>,
 	) -> (Vec<logical_design::NodeId>, Vec<logical_design::NodeId>) {
 		let (input_wires, outputs) = match op {
@@ -1167,7 +1171,147 @@ impl CheckedDesign {
 				(input_wires, vec![output_comb])
 			}
 			ImplementableOp::Memory => {
-				todo!()
+				let cell = mapped_cell.unwrap();
+				let n_rd_ports = cell.attributes["RD_PORTS"].from_bin_str().unwrap();
+				let n_wr_ports = cell.attributes["WR_PORTS"].from_bin_str().unwrap();
+
+				fn index_of(strings: &[&str], target: &str) -> Option<usize> {
+					let mut i = 0;
+					for s in strings {
+						if *s == target {
+							return Some(i);
+						}
+						i += 1;
+					}
+					None
+				}
+
+				let mut rd_ports = vec![];
+				for i in 0..n_rd_ports {
+					let addr_idx = index_of(&mapped_in_port, &format!("RD_ADDR_{i}")).unwrap();
+					let data_idx = index_of(&mapped_out_port, &format!("RD_DATA_{i}")).unwrap();
+					let clk_idx = index_of(&mapped_in_port, &format!("RD_CLK_{i}"));
+					let en_idx = index_of(&mapped_in_port, &format!("RD_EN_{i}"));
+					let arst_idx = index_of(&mapped_in_port, &format!("RD_ARST_{i}"));
+					let srst_idx = index_of(&mapped_in_port, &format!("RD_SRST_{i}"));
+					let rst_spec = if let Some(idx) = arst_idx {
+						ResetSpec::Async(sig_in[idx])
+					} else if let Some(idx) = srst_idx {
+						ResetSpec::Sync(sig_in[idx])
+					} else {
+						ResetSpec::Disabled
+					};
+					let mut idx_offset = 1;
+					if clk_idx.is_some() {
+						assert!(addr_idx + idx_offset == clk_idx.unwrap());
+						idx_offset += 1;
+					}
+					if en_idx.is_some() {
+						assert!(addr_idx + idx_offset == en_idx.unwrap());
+						idx_offset += 1;
+					}
+					if arst_idx.is_some() {
+						assert!(addr_idx + idx_offset == arst_idx.unwrap());
+					} else if srst_idx.is_some() {
+						assert!(addr_idx + idx_offset == srst_idx.unwrap());
+					}
+					rd_ports.push(MemoryReadPort {
+						addr: sig_in[addr_idx],
+						data: sig_in[data_idx],
+						clk: clk_idx.map(|idx| sig_in[idx]),
+						en: en_idx.map(|idx| sig_in[idx]),
+						rst: rst_spec,
+						transparent: false,
+					});
+				}
+
+				if n_wr_ports == 0 {
+					let mut ret_in = vec![];
+					let mut ret_out = vec![];
+					let width: usize = cell.parameters["WIDTH"].from_bin_str().unwrap();
+					let rom_values = cell.parameters["INIT"]
+						.chars()
+						.chunks(width)
+						.into_iter()
+						.map(|rom_value| {
+							rom_value.collect::<String>().from_bin_str().unwrap() as i32
+						})
+						.collect_vec();
+					let rd_ports = logical_design.add_rom(
+						rd_ports,
+						rom_values,
+						cell.attributes
+							.get("density")
+							.map(|d| d.from_bin_str().unwrap() as i32),
+					);
+					for p in rd_ports {
+						ret_in.push(p.addr_wire);
+						ret_out.push(p.data);
+						if let Some(clk_wire) = p.clk_wire {
+							ret_in.push(clk_wire);
+						}
+						if let Some(en_wire) = p.en_wire {
+							ret_in.push(en_wire);
+						}
+						if let Some(rst_wire) = p.rst_wire {
+							ret_in.push(rst_wire);
+						}
+					}
+					(ret_in, ret_out)
+				} else {
+					let mut wr_ports = vec![];
+					for i in 0..n_rd_ports {
+						let addr_idx = index_of(&mapped_in_port, &format!("WR_ADDR_{i}")).unwrap();
+						let data_idx = index_of(&mapped_in_port, &format!("WR_DATA_{i}")).unwrap();
+						let clk_idx = index_of(&mapped_in_port, &format!("WR_CLK_{i}")).unwrap();
+						let en_idx = index_of(&mapped_in_port, &format!("WR_EN_{i}"));
+						let mut idx_offset = 1;
+						assert!(addr_idx + idx_offset == data_idx);
+						idx_offset += 1;
+						assert!(addr_idx + idx_offset == clk_idx);
+						idx_offset += 1;
+						if en_idx.is_some() {
+							assert!(addr_idx + idx_offset == en_idx.unwrap());
+						}
+						wr_ports.push(MemoryWritePort {
+							addr: sig_in[addr_idx],
+							data: sig_in[data_idx],
+							clk: sig_in[clk_idx],
+							en: en_idx.map(|idx| sig_in[idx]),
+						});
+					}
+					let (rd_ports, wr_ports) = logical_design.add_ram(
+						rd_ports,
+						wr_ports,
+						cell.attributes["SIZE"].from_bin_str().unwrap() as u32,
+					);
+					let mut ret_in = vec![];
+					let mut ret_out = vec![];
+					for p in rd_ports {
+						ret_in.push(p.addr_wire);
+						ret_out.push(p.data);
+						if let Some(clk_wire) = p.clk_wire {
+							ret_in.push(clk_wire);
+						}
+						if let Some(en_wire) = p.en_wire {
+							ret_in.push(en_wire);
+						}
+						if let Some(rst_wire) = p.rst_wire {
+							ret_in.push(rst_wire);
+						}
+					}
+					for p in wr_ports {
+						ret_in.push(p.addr_wire);
+						ret_in.push(p.data_wire);
+						if let Some(clk_wire) = p.clk_wire {
+							ret_in.push(clk_wire);
+						}
+						if let Some(en_wire) = p.en_wire {
+							ret_in.push(en_wire);
+						}
+					}
+					(ret_in, ret_out)
+				}
 			}
 			_ => unreachable!(),
 		};
