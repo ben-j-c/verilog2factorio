@@ -1,17 +1,14 @@
-use core::num;
 use std::{
 	collections::{BTreeSet, HashMap, HashSet},
-	hash::{BuildHasherDefault, DefaultHasher},
+	hash::BuildHasherDefault,
 	isize,
 	mem::swap,
-	process::id,
 	usize,
 };
 
 use hashers::fnv::FNV1aHasher64;
 use itertools::Itertools;
-use rand::{random_bool, rngs::StdRng, Rng};
-use rayon::iter::plumbing::UnindexedConsumer;
+use rand::{rngs::StdRng, Rng};
 
 use crate::{mapped_design::Integer, ndarr::Arr2};
 

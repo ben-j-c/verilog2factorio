@@ -18,6 +18,7 @@ pub mod signal_lookup_table;
 mod ndarr;
 mod svg;
 
+mod physical_partitioner;
 mod physical_planning;
 
 /// Verilog to Factorio combinator compiler (v2f)

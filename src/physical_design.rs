@@ -11,11 +11,11 @@ use std::{
 };
 use std::{isize, usize};
 
-use crate::physical_planning::*;
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
 };
+use crate::{physical_partitioner, physical_planning::*};
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum PlacementStrategy {
@@ -1340,6 +1340,38 @@ impl PhysicalDesign {
 			}
 		}
 		ret
+	}
+
+	pub fn partition(&self, ld: &LogicalDesign, target_size: usize) -> Vec<usize> {
+		let connectivity = self
+			.get_connectivity_as_vec(ld)
+			.iter()
+			.map(|v_of_coid| v_of_coid.iter().map(|coid| coid.0).collect_vec())
+			.collect_vec();
+		let n_cells = connectivity.len();
+
+		let n_partitions = n_cells / target_size;
+
+		let mut partitions: Vec<Vec<usize>> = vec![(0..n_cells).collect()];
+
+		while partitions.len() < n_partitions {
+			if let Some(idx) = partitions.iter().position(|p| p.len() > 1) {
+				let nodes = partitions.remove(idx);
+				let (part_a, part_b) = physical_partitioner::kernighan_lin(&nodes, &connectivity);
+				partitions.push(part_a);
+				partitions.push(part_b);
+			} else {
+				break;
+			}
+		}
+
+		let mut result = vec![0; n_cells];
+		for (pid, part) in partitions.iter().enumerate() {
+			for &node in part.iter() {
+				result[node] = pid;
+			}
+		}
+		result
 	}
 }
 
