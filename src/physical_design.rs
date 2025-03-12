@@ -697,11 +697,12 @@ impl PhysicalDesign {
 			if !final_stage && (delta < 0.0 || new_cost.1)
 				|| final_stage && (delta < 0.0 && new_cost.1)
 			{
-				best_cost = new.compute_cost(&connections, max_density);
+				//best_cost = new.compute_cost(&connections, max_density);
+				new.draw_placement(&connections, max_density, "svg/best.svg");
 				best = new.clone();
 				curr = new;
 				best_cost = new_cost;
-				assignments_cost = new_cost;
+				//assignments_cost = new_cost;
 				assignments_cost = best_cost;
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
 				trend_of_bests.push(best_cost);

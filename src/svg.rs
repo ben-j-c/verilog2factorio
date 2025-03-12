@@ -13,13 +13,13 @@ struct RectData {
 	y: i32,
 	w: i32,
 	h: i32,
-	color: (u8, u8, u8),
+	colour: (u8, u8, u8),
 	label: Option<String>,
 	hover: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-struct LineData {
+struct WireData {
 	shape_a: ShapeId,
 	shape_b: ShapeId,
 	attachment_a: u32,
@@ -29,21 +29,21 @@ struct LineData {
 #[derive(Debug, Clone)]
 enum Shape {
 	Rect(RectData),
-	Line(LineData),
+	Wire(WireData),
 	// New variants for arbitrary lines and text
-	CustomLine {
+	Line {
 		x1: i32,
 		y1: i32,
 		x2: i32,
 		y2: i32,
-		color: String,
+		colour: String,
 		stroke_width: i32,
 	},
-	CustomText {
+	Text {
 		x: i32,
 		y: i32,
 		text: String,
-		color: String,
+		colour: String,
 		font_size: i32,
 		anchor: Option<String>,
 		// (angle, cx, cy) for rotation; if None, no transform is applied.
@@ -51,9 +51,63 @@ enum Shape {
 	},
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GridSpec {
+	cell_width: i32,
+	cell_height: i32,
+	margin: i32,
+}
+
 impl SVG {
 	pub fn new() -> Self {
 		SVG { shapes: Vec::new() }
+	}
+
+	pub fn new_grid(cell_width: i32, cell_height: i32, margin: i32) -> GridSpec {
+		GridSpec {
+			cell_width,
+			cell_height,
+			margin,
+		}
+	}
+
+	pub fn add_fill_cell(
+		&mut self,
+		grid: GridSpec,
+		x: i32,
+		y: i32,
+		colour: (u8, u8, u8),
+		label: Option<String>,
+		hover: Option<String>,
+	) -> ShapeId {
+		let x = x * (grid.cell_width + grid.margin);
+		let y = y * (grid.cell_height + grid.margin);
+		self.add_rect(
+			x,
+			y,
+			grid.cell_width,
+			grid.cell_height,
+			colour,
+			label,
+			hover,
+		)
+	}
+
+	pub fn add_line_cell(
+		&mut self,
+		grid: GridSpec,
+		x1: i32,
+		y1: i32,
+		x2: i32,
+		y2: i32,
+		colour: Option<String>,
+		width: Option<i32>,
+	) {
+		let x1 = x1 * (grid.cell_width + grid.margin) + grid.cell_width / 2;
+		let y1 = y1 * (grid.cell_height + grid.margin) + grid.cell_height / 2;
+		let x2 = x2 * (grid.cell_width + grid.margin) + grid.cell_width / 2;
+		let y2 = y2 * (grid.cell_height + grid.margin) + grid.cell_height / 2;
+		self.add_line(x1, y1, x2, y2, colour, width)
 	}
 
 	pub fn add_rect(
@@ -71,12 +125,33 @@ impl SVG {
 			y,
 			w,
 			h,
-			color: colour,
+			colour: colour,
 			label: label.map(|s| s.to_string()),
 			hover: hover.map(|s| s.to_string()),
 		};
 		self.shapes.push(Shape::Rect(rect));
 		self.shapes.len() - 1
+	}
+
+	pub fn add_line(
+		&mut self,
+		x1: i32,
+		y1: i32,
+		x2: i32,
+		y2: i32,
+		colour: Option<String>,
+		width: Option<i32>,
+	) {
+		let colour = colour.unwrap_or_else(|| "black".to_owned());
+		let stroke_width = width.unwrap_or(1).min(1);
+		self.shapes.push(Shape::Line {
+			x1,
+			y1,
+			x2,
+			y2,
+			colour,
+			stroke_width,
+		});
 	}
 
 	pub fn add_wire(
@@ -91,13 +166,13 @@ impl SVG {
 		assert!(a < self.shapes.len(), "Invalid shape index for 'a'");
 		assert!(b < self.shapes.len(), "Invalid shape index for 'b'");
 
-		let line = LineData {
+		let line = WireData {
 			shape_a: a,
 			shape_b: b,
 			attachment_a,
 			attachment_b,
 		};
-		self.shapes.push(Shape::Line(line));
+		self.shapes.push(Shape::Wire(line));
 		self.shapes.len() - 1
 	}
 
@@ -126,20 +201,20 @@ impl SVG {
 		let total_height = top_margin + plot_height + bottom_margin;
 
 		// Add axes (in black).
-		self.shapes.push(Shape::CustomLine {
+		self.shapes.push(Shape::Line {
 			x1: left_margin,
 			y1: top_margin + plot_height,
 			x2: left_margin + plot_width,
 			y2: top_margin + plot_height,
-			color: "black".to_string(),
+			colour: "black".to_string(),
 			stroke_width: 1,
 		});
-		self.shapes.push(Shape::CustomLine {
+		self.shapes.push(Shape::Line {
 			x1: left_margin,
 			y1: top_margin,
 			x2: left_margin,
 			y2: top_margin + plot_height,
-			color: "black".to_string(),
+			colour: "black".to_string(),
 			stroke_width: 1,
 		});
 
@@ -155,12 +230,12 @@ impl SVG {
 		// Draw blue line segments connecting consecutive data points.
 		for pair in points.windows(2) {
 			if let [p1, p2] = pair {
-				self.shapes.push(Shape::CustomLine {
+				self.shapes.push(Shape::Line {
 					x1: p1.0,
 					y1: p1.1,
 					x2: p2.0,
 					y2: p2.1,
-					color: "blue".to_string(),
+					colour: "blue".to_string(),
 					stroke_width: 2,
 				});
 			}
@@ -169,11 +244,11 @@ impl SVG {
 		// Add title text (centered, black).
 		let title_x = total_width / 2;
 		let title_y = top_margin / 2;
-		self.shapes.push(Shape::CustomText {
+		self.shapes.push(Shape::Text {
 			x: title_x,
 			y: title_y,
 			text: title.to_string(),
-			color: "black".to_string(),
+			colour: "black".to_string(),
 			font_size: 16,
 			anchor: Some("middle".to_string()),
 			rotate: None,
@@ -182,11 +257,11 @@ impl SVG {
 		// Add x-axis label (centered, black).
 		let x_label_x = left_margin + plot_width / 2;
 		let x_label_y = top_margin + plot_height + bottom_margin / 2 + 10;
-		self.shapes.push(Shape::CustomText {
+		self.shapes.push(Shape::Text {
 			x: x_label_x,
 			y: x_label_y,
 			text: x_axis.to_string(),
-			color: "black".to_string(),
+			colour: "black".to_string(),
 			font_size: 12,
 			anchor: Some("middle".to_string()),
 			rotate: None,
@@ -195,11 +270,11 @@ impl SVG {
 		// Add y-axis label (rotated -90 degrees).
 		let y_label_x = left_margin / 2;
 		let y_label_y = top_margin + plot_height / 2;
-		self.shapes.push(Shape::CustomText {
+		self.shapes.push(Shape::Text {
 			x: y_label_x,
 			y: y_label_y,
 			text: y_axis.to_string(),
-			color: "black".to_string(),
+			colour: "black".to_string(),
 			font_size: 12,
 			anchor: Some("middle".to_string()),
 			rotate: Some((-90.0, y_label_x, y_label_y)),
@@ -222,11 +297,11 @@ impl SVG {
 						max_h = bottom;
 					}
 				}
-				Shape::CustomLine { x1, y1, x2, y2, .. } => {
+				Shape::Line { x1, y1, x2, y2, .. } => {
 					max_w = max_w.max(*x1).max(*x2);
 					max_h = max_h.max(*y1).max(*y2);
 				}
-				Shape::CustomText { x, y, .. } => {
+				Shape::Text { x, y, .. } => {
 					max_w = max_w.max(*x);
 					max_h = max_h.max(*y);
 				}
@@ -242,10 +317,10 @@ impl SVG {
 		);
 
 		{
-			let color_str = color_to_string((255, 255, 255));
+			let colour_str = colour_to_string((255, 255, 255));
 			svg_data.push_str(&format!(
 				r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}">"#,
-				0, 0, svg_w, svg_h, color_str
+				0, 0, svg_w, svg_h, colour_str
 			));
 			svg_data.push_str("</rect>");
 		}
@@ -253,10 +328,10 @@ impl SVG {
 		for shape in &self.shapes {
 			match shape {
 				Shape::Rect(r) => {
-					let color_str = color_to_string(r.color);
+					let colour_str = colour_to_string(r.colour);
 					svg_data.push_str(&format!(
 						r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}">"#,
-						r.x, r.y, r.w, r.h, color_str
+						r.x, r.y, r.w, r.h, colour_str
 					));
 					if let Some(txt) = &r.hover {
 						svg_data.push_str(&format!(r#"<title>{}</title>"#, txt));
@@ -272,8 +347,8 @@ impl SVG {
 						));
 					}
 				}
-				Shape::Line(l) => {
-					let wire_color = match l.attachment_a {
+				Shape::Wire(l) => {
+					let wire_colour = match l.attachment_a {
 						0 | 2 => "red",
 						1 | 3 => "green",
 						_ => unreachable!(),
@@ -288,27 +363,27 @@ impl SVG {
 
 					svg_data.push_str(&format!(
 						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="1" />"#,
-						x1, y1, x2, y2, wire_color
+						x1, y1, x2, y2, wire_colour
 					));
 				}
-				Shape::CustomLine {
+				Shape::Line {
 					x1,
 					y1,
 					x2,
 					y2,
-					color,
+					colour,
 					stroke_width,
 				} => {
 					svg_data.push_str(&format!(
 						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" />"#,
-						x1, y1, x2, y2, color, stroke_width
+						x1, y1, x2, y2, colour, stroke_width
 					));
 				}
-				Shape::CustomText {
+				Shape::Text {
 					x,
 					y,
 					text,
-					color,
+					colour,
 					font_size,
 					anchor,
 					rotate,
@@ -318,7 +393,7 @@ impl SVG {
                             r#"<text x="{}" y="{}" fill="{}" font-size="{}" text-anchor="{}" transform="rotate({} {} {})">{}</text>"#,
                             x,
                             y,
-                            color,
+                            colour,
                             font_size,
                             anchor.clone().unwrap_or_else(|| "start".to_string()),
                             angle,
@@ -331,7 +406,7 @@ impl SVG {
 							r#"<text x="{}" y="{}" fill="{}" font-size="{}" text-anchor="{}">{}</text>"#,
 							x,
 							y,
-							color,
+							colour,
 							font_size,
 							anchor.clone().unwrap_or_else(|| "start".to_string()),
 							text
@@ -364,6 +439,6 @@ fn rect_attachment(r: &RectData, attachment_index: u32) -> (i32, i32) {
 	}
 }
 
-fn color_to_string(c: (u8, u8, u8)) -> String {
+fn colour_to_string(c: (u8, u8, u8)) -> String {
 	format!("rgb({},{},{})", c.0, c.1, c.2)
 }

@@ -1,4 +1,5 @@
 use std::{
+	cmp::max,
 	collections::{BTreeSet, HashMap, HashSet},
 	hash::BuildHasherDefault,
 	isize,
@@ -10,7 +11,7 @@ use hashers::fnv::FNV1aHasher64;
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng};
 
-use crate::{mapped_design::Integer, ndarr::Arr2};
+use crate::{mapped_design::Integer, ndarr::Arr2, svg::SVG};
 
 fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
 	HashSet::default()
@@ -138,7 +139,6 @@ pub(crate) fn ripup_range_method(
 	side_length: usize,
 	max_density: i32,
 ) {
-	let num_cells = new.num_cells();
 	let region_w = rng.random_range(1..=10);
 	let region_h = rng.random_range(1..=10);
 
@@ -311,10 +311,10 @@ pub(crate) fn slide_puzzle_method(
 
 pub(crate) fn slide_puzzle_method_worst_cells(
 	rng: &mut StdRng,
-	curr: &Placement,
+	_curr: &Placement,
 	new: &mut Placement,
-	connections_per_node: &Vec<Vec<usize>>,
-	side_length: usize,
+	_connections_per_node: &Vec<Vec<usize>>,
+	_side_length: usize,
 	max_density: i32,
 ) {
 	let mut interesting_cells = vec![];
@@ -341,11 +341,11 @@ pub(crate) fn slide_puzzle_method_worst_cells(
 
 pub(crate) fn overflowing_cells_swap_local_method(
 	rng: &mut StdRng,
-	curr: &Placement,
+	_curr: &Placement,
 	new: &mut Placement,
-	connections_per_node: &Vec<Vec<usize>>,
+	_connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
-	max_density: i32,
+	_max_density: i32,
 ) {
 	let mut swap_cells = vec![];
 	for (idx, assignment) in new.assignments.iter().enumerate() {
@@ -368,8 +368,6 @@ pub(crate) fn overflowing_cells_swap_local_method(
 			{
 				continue;
 			}
-			let mut did_swap = false;
-
 			let candidates = new.id_at(want_assignment).iter().collect_vec();
 			if candidates.is_empty() {
 				new.mov(*cell, want_assignment);
@@ -384,7 +382,7 @@ pub(crate) fn overflowing_cells_swap_local_method(
 
 pub(crate) fn simulated_spring_method(
 	rng: &mut StdRng,
-	curr: &Placement,
+	_curr: &Placement,
 	new: &mut Placement,
 	connections_per_node: &Vec<Vec<usize>>,
 	side_length: usize,
@@ -563,13 +561,12 @@ pub(crate) fn simulated_spring_method(
 
 pub(crate) fn slide_puzzle_method_on_violations(
 	rng: &mut StdRng,
-	curr: &Placement,
+	_curr: &Placement,
 	new: &mut Placement,
 	connections_per_node: &Vec<Vec<usize>>,
-	side_length: usize,
+	_side_length: usize,
 	max_density: i32,
 ) {
-	let num_cells = new.num_cells();
 	let iters = 1;
 	for _ in 0..iters {
 		let mut interesting_cells = BTreeSet::new();
@@ -947,5 +944,51 @@ impl Placement {
 			}
 		}
 		(cost, sat, sat_count.max(0))
+	}
+
+	pub(crate) fn draw_placement(
+		&self,
+		connections: &Vec<(usize, usize)>,
+		max_density: i32,
+		filename: &str,
+	) {
+		let mut svg = SVG::new();
+		let grid = SVG::new_grid(50, 25, 3);
+		for x in 0..self.side_length {
+			for y in 0..self.side_length {
+				let density = self.density((x, y));
+				if density > 0 {
+					let r = 100
+						+ if density == 1 {
+							0
+						} else {
+							density * 155 / max_density
+						};
+
+					svg.add_fill_cell(
+						grid,
+						x as i32 / 2,
+						y as i32,
+						(r as u8, 100, 100),
+						None,
+						Some(format!("{density}")),
+					);
+				}
+			}
+		}
+		for &(i, j) in connections {
+			let (x1, y1) = self.assignment(i);
+			let (x2, y2) = self.assignment(j);
+			svg.add_line_cell(
+				grid,
+				x1 as i32 / 2,
+				y1 as i32,
+				x2 as i32 / 2,
+				y2 as i32,
+				None,
+				None,
+			);
+		}
+		svg.save(filename).unwrap();
 	}
 }
