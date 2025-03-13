@@ -15,7 +15,7 @@ use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
 };
-use crate::{physical_partitioner, physical_planning::*};
+use crate::{physical_partitioner, physical_placement::*};
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum PlacementStrategy {

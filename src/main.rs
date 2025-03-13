@@ -19,7 +19,7 @@ mod ndarr;
 mod svg;
 
 mod physical_partitioner;
-mod physical_planning;
+mod physical_placement;
 
 /// Verilog to Factorio combinator compiler (v2f)
 #[derive(Parser, Debug)]
