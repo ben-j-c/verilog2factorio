@@ -179,8 +179,8 @@ pub(crate) fn crack_in_two_method(
 	}
 	let num_cells = new.num_cells();
 	let selection = (
-		rng.random_range(4..side_length - 4) / 2 * 2,
-		rng.random_range(3..side_length - 3),
+		rng.random_range(2..side_length - 4) / 2 * 2,
+		rng.random_range(1..side_length - 2),
 	);
 	let (offset, corner1, corner2, sorter) = match (rng.random_bool(0.5), rng.random_bool(0.5)) {
 		(true, true) => ((-2, 0), (0, 0), (selection.0, side_length), 1),
@@ -660,6 +660,68 @@ pub(crate) fn swap_random_energy_method(
 	}
 }
 
+pub(crate) fn swap_local_energy_method(
+	rng: &mut StdRng,
+	_curr: &Placement,
+	new: &mut Placement,
+	connections_per_node: &Vec<Vec<usize>>,
+	side_length: usize,
+	_max_density: i32,
+) {
+	let num_cells = new.num_cells();
+	let n_swap = exponential_distr_sample(rng.random(), 0.02, num_cells);
+	let mut swap_cells = vec![];
+	while swap_cells.len() != n_swap {
+		let cell = rng.random_range(0..num_cells);
+		if swap_cells.contains(&cell) {
+			continue;
+		}
+		swap_cells.push(cell);
+	}
+
+	for c1 in swap_cells {
+		let cxcy = new.assignment(c1);
+		loop {
+			let pick_x: i32 = rng.random_range(0..=1) * 2;
+			let pick_y: i32 = rng.random_range(-1..=1);
+			let want_x = cxcy.0 as isize + pick_x as isize;
+			let want_y = cxcy.1 as isize + pick_y as isize;
+			if pick_x == 0 && pick_y == 0
+				|| want_x < 0
+				|| want_x >= side_length as isize
+				|| want_y < 0
+				|| want_y >= side_length as isize
+			{
+				continue;
+			}
+			let want_assignment = (want_x as usize, want_y as usize);
+			let candidates = new.id_at(want_assignment).iter().collect_vec();
+			if candidates.is_empty() {
+				let e_before = new.energy(c1, connections_per_node);
+				new.mov(c1, want_assignment);
+				let e_after = new.energy(c1, connections_per_node);
+				if e_after > e_before {
+					new.mov(c1, cxcy);
+				}
+			} else {
+				let c2 = *candidates[rng.random_range(0..candidates.len())];
+				let e_before = new.energy(c1, connections_per_node) as f64
+					+ new.energy(c2, connections_per_node) as f64;
+				new.swap(c1, c2);
+				let e_after = new.energy(c1, connections_per_node) as f64
+					+ new.energy(c2, connections_per_node) as f64;
+				if e_after > e_before {
+					let acceptance = f64::exp(-(e_after - e_before) / e_before).min(1.0);
+					if !rng.random_bool(acceptance) {
+						new.swap(c1, c2);
+					}
+				}
+			}
+			break;
+		}
+	}
+}
+
 pub(crate) fn random_01<T: Integer>(rng: &mut StdRng, p: f64) -> T {
 	if rng.random_bool(p) {
 		Integer::one()
@@ -931,7 +993,7 @@ impl Placement {
 				cost += r2distance.sqrt();
 				sat_count += 1;
 				sat = false;
-			} else {
+			} else if dx > 2.0 || dy > 1.0 || dx == 2.0 && dy == 1.0 {
 				cost += r2distance.sqrt() / 10.0;
 			}
 		}
@@ -949,7 +1011,7 @@ impl Placement {
 	pub(crate) fn draw_placement(
 		&self,
 		connections: &Vec<(usize, usize)>,
-		max_density: i32,
+		_max_density: i32,
 		filename: &str,
 	) {
 		let mut svg = SVG::new();
@@ -962,7 +1024,7 @@ impl Placement {
 						+ if density == 1 {
 							0
 						} else {
-							density * 155 / max_density
+							(density - 1) * 155 / 4
 						};
 
 					svg.add_fill_cell(

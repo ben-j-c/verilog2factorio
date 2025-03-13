@@ -597,6 +597,7 @@ impl PhysicalDesign {
 				mthd!(10, false, true, simulated_spring_method),
 				mthd!(40, false, true, slide_puzzle_method_on_violations),
 				mthd!(10, false, true, swap_random_energy_method),
+				mthd!(100, true, true, swap_local_energy_method),
 			];
 			const METHODS_2: &[METHOD] = &[
 				mthd!(100, false, false, ripup_replace_method),
@@ -609,7 +610,7 @@ impl PhysicalDesign {
 				mthd!(100, false, false, overflowing_cells_swap_local_method),
 				mthd!(100, false, true, simulated_spring_method),
 				mthd!(1000, false, true, slide_puzzle_method_on_violations),
-				mthd!(10, false, true, swap_random_energy_method),
+				mthd!(10, true, true, swap_local_energy_method),
 			];
 
 			// Select weighted method
