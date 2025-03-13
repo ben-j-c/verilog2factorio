@@ -1054,3 +1054,42 @@ impl Placement {
 		svg.save(filename).unwrap();
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::Placement;
+
+	#[test]
+	fn new() {
+		let a = (0, 0);
+		let b = (2, 2);
+		let c = (4, 4);
+		let plc = Placement::from_initialization(vec![a, b, c], 10);
+		assert_eq!(plc.assignment(0), a);
+		assert_eq!(plc.assignment(1), b);
+		assert_eq!(plc.assignment(2), c);
+		assert_eq!(plc.num_cells(), 3);
+		assert_eq!(plc.side_length, 10);
+		assert_eq!(plc.density(a), 1);
+		assert_eq!(plc.density(b), 1);
+		assert_eq!(plc.density(c), 1);
+	}
+
+	#[test]
+	fn ops() {
+		let a = (0, 0);
+		let b = (2, 2);
+		let c = (4, 4);
+		let d = (6, 4);
+		let mut plc = Placement::from_initialization(vec![a, b, c], 10);
+		plc.swap(0, 1);
+		assert_eq!(plc.assignment(1), a);
+		assert_eq!(plc.assignment(0), b);
+		assert_eq!(plc.assignment(2), c);
+
+		plc.mov(0, c);
+		assert_eq!(plc.density(c), 2);
+		plc.slide(c, 10, false, true);
+		assert_eq!(plc.density(d), 2);
+	}
+}
