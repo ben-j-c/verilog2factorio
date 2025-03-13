@@ -47,7 +47,7 @@
 					"--no-run",
 					"--bin=v2f",
 					"--package=v2f",
-					"physical_design::test::synthetic_n_mcmc_dense",
+					"logical_design::test::ram",
 					"--",
 					"--exact",
 					"--show-output"

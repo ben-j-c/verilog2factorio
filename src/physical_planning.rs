@@ -543,7 +543,7 @@ pub(crate) fn simulated_spring_method(
 				continue;
 			}
 
-			if min_cand != usize::MAX {
+			if min_cand != usize::MAX && min_cand != *idx1 {
 				if new.density(new.assignment(min_cand)) < (max_density - 1).max(1) {
 					new.mov(*idx1, new.assignment(min_cand));
 				} else {

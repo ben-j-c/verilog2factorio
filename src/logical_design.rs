@@ -698,7 +698,7 @@ impl LogicalDesign {
 		for phy_addr in 0..size as usize {
 			let (data_wire, clk_wire, en_wire, _q) = memory_cells[phy_addr];
 			// Connect enable and data in
-			self.add_wire_red_simple(wr_enable_decode[phy_addr], en_wire);
+			self.connect_red(wr_enable_decode[phy_addr], en_wire);
 			self.connect_red(wr_data_mapper[0][phy_addr], data_wire);
 
 			// Clock daisy chain
@@ -843,7 +843,7 @@ impl LogicalDesign {
 		// Wire memory_cells to read address decoders
 		for physical_addr in 0..size as usize {
 			let (_, _, _, q) = memory_cells[physical_addr];
-			let mux1 = mux1s[physical_addr][0];
+			let mux1 = mux1s[0][physical_addr];
 			self.add_wire_green(vec![q], vec![mux1]);
 			// Daisy chain down read port muxes
 			for i in 1..read_ports.len() {
@@ -860,10 +860,10 @@ impl LogicalDesign {
 			for physical_addr in 1..size as usize {
 				self.add_wire_red(
 					vec![],
-					vec![mux1s[physical_addr - 1][i], mux1s[physical_addr][i]],
+					vec![mux1s[i][physical_addr - 1], mux1s[i][physical_addr]],
 				);
 				self.add_wire_red(
-					vec![mux1s[physical_addr - 1][i], mux1s[physical_addr][i]],
+					vec![mux1s[i][physical_addr - 1], mux1s[i][physical_addr]],
 					vec![],
 				);
 			}
@@ -2277,6 +2277,71 @@ mod test {
 			let id = d.add_nop(Signal::Id(i), Signal::Id(i));
 			d.set_description_node(id, format!("Sigid: {i}"));
 		}
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d, PlacementStrategy::default());
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn ram() {
+		let mut d = LogicalDesign::new();
+		let sig_red = Sig::Id(signal_lookup_table::lookup_id("signal-red").unwrap());
+		let (rd_ports, wr_ports) = d.add_ram(
+			vec![MemoryReadPort {
+				addr: Sig::Id(0),
+				data: Sig::Id(1),
+				clk: Some(Sig::Id(2)),
+				en: Some(Sig::Id(3)),
+				rst: ResetSpec::Disabled,
+				transparent: false,
+			}],
+			vec![
+				MemoryWritePort {
+					addr: Sig::Id(4),
+					data: Sig::Id(5),
+					clk: sig_red,
+					en: Some(Sig::Id(6)),
+				},
+				MemoryWritePort {
+					addr: Sig::Id(7),
+					data: Sig::Id(8),
+					clk: sig_red,
+					en: Some(Sig::Id(9)),
+				},
+			],
+			1,
+		);
+
+		// Setup read side.
+		let read_port = d.add_constant_comb(
+			vec![Sig::Id(0), Sig::Id(1), Sig::Id(2), Sig::Id(3)],
+			vec![0, 0, 0, 0],
+		);
+		d.set_description_node(read_port, "Read port".to_owned());
+		let read_lamp = d.add_lamp((Sig::Id(1), DeciderOperator::NotEqual, Sig::Constant(0)));
+		d.connect_red(read_port, rd_ports[0].addr_wire);
+		d.connect_red(read_port, rd_ports[0].en_wire.unwrap());
+		d.connect_red(read_port, rd_ports[0].clk_wire.unwrap());
+		d.add_wire_red_simple(rd_ports[0].data, read_lamp);
+
+		// Setup write0 side.
+		let write0_port =
+			d.add_constant_comb(vec![Sig::Id(4), Sig::Id(5), Sig::Id(6)], vec![0, 0, 0]);
+		d.connect_red(write0_port, wr_ports[0].addr_wire);
+
+		// Setup write1 side.
+		let write1_port =
+			d.add_constant_comb(vec![Sig::Id(8), Sig::Id(9), Sig::Id(10)], vec![0, 0, 0]);
+
+		d.connect_red(write1_port, wr_ports[0].addr_wire);
+
+		// CLK
+		let clk = d.add_constant_comb(vec![sig_red], vec![1]);
+		d.connect_red(clk, wr_ports[0].clk_wire.unwrap());
+
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
 		p.build_from(&d, PlacementStrategy::default());
