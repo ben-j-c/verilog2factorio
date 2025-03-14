@@ -173,7 +173,7 @@ impl PhysicalDesign {
 		}
 	}
 
-	fn extract_combs(&mut self, logical: &LogicalDesign) {
+	pub(crate) fn extract_combs(&mut self, logical: &LogicalDesign) {
 		logical.for_all(|_, ld_node| match &ld_node.function {
 			ld::NodeFunction::Arithmetic { .. }
 			| ld::NodeFunction::Decider { .. }
@@ -1303,6 +1303,16 @@ impl PhysicalDesign {
 		for cell in &self.combs {
 			for ldid in ld.get_connected_combs(cell.logic) {
 				connections[cell.id.0].push(*self.idx_combs.get(&ldid).unwrap());
+			}
+		}
+		connections
+	}
+
+	pub fn get_connectivity_as_vec_usize(&self, ld: &LogicalDesign) -> Vec<Vec<usize>> {
+		let mut connections = vec![vec![]; self.combs.len()];
+		for cell in &self.combs {
+			for ldid in ld.get_connected_combs(cell.logic) {
+				connections[cell.id.0].push(self.idx_combs.get(&ldid).unwrap().0);
 			}
 		}
 		connections

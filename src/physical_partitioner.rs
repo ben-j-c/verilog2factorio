@@ -1,7 +1,8 @@
 use core::num;
 
 use itertools::Itertools;
-use nalgebra::{DMatrix, SquareMatrix};
+use nalgebra::DMatrix;
+use nalgebra_lapack::SymmetricEigen;
 
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
@@ -81,7 +82,7 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 			laplacian[(i, *j)] = -1.0;
 		}
 	}
-	let ev = laplacian.symmetric_eigen();
+	let ev = SymmetricEigen::new(laplacian);
 	let values = (0..num_nodes)
 		.map(|idx| (idx, ev.eigenvalues[(idx, 0)]))
 		.sorted_by(|(_, val1), (_, val2)| val1.total_cmp(val2))
@@ -89,20 +90,28 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 	let mut by_sign = Vec::with_capacity(num_nodes);
 	let mut by_median = Vec::with_capacity(num_nodes);
 	let idx_pick = values[1].0;
+	let ev_sorted = ev
+		.eigenvectors
+		.column(idx_pick)
+		.into_iter()
+		.sorted_by(|a, b| a.total_cmp(b))
+		.collect_vec();
 	let median = if num_nodes % 2 == 0 {
-		(values[num_nodes / 2].1 + values[num_nodes / 2 + 1].1) / 2.0
+		(ev_sorted[num_nodes / 2] + ev_sorted[num_nodes / 2 + 1]) / 2.0
 	} else {
-		values[num_nodes / 2].1
+		*ev_sorted[num_nodes / 2]
 	};
 	for i in 0..num_nodes {
-		by_sign.push(ev.eigenvectors[(i, idx_pick)] > 0.0);
-		by_median.push(ev.eigenvectors[(i, idx_pick)] > median);
+		by_sign.push(ev.eigenvectors[(i, idx_pick)] >= 0.0);
+		by_median.push(ev.eigenvectors[(i, idx_pick)] >= median);
 	}
 	(by_median, by_sign)
 }
 
 #[cfg(test)]
 mod test {
+	use crate::physical_design::PhysicalDesign;
+
 	use super::*;
 
 	#[test]
@@ -115,13 +124,34 @@ mod test {
 			vec![3, 5],
 			vec![3, 4],
 		];
-		let (_, by_sign) = spectral(&connectivity);
+		let (by_median, by_sign) = spectral(&connectivity);
 		assert_eq!(by_sign.len(), 6);
 		assert_eq!(by_sign[0], by_sign[1]);
 		assert_eq!(by_sign[0], by_sign[2]);
 		assert_ne!(by_sign[0], by_sign[3]);
 		assert_ne!(by_sign[0], by_sign[4]);
 		assert_ne!(by_sign[0], by_sign[5]);
+		println!("{:?}", by_median);
 		println!("{:?}", by_sign);
+	}
+
+	#[test]
+	fn spectral_n_synthetic() {
+		let l = crate::logical_design::get_large_logical_design(4000);
+		let mut p = PhysicalDesign::new();
+		p.extract_combs(&l);
+		let connectvity = p.get_connectivity_as_vec_usize(&l);
+		let (by_median, by_sign) = spectral(&connectvity);
+		println!(
+			"Median: {:?}",
+			by_median
+				.iter()
+				.map(|b| if *b { 1 } else { 0 })
+				.collect_vec()
+		);
+		println!(
+			"Sign: {:?}",
+			by_sign.iter().map(|b| if *b { 1 } else { 0 }).collect_vec()
+		);
 	}
 }
