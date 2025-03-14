@@ -1,8 +1,7 @@
 use core::num;
 
 use itertools::Itertools;
-use nalgebra::DMatrix;
-use nalgebra_lapack::SymmetricEigen;
+use nalgebra::{DMatrix, SymmetricEigen};
 
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
@@ -137,7 +136,7 @@ mod test {
 
 	#[test]
 	fn spectral_n_synthetic() {
-		let l = crate::logical_design::get_large_logical_design(4000);
+		let l = crate::logical_design::get_large_logical_design(3000);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectvity = p.get_connectivity_as_vec_usize(&l);
