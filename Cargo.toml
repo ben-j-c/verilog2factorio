@@ -7,6 +7,7 @@ edition = "2021"
 clap = { version = "4.5.23", features = ["derive"] }
 hashers = "1.0.1"
 itertools = "0.13.0"
+nalgebra = "0.33.2"
 once_cell = "1.20.3"
 rand = "0.9.0"
 rayon = "1.10.0"
@@ -16,3 +17,6 @@ serde_json = "1.0.133"
 [profile.perf]
 inherits = "release"
 debug = true
+
+[profile.dev]
+overflow-checks = false

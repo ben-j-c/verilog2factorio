@@ -1,3 +1,8 @@
+use core::num;
+
+use itertools::Itertools;
+use nalgebra::{DMatrix, SquareMatrix};
+
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
 	connectivity: &Vec<Vec<usize>>,
@@ -65,4 +70,58 @@ fn compute_gain(
 	let connection = if connectivity[a].contains(&b) { 1 } else { 0 };
 
 	(ext_a - int_a) + (ext_b - int_b) - 2 * connection
+}
+
+pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>) {
+	let num_nodes = connectivity.len();
+	let mut laplacian: DMatrix<f64> = DMatrix::zeros(num_nodes, num_nodes);
+	for (i, connections) in connectivity.iter().enumerate() {
+		laplacian[(i, i)] = connections.len() as f64;
+		for j in connections {
+			laplacian[(i, *j)] = -1.0;
+		}
+	}
+	let ev = laplacian.symmetric_eigen();
+	let values = (0..num_nodes)
+		.map(|idx| (idx, ev.eigenvalues[(idx, 0)]))
+		.sorted_by(|(_, val1), (_, val2)| val1.total_cmp(val2))
+		.collect_vec();
+	let mut by_sign = Vec::with_capacity(num_nodes);
+	let mut by_median = Vec::with_capacity(num_nodes);
+	let idx_pick = values[1].0;
+	let median = if num_nodes % 2 == 0 {
+		(values[num_nodes / 2].1 + values[num_nodes / 2 + 1].1) / 2.0
+	} else {
+		values[num_nodes / 2].1
+	};
+	for i in 0..num_nodes {
+		by_sign.push(ev.eigenvectors[(i, idx_pick)] > 0.0);
+		by_median.push(ev.eigenvectors[(i, idx_pick)] > median);
+	}
+	(by_median, by_sign)
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn spectral_simple() {
+		let connectivity = vec![
+			vec![1, 2],
+			vec![0, 2],
+			vec![0, 1, 3],
+			vec![2, 4, 5],
+			vec![3, 5],
+			vec![3, 4],
+		];
+		let (_, by_sign) = spectral(&connectivity);
+		assert_eq!(by_sign.len(), 6);
+		assert_eq!(by_sign[0], by_sign[1]);
+		assert_eq!(by_sign[0], by_sign[2]);
+		assert_ne!(by_sign[0], by_sign[3]);
+		assert_ne!(by_sign[0], by_sign[4]);
+		assert_ne!(by_sign[0], by_sign[5]);
+		println!("{:?}", by_sign);
+	}
 }
