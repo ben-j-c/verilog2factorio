@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
-      run: sudo apt install coinor-cbc coinor-libcbc-dev
+      run: sudo apt install metis libmetis-dev
     - name: Build
       run: cargo build --release --verbose 
     - name: Run tests
