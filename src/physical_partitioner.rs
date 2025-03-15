@@ -3,6 +3,8 @@ use core::num;
 use itertools::Itertools;
 use nalgebra::{DMatrix, SymmetricEigen};
 
+use crate::physical_design;
+
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
 	connectivity: &Vec<Vec<usize>>,
@@ -107,11 +109,58 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 	(by_median, by_sign)
 }
 
+pub(crate) fn metis(connectivity: &Vec<Vec<usize>>) -> (Vec<i32>, i32) {
+	let (adj, idx_adj) = convert_connectivity_to_csr(connectivity);
+	let graph = metis::Graph::new(1, 2, &idx_adj, &adj).unwrap();
+	let mut partition = vec![0; connectivity.len()];
+	let ret = graph.part_recursive(&mut partition).unwrap();
+	(partition, ret)
+}
+
+pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, Vec<i32>) {
+	let mut idx_adj = vec![0];
+	let mut adj = vec![];
+	let mut idx = 0;
+	for neighbors in conn.iter() {
+		for neigh in neighbors.iter().sorted() {
+			adj.push(*neigh as i32);
+			idx += 1;
+		}
+		idx_adj.push(idx);
+	}
+	(adj, idx_adj)
+}
+
 #[cfg(test)]
 mod test {
 	use crate::physical_design::PhysicalDesign;
 
 	use super::*;
+
+	#[test]
+	fn csr() {
+		let conn = vec![vec![1], vec![0]];
+		let (adj, idx_adj) = convert_connectivity_to_csr(&conn);
+		assert_eq!(adj, vec![1, 0]);
+		assert_eq!(idx_adj, vec![0, 1, 2]);
+		println!("{:?}, {:?}", adj, idx_adj);
+	}
+
+	#[test]
+	fn csr2() {
+		let conn = vec![
+			vec![1, 4],
+			vec![0, 2, 4],
+			vec![1, 3],
+			vec![2, 4, 5],
+			vec![0, 1, 3],
+			vec![3],
+		];
+		let (adj, idx_adj) = convert_connectivity_to_csr(&conn);
+		assert_eq!(adj, vec![1, 4, 0, 2, 4, 1, 3, 2, 4, 5, 0, 1, 3, 3]);
+		assert_eq!(idx_adj, vec![0, 2, 5, 7, 10, 13, 14]);
+		println!("{:?}, {:?}", adj, idx_adj);
+	}
 
 	#[test]
 	fn spectral_simple() {
@@ -136,7 +185,7 @@ mod test {
 
 	#[test]
 	fn spectral_n_synthetic() {
-		let l = crate::logical_design::get_large_logical_design(3000);
+		let l = crate::logical_design::get_large_logical_design(1000);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectvity = p.get_connectivity_as_vec_usize(&l);
@@ -152,5 +201,49 @@ mod test {
 			"Sign: {:?}",
 			by_sign.iter().map(|b| if *b { 1 } else { 0 }).collect_vec()
 		);
+	}
+
+	#[test]
+	fn metis_simple() {
+		let connectivity = vec![
+			vec![1, 2],
+			vec![0, 2],
+			vec![0, 1, 3],
+			vec![2, 4, 5],
+			vec![3, 5],
+			vec![3, 4],
+		];
+		let (part, _ncuts) = metis(&connectivity);
+		assert_eq!(part.len(), 6);
+		assert_eq!(part[0], part[1]);
+		assert_eq!(part[0], part[2]);
+		assert_ne!(part[0], part[3]);
+		assert_ne!(part[0], part[4]);
+		assert_ne!(part[0], part[5]);
+		println!("{:?}", part);
+	}
+
+	#[test]
+	fn metis_n_synthetic() {
+		let l = crate::logical_design::get_large_logical_design(30_000);
+		let mut p = PhysicalDesign::new();
+		p.extract_combs(&l);
+		let connectvity = p.get_connectivity_as_vec_usize(&l);
+		let (_part, ncuts) = metis(&connectvity);
+		println!("Edges cut: {ncuts}");
+		println!("N nodes: {}", connectvity.len());
+		//println!("Partition: {:?}", part);
+	}
+
+	#[test]
+	fn metis_2d_synthetic() {
+		let l = crate::logical_design::get_large_logical_design_2d(400);
+		let mut p = PhysicalDesign::new();
+		p.extract_combs(&l);
+		let connectvity = p.get_connectivity_as_vec_usize(&l);
+		let (_part, ncuts) = metis(&connectvity);
+		println!("Edges cut: {ncuts}");
+		println!("N nodes: {}", connectvity.len());
+		//println!("Partition: {:?}", part);
 	}
 }
