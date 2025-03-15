@@ -1,3 +1,5 @@
+use super::*;
+
 use core::{f64, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
@@ -11,11 +13,13 @@ use std::{
 };
 use std::{isize, usize};
 
+use crate::phy::placement::*;
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
 };
-use crate::{physical_partitioner, physical_placement::*};
+
+use super::placement::Placement;
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
 pub enum PlacementStrategy {
@@ -1369,7 +1373,7 @@ impl PhysicalDesign {
 		while partitions.len() < n_partitions {
 			if let Some(idx) = partitions.iter().position(|p| p.len() > 1) {
 				let nodes = partitions.remove(idx);
-				let (part_a, part_b) = physical_partitioner::kernighan_lin(&nodes, &connectivity);
+				let (part_a, part_b) = partition::kernighan_lin(&nodes, &connectivity);
 				partitions.push(part_a);
 				partitions.push(part_b);
 			} else {

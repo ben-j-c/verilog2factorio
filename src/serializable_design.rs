@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::logical_design::{
 	self, ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal,
 };
-use crate::physical_design::{Combinator, CombinatorId, PhysicalDesign};
+use crate::phy::{Combinator, CombinatorId, PhysicalDesign};
 use crate::signal_lookup_table;
 
 #[derive(Debug, Clone, Serialize)]
@@ -524,7 +524,7 @@ fn resolve_network(val: (bool, bool)) -> Option<HashMap<String, bool>> {
 
 #[cfg(test)]
 mod test {
-	use crate::physical_design::PlacementStrategy;
+	use crate::phy::PlacementStrategy;
 
 	use super::*;
 	#[test]

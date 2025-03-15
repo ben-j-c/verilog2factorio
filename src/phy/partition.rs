@@ -1,9 +1,5 @@
-use core::num;
-
 use itertools::Itertools;
 use nalgebra::{DMatrix, SymmetricEigen};
-
-use crate::physical_design;
 
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
@@ -133,7 +129,7 @@ pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, 
 
 #[cfg(test)]
 mod test {
-	use crate::physical_design::PhysicalDesign;
+	use crate::phy::PhysicalDesign;
 
 	use super::*;
 

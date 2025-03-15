@@ -1380,7 +1380,7 @@ mod test {
 	use std::{fs::File, io::BufReader};
 
 	use crate::{
-		physical_design::{PhysicalDesign, PlacementStrategy},
+		phy::{PhysicalDesign, PlacementStrategy},
 		serializable_design::SerializableDesign,
 	};
 

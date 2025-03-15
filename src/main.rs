@@ -4,22 +4,19 @@ use checked_design::CheckedDesign;
 use clap::Parser;
 use logical_design::LogicalDesign;
 use mapped_design::MappedDesign;
-use physical_design::{PhysicalDesign, PlacementStrategy};
+use phy::{PhysicalDesign, PlacementStrategy};
 use serializable_design::SerializableDesign;
 
 pub mod checked_design;
 mod connected_design;
 pub mod logical_design;
 mod mapped_design;
-mod physical_design;
+mod phy;
 mod serializable_design;
 pub mod signal_lookup_table;
 
 mod ndarr;
 mod svg;
-
-mod physical_partitioner;
-mod physical_placement;
 
 /// Verilog to Factorio combinator compiler (v2f)
 #[derive(Parser, Debug)]

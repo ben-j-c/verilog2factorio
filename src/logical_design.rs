@@ -1955,7 +1955,7 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 #[cfg(test)]
 mod test {
 	use crate::{
-		physical_design::{PhysicalDesign, PlacementStrategy},
+		phy::{PhysicalDesign, PlacementStrategy},
 		serializable_design::SerializableDesign,
 		signal_lookup_table,
 	};
