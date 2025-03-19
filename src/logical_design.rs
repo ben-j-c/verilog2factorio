@@ -1955,9 +1955,7 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 #[cfg(test)]
 mod test {
 	use crate::{
-		phy::{PhysicalDesign, PlacementStrategy},
-		serializable_design::SerializableDesign,
-		signal_lookup_table,
+		phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
 	};
 
 	use super::*;
@@ -2037,7 +2035,7 @@ mod test {
 		d.for_all_topological_order(|x| println!("{:?}", x));
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d)
 	}
 
@@ -2052,7 +2050,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d)
 	}
 
@@ -2067,7 +2065,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("{}", blueprint_json);
@@ -2087,7 +2085,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("{}", blueprint_json);
@@ -2106,7 +2104,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("{}", blueprint_json);
@@ -2121,7 +2119,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2144,7 +2142,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2175,7 +2173,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2206,7 +2204,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2241,7 +2239,7 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2279,7 +2277,7 @@ mod test {
 		}
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
@@ -2344,7 +2342,21 @@ mod test {
 
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		p.build_from(&d, PlacementStrategy::default());
+		p.build_from(&d);
+		s.build_from(&p, &d);
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn nop_to_lamp() {
+		let mut d = LogicalDesign::new();
+		let nop = d.add_nop(Sig::Id(0), Sig::Id(0));
+		let lamp = d.add_lamp((Sig::None, DeciderOperator::Equal, Sig::None));
+		d.add_wire_red_simple(nop, lamp);
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&d);
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);

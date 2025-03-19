@@ -1,0 +1,1 @@
+cargo test --release phy::partition::test::metis_n_synthetic -- --exact --nocapture

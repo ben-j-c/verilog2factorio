@@ -1,3 +1,4 @@
+use super::route::Topology;
 use super::*;
 
 use core::{f64, panic};
@@ -11,9 +12,10 @@ use std::{
 	hash::Hash,
 	vec,
 };
-use std::{isize, usize};
 
+use crate::ndarr::Arr2;
 use crate::phy::placement::*;
+use crate::util::{self, hash_map, hash_set, HashM, HashS};
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
 	svg::SVG,
@@ -21,15 +23,14 @@ use crate::{
 
 use super::placement::Placement;
 
-#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
-pub enum PlacementStrategy {
-	ConnectivityAveraging,
-	#[default]
-	MCMCSADense,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CombinatorId(usize);
+pub struct PhyId(usize);
+
+impl Default for PhyId {
+	fn default() -> Self {
+		Self(usize::MAX)
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WireId(usize);
@@ -61,12 +62,16 @@ impl TerminalId {
 pub struct PoleId(usize);
 
 #[derive(Debug)]
-pub struct Combinator {
-	pub id: CombinatorId,
+pub struct PhyNode {
+	pub id: PhyId,
 	pub logic: ld::NodeId,
+	pub wire_hop: WireHopType,
 	pub position: (f64, f64),
 	pub placed: bool,
 	pub orientation: u32,
+	pub partition: i32,
+	pub is_pole: bool,
+	pub routes: Vec<(TerminalId, PhyId, TerminalId, PhyId, PhyId)>
 }
 
 #[allow(dead_code)]
@@ -74,8 +79,8 @@ pub struct Combinator {
 pub struct Wire {
 	pub id: WireId,
 	pub logic: ld::NodeId,
-	pub node1_id: CombinatorId,
-	pub node2_id: CombinatorId,
+	pub node1_id: PhyId,
+	pub node2_id: PhyId,
 	pub terminal1_id: TerminalId,
 	pub terminal2_id: TerminalId,
 }
@@ -93,77 +98,84 @@ pub enum WireHopType {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct Pole {
-	pub id: PoleId,
-	pub logic: ld::NodeId,
-	pub position: (f64, f64),
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
 pub struct PhysicalDesign {
-	combs: Vec<Combinator>,
+	nodes: Vec<PhyNode>,
 	wires: Vec<Wire>,
-	poles: Vec<Pole>,
 
-	idx_combs: HashMap<ld::NodeId, CombinatorId>,
-	idx_wires: HashMap<ld::NodeId, WireId>,
-	idx_poles: HashMap<ld::NodeId, PoleId>,
-	space: HashMap<(i32, i32), SpaceNode>,
+	idx_combs: HashM<ld::NodeId, PhyId>,
+	idx_wires: HashM<ld::NodeId, WireId>,
+	space: Vec<Arr2<PhyId>>,
 
 	connected_wires: Vec<Vec<WireId>>,
-}
 
-#[allow(dead_code)]
-#[derive(Debug)]
-enum SpaceNode {
-	Combinator {
-		id: CombinatorId,
-		ld_id: ld::NodeId,
-	},
-	Pole {
-		id: PoleId,
-		hop_type: WireHopType,
-		ld_id: ld::NodeId,
-	},
+	global_space: Arr2<PhyId>,
+
+	side_length_single_partition: usize,
+	side_length_partitions: usize,
+	n_partitions: i32,
+	n_edges_cut: i32,
+	partition_assignments: Vec<(usize, usize)>,
+	local_assignments: Vec<Vec<(usize, usize)>>,
+	intra_partition_margin: usize,
 }
 
 #[allow(dead_code)]
 impl PhysicalDesign {
 	pub fn new() -> Self {
 		PhysicalDesign {
-			combs: vec![],
+			nodes: vec![],
 			wires: vec![],
-			poles: vec![],
-			idx_combs: HashMap::new(),
-			idx_wires: HashMap::new(),
-			idx_poles: HashMap::new(),
-			space: HashMap::new(),
+			idx_combs: hash_map(),
+			idx_wires: hash_map(),
+			space: vec![],
 			connected_wires: vec![],
+
+			global_space: Arr2::new([2, 1]),
+
+			side_length_single_partition: 100,
+			side_length_partitions: 1,
+			n_partitions: 1,
+			n_edges_cut: 0,
+			partition_assignments: vec![(0, 0)],
+			local_assignments: vec![vec![]],
+			intra_partition_margin: 0,
 		}
 	}
 
-	pub fn build_from(&mut self, logical: &LogicalDesign, placement_strategy: PlacementStrategy) {
+	pub fn build_from(&mut self, logical: &LogicalDesign) {
+		let partition_size = 1024;
+		let scale_factor = 1.5;
+		self.side_length_single_partition =
+			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		self.extract_combs(logical);
-		self.place_combs(logical, placement_strategy);
-		self.connect_combs(logical);
+		self.partition(logical, partition_size);
+		let connectivity = self.get_connectivity_as_vec_usize(logical);
+		let (
+			partition_local_connectivity,
+			partition_global_connectivity,
+			local_to_global,
+			global_to_local,
+		) = self.split_connections_to_local_and_global(&connectivity);
+
+		self.place_global(&partition_global_connectivity);
+		self.place_local(logical, &partition_local_connectivity, &local_to_global);
+		for i in 0..self.n_partitions {
+			self.connect_combs(logical, i);
+		}
+		self.global_freeze_and_route(
+			logical,
+			&partition_global_connectivity,
+			&local_to_global,
+			&global_to_local,
+		);
 		self.validate_against(logical);
 	}
 
-	pub fn for_all_combinators<F>(&self, mut func: F)
+	pub fn for_all_phy<F>(&self, mut func: F)
 	where
-		F: FnMut(&Combinator),
+		F: FnMut(&PhyNode),
 	{
-		for x in &self.combs {
-			func(x)
-		}
-	}
-
-	pub fn for_all_poles<F>(&self, mut func: F)
-	where
-		F: FnMut(&Pole),
-	{
-		for x in &self.poles {
+		for x in &self.nodes {
 			func(x)
 		}
 	}
@@ -183,13 +195,16 @@ impl PhysicalDesign {
 			| ld::NodeFunction::Decider { .. }
 			| ld::NodeFunction::Constant { .. }
 			| ld::NodeFunction::Lamp { .. } => {
-				let id = CombinatorId(self.combs.len());
-				self.combs.push(Combinator {
+				let id = PhyId(self.nodes.len());
+				self.nodes.push(PhyNode {
 					id,
 					logic: ld_node.id,
+					wire_hop: WireHopType::Medium,
 					position: (0.0, 0.0),
 					placed: false,
 					orientation: 4,
+					partition: 0,
+					is_pole: false,
 				});
 				self.idx_combs.insert(ld_node.id, id);
 				self.connected_wires.push(vec![]);
@@ -198,94 +213,55 @@ impl PhysicalDesign {
 		});
 	}
 
-	pub fn get_logical<'a>(&self, id: CombinatorId, logical: &'a LogicalDesign) -> &'a ld::Node {
-		let comb = &self.combs[id.0];
+	pub fn get_logical<'a>(&self, id: PhyId, logical: &'a LogicalDesign) -> &'a ld::Node {
+		let comb = &self.nodes[id.0];
 		let ld_node = logical.get_node(comb.logic);
 		ld_node
 	}
 
-	fn solve_as_connectivity_averaging(
-		&mut self,
-		logical: &LogicalDesign,
-	) -> Result<Vec<(usize, usize)>, ()> {
-		logical.for_all(|_, node| {
-			match node.function {
-				ld::NodeFunction::Arithmetic { .. }
-				| ld::NodeFunction::Decider { .. }
-				| ld::NodeFunction::Constant { .. }
-				| ld::NodeFunction::Lamp { .. } => {
-					self.recurse_place_comb(*self.idx_combs.get(&node.id).unwrap(), logical)
-				}
-				ld::NodeFunction::WireSum(..) => {}
-			};
-		});
-		let min_x = self
-			.combs
-			.iter()
-			.map(|c| c.position.0)
-			.min_by(|a, b| a.total_cmp(b))
-			.unwrap()
-			.floor();
-		let min_y = self
-			.combs
-			.iter()
-			.map(|c| c.position.1)
-			.min_by(|a, b| a.total_cmp(b))
-			.unwrap()
-			.floor();
-		for c in &mut self.combs {
-			c.position.0 -= min_x;
-			c.position.1 -= min_y;
-		}
-		let mut ret = vec![(0, 0); self.combs.len()];
-		for (idx, c) in self.combs.iter().enumerate() {
-			ret[idx] = (c.position.0.round() as usize + 1, c.position.1 as usize);
-		}
-		self.save_svg(logical, "./svg/internal_cavg.svg");
-		self.reset_place_route();
-		Ok(ret)
-	}
-
-	fn get_initializations(&self, logical: &LogicalDesign) -> Vec<Vec<(usize, usize)>> {
-		let side_length = (self.combs.len() as f64 * 2.0).sqrt().ceil() as usize;
+	fn get_initializations(
+		&self,
+		local_connectivity: &Vec<Vec<usize>>,
+	) -> Vec<Vec<(usize, usize)>> {
+		let side_length = (self.nodes.len() as f64 * 2.0).sqrt().ceil() as usize;
 		let mut retval = vec![];
-		retval.push(vec![(0, 0); self.combs.len()]);
+		retval.push(vec![(0, 0); self.nodes.len()]);
 		{
 			let initial0 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y: isize = 0;
 			let mut ydir = 1;
-			for c in &self.get_bfs_order(CombinatorId(0), logical) {
+			for c in &self.get_bfs_order(0, local_connectivity) {
 				if y >= side_length as isize || y < 0 {
 					x += 2;
 					ydir = -ydir;
 					y += ydir;
 				}
-				initial0[c.0] = (x, y as usize);
+				initial0[*c] = (x, y as usize);
 				y += ydir;
 			}
 		}
-		retval.push(vec![(0, 0); self.combs.len()]);
+		retval.push(vec![(0, 0); self.nodes.len()]);
 		{
 			let initial1 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
-			for c in &self.get_bfs_order(CombinatorId(0), logical) {
+			for c in &self.get_bfs_order(0, local_connectivity) {
 				if y >= side_length {
 					x += 2;
 					y = 0;
 				}
-				initial1[c.0] = (x, y);
+				initial1[*c] = (x, y);
 				y += 1;
 			}
 		}
-		retval.push(vec![(0, 0); self.combs.len()]);
+		retval.push(vec![(0, 0); self.nodes.len()]);
 		{
 			let initial2 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y: isize = 0;
 			let mut ydir = 1;
-			for c in 0..self.combs.len() {
+			for c in 0..self.nodes.len() {
 				if y >= side_length as isize || y < 0 {
 					x += 2;
 					ydir = -ydir;
@@ -295,12 +271,12 @@ impl PhysicalDesign {
 				y += ydir;
 			}
 		}
-		retval.push(vec![(0, 0); self.combs.len()]);
+		retval.push(vec![(0, 0); self.nodes.len()]);
 		{
 			let initial3 = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
-			for c in 0..self.combs.len() {
+			for c in 0..self.nodes.len() {
 				if y >= side_length {
 					x += 2;
 					y = 0;
@@ -309,14 +285,14 @@ impl PhysicalDesign {
 				y += 1;
 			}
 		}
-		if self.combs.len() > 100 {
-			retval.push(vec![(0, 0); self.combs.len()]);
+		if self.nodes.len() > 100 {
+			retval.push(vec![(0, 0); self.nodes.len()]);
 			let initial = retval.last_mut().unwrap();
 			let mut x = 0;
 			let mut y = 0;
 			let mut ydir = false;
-			for c in &self.get_bfs_order(CombinatorId(0), logical) {
-				initial[c.0] = (x, y as usize);
+			for c in &self.get_bfs_order(0, local_connectivity) {
+				initial[*c] = (x, y as usize);
 				x += 2;
 				if (x / 2) % 3 == 0 {
 					x -= 4;
@@ -334,45 +310,60 @@ impl PhysicalDesign {
 		retval
 	}
 
-	fn place_combs(&mut self, logical: &LogicalDesign, placement_strategy: PlacementStrategy) {
-		match placement_strategy {
-			PlacementStrategy::ConnectivityAveraging => {
-				let pos = self.solve_as_connectivity_averaging(logical).unwrap();
-				self.place_combs_physical_dense(&pos, logical).unwrap();
-			}
-			PlacementStrategy::MCMCSADense => {
-				let initializations = self.get_initializations(logical);
-				self.reset_place_route();
-				let comb_positions =
-					match self.solve_as_mcmc_dense(logical, 4.0, &initializations, None) {
-						Ok(pos) => pos,
-						Err(e) => {
-							println!("WARN: MCMC failed to place with scale 1.6");
-							println!("WARN: {}", e.0);
-							let _ = self.place_combs_physical_dense(&e.1, logical);
-							self.connect_combs(logical);
-							self.save_svg(logical, format!("./svg/failed{}.svg", 4.0).as_str());
-							panic!("failed to place");
-						}
-					};
-				if let Err(_) = self.place_combs_physical_dense(&comb_positions, logical) {
-					println!("Failed to place all cells. Here was the assignments:");
-					for (idx, p) in comb_positions.iter().enumerate() {
-						println!("{idx}: {:?}", p);
-					}
-					for (i, p_i) in comb_positions.iter().enumerate() {
-						for (j, p_j) in comb_positions.iter().enumerate() {
-							if j <= i {
-								continue;
-							}
-							if p_i == p_j {
-								println!("Found that {i} has the same assignment as {j}");
-							}
-						}
-					}
-					panic!("Have to bail due to failure in placement");
+	fn place_local(
+		&mut self,
+		logical: &LogicalDesign,
+		partition_local_connectivity: &Vec<Vec<Vec<usize>>>,
+		local_to_global: &Vec<Vec<usize>>,
+	) {
+		for partition in 0..self.n_partitions {
+			let initializations =
+				self.get_initializations(&partition_local_connectivity[partition as usize]);
+			self.space[partition as usize] = Arr2::new([
+				self.side_length_single_partition,
+				self.side_length_single_partition,
+			]);
+			let comb_positions = match Self::solve_as_mcmc_dense(
+				&partition_local_connectivity[partition as usize],
+				1.5,
+				&initializations,
+				None,
+				self.side_length_single_partition,
+			) {
+				Ok(pos) => pos,
+				Err(e) => {
+					println!("WARN: MCMC failed to place with scale 1.5");
+					println!("WARN: {}", e.0);
+					let _ =
+						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
+					self.connect_combs(logical, partition);
+					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
+					panic!("failed to place");
 				}
+			};
+			if let Err(_) = self.place_combs_physical_dense(
+				&comb_positions,
+				logical,
+				partition,
+				local_to_global,
+			) {
+				println!("Failed to place all cells. Here was the assignments:");
+				for (idx, p) in comb_positions.iter().enumerate() {
+					println!("{idx}: {:?}", p);
+				}
+				for (i, p_i) in comb_positions.iter().enumerate() {
+					for (j, p_j) in comb_positions.iter().enumerate() {
+						if j <= i {
+							continue;
+						}
+						if p_i == p_j {
+							println!("Found that {i} has the same assignment as {j}");
+						}
+					}
+				}
+				panic!("Have to bail due to failure in placement");
 			}
+			self.local_assignments[partition as usize] = comb_positions;
 		}
 	}
 
@@ -380,11 +371,18 @@ impl PhysicalDesign {
 		&mut self,
 		comb_positions: &Vec<(usize, usize)>,
 		logical: &LogicalDesign,
+		partition: i32,
+		local_to_global: &Vec<Vec<usize>>,
 	) -> Result<(), String> {
 		let mut failure = Ok(());
 		for (idx, (x, y)) in comb_positions.iter().enumerate() {
 			let p = (*x as f64, *y as f64);
-			let res2 = self.place_comb_physical(p, CombinatorId(idx), logical);
+			let res2 = self.place_comb_physical(
+				p,
+				PhyId(local_to_global[partition as usize][idx]),
+				logical,
+				Some(partition),
+			);
 			match res2.clone() {
 				Ok(_) => {}
 				Err(e) => {
@@ -419,27 +417,21 @@ impl PhysicalDesign {
 				(*x * 3 + (allocated_resources % 3)) as f64 * 2.0,
 				(*y * 5 + allocated_resources / 3) as f64,
 			);
-			self.place_comb_physical(p, CombinatorId(idx), logical)
+			self.place_comb_physical(p, PhyId(idx), logical, Some(0))
 				.unwrap();
 		}
 	}
 
 	pub fn solve_as_mcmc_dense(
-		&self,
-		ld: &LogicalDesign,
+		connections_per_node: &Vec<Vec<usize>>,
 		scale_factor: f64,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
+		side_length: usize,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
-		let side_length = (self.combs.len() as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
-		let num_cells = self.combs.len();
+		let num_cells = connections_per_node.len();
 
-		let connections = self.get_connectivity_as_edges(ld, true);
-		let connections_per_node = self
-			.get_connectivity_as_vec(ld)
-			.into_iter()
-			.map(|x| x.into_iter().map(|c| c.0).collect_vec())
-			.collect_vec();
+		let connections = adjacency_to_edges(connections_per_node, true);
 
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
 		let mut curr = Placement::from_initialization(vec![(0, 0); num_cells], side_length);
@@ -758,8 +750,8 @@ impl PhysicalDesign {
 	pub fn max_allowable_distance(
 		&self,
 		logical: &LogicalDesign,
-		id_comb_a: CombinatorId,
-		id_comb_b: CombinatorId,
+		id_comb_a: PhyId,
+		id_comb_b: PhyId,
 	) -> f64 {
 		let hop_spec_i = self
 			.get_logical(id_comb_a, logical)
@@ -775,11 +767,14 @@ impl PhysicalDesign {
 	}
 
 	fn reset_place_route(&mut self) {
-		self.space.clear();
+		for p in 0..self.n_partitions {
+			self.space[p as usize] =
+				Arr2::new([self.side_length_partitions, self.side_length_partitions]);
+		}
 		for x in &mut self.connected_wires {
 			x.clear();
 		}
-		for c in &mut self.combs {
+		for c in &mut self.nodes {
 			c.placed = false;
 		}
 	}
@@ -787,33 +782,40 @@ impl PhysicalDesign {
 	fn place_comb_physical(
 		&mut self,
 		position: (f64, f64),
-		id_to_place: CombinatorId,
+		id_to_place: PhyId,
 		logical: &LogicalDesign,
+		partition_opt: Option<i32>,
 	) -> Result<(), String> {
-		let pos_start = (position.0 as i32, position.1 as i32);
-		let comb_to_place = &mut self.combs[id_to_place.0];
+		let pos_start = (position.0 as usize, position.1 as usize);
+		let comb_to_place = &mut self.nodes[id_to_place.0];
 		let ld_node = logical.get_node(comb_to_place.logic);
 		let hop_spec = ld_node.function.wire_hop_type().wire_hop_spec();
-		for x in 0..hop_spec.dim.0 {
-			for y in 0..hop_spec.dim.1 {
+		for x in 0..hop_spec.dim.0 as usize {
+			for y in 0..hop_spec.dim.1 as usize {
 				let key = (pos_start.0 + x, pos_start.1 + y);
-				if self.space.contains_key(&key) {
-					return Result::Err(format!(
-						"Sub-cell ({x}, {y}) overlaps with an existing cell."
-					));
+				if let Some(partition) = partition_opt {
+					if self.space[partition as usize][key] != PhyId::default() {
+						return Result::Err(format!(
+							"Sub-cell ({x}, {y}) overlaps with an existing cell."
+						));
+					}
+				} else {
+					if self.global_space[key] != PhyId::default() {
+						return Result::Err(format!(
+							"Sub-cell ({x}, {y}) overlaps with an existing cell."
+						));
+					}
 				}
 			}
 		}
-		for x in 0..hop_spec.dim.0 {
-			for y in 0..hop_spec.dim.1 {
+		for x in 0..hop_spec.dim.0 as usize {
+			for y in 0..hop_spec.dim.1 as usize {
 				let key = (pos_start.0 + x, pos_start.1 + y);
-				self.space.insert(
-					key,
-					SpaceNode::Combinator {
-						id: id_to_place,
-						ld_id: comb_to_place.logic,
-					},
-				);
+				if let Some(partition) = partition_opt {
+					self.space[partition as usize][key] = id_to_place;
+				} else {
+					self.global_space[key] = id_to_place;
+				}
 			}
 		}
 		comb_to_place.position = (
@@ -824,147 +826,7 @@ impl PhysicalDesign {
 		Result::Ok(())
 	}
 
-	fn recurse_place_comb(&mut self, id: CombinatorId, logical: &LogicalDesign) {
-		if self.combs[id.0].placed {
-			return;
-		}
-		let sum = {
-			let ld_comb = self.get_logical(id, logical);
-			let ld_in_wire_fanin_red_iter = ld_comb
-				.fanin_red
-				.first() // Option<NodeId>
-				.map(|id| {
-					logical.assert_is_wire_sum(*id);
-					logical.get_node(*id).iter_fanin(WireColour::Red)
-				})
-				.into_iter()
-				.flatten();
-			let ld_in_wire_fanin_green_iter = ld_comb
-				.fanin_green
-				.first() // Option<NodeId>
-				.map(|id| {
-					logical.assert_is_wire_sum(*id);
-					logical.get_node(*id).iter_fanin(WireColour::Green)
-				})
-				.into_iter()
-				.flatten();
-			let ld_out_wire_fanout_red_iter = ld_comb
-				.fanout_red
-				.first() // Option<NodeId>
-				.map(|id| {
-					logical.assert_is_wire_sum(*id);
-					logical.get_node(*id).iter_fanout(WireColour::Red)
-				})
-				.into_iter()
-				.flatten();
-			let ld_out_wire_fanout_green_iter = ld_comb
-				.fanout_green
-				.first() // Option<NodeId>
-				.map(|id| {
-					logical.assert_is_wire_sum(*id);
-					logical.get_node(*id).iter_fanout(WireColour::Green)
-				})
-				.into_iter()
-				.flatten();
-			ld_in_wire_fanin_red_iter
-				.chain(ld_in_wire_fanin_green_iter)
-				.chain(ld_out_wire_fanout_red_iter)
-				.chain(ld_out_wire_fanout_green_iter)
-				.filter_map(|ld_id| {
-					let comb = &self.combs[self.idx_combs.get(ld_id).unwrap().0];
-					if comb.placed {
-						Some((comb.position, 1.0))
-					} else {
-						None
-					}
-				})
-				.reduce(|(pos, count), (pos2, count2)| {
-					((pos.0 + pos2.0, pos.1 + pos2.1), count + count2)
-				})
-		};
-		match sum {
-			Some((pos, count)) => {
-				let avg_pos = (pos.0 / count, pos.1 / count);
-				let mut good = false;
-				for offset in get_proposed_placements() {
-					let placement_pos = (
-						((avg_pos.0 + offset.0).floor() / 2.0).floor() * 2.0,
-						(avg_pos.1 + offset.1).floor(),
-					);
-					if self.place_comb_physical(placement_pos, id, logical).is_ok() {
-						good = true;
-						break;
-					}
-				}
-				if !good {
-					assert!(false, "Placement failed");
-				}
-			}
-			None => {
-				let mut good = false;
-				let mut offset_factor = 1.0;
-				while !good {
-					for offset in get_proposed_placements() {
-						if self
-							.place_comb_physical(
-								(offset.0 * offset_factor, offset.1 * offset_factor),
-								id,
-								logical,
-							)
-							.is_ok()
-						{
-							good = true;
-							break;
-						};
-					}
-					if offset_factor > 100.0 {
-						assert!(false, "Placement failed");
-					}
-					offset_factor += 1.0;
-				}
-			}
-		}
-		for fanout_wire_id in self
-			.get_logical(id, logical)
-			.iter_fanout(WireColour::Red)
-			.chain(self.get_logical(id, logical).iter_fanout(WireColour::Green))
-		{
-			let fo_node = logical.get_node(*fanout_wire_id);
-			match fo_node.function {
-				ld::NodeFunction::WireSum(c) => {
-					for fanout_combinator in fo_node.iter_fanout(c) {
-						self.recurse_place_comb(
-							*self.idx_combs.get(fanout_combinator).unwrap(),
-							logical,
-						)
-					}
-				}
-				_ => assert!(
-					false,
-					"A combinator is connected -- without a wire -- to another combinator."
-				),
-			}
-		}
-		for fanin_wire_id in self.get_logical(id, logical).fanin_red.iter() {
-			let fo_node = logical.get_node(*fanin_wire_id);
-			match fo_node.function {
-				ld::NodeFunction::WireSum(c) => {
-					for fanin_combinator in fo_node.iter_fanin(c) {
-						self.recurse_place_comb(
-							*self.idx_combs.get(fanin_combinator).unwrap(),
-							logical,
-						)
-					}
-				}
-				_ => assert!(
-					false,
-					"A combinator is connected -- without a wire -- to another combinator."
-				),
-			}
-		}
-	}
-
-	fn connect_combs(&mut self, logical: &LogicalDesign) {
+	fn connect_combs(&mut self, logical: &LogicalDesign, partition: i32) {
 		let mut global_edges: Vec<(ld::NodeId, Vec<(bool, ld::NodeId, bool, ld::NodeId)>)> = vec![];
 		logical.for_all(|_, ld_node| {
 			match &ld_node.function {
@@ -972,8 +834,8 @@ impl PhysicalDesign {
 					let mut edges = vec![];
 					for id_i in ld_node.iter_fanout(*c) {
 						for id_j in ld_node.iter_fanin(*c) {
-							let comb_i = &self.combs[self.idx_combs.get(id_i).unwrap().0];
-							let comb_j = &self.combs[self.idx_combs.get(id_j).unwrap().0];
+							let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
+							let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
 							let ld_node_i = logical.get_node(comb_i.logic);
 							let ld_node_j = logical.get_node(comb_j.logic);
 							let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
@@ -992,8 +854,8 @@ impl PhysicalDesign {
 								if id_i == id_j {
 									continue;
 								}
-								let comb_i = &self.combs[self.idx_combs.get(id_i).unwrap().0];
-								let comb_j = &self.combs[self.idx_combs.get(id_j).unwrap().0];
+								let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
+								let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
 								let ld_node_i = logical.get_node(comb_i.logic);
 								let ld_node_j = logical.get_node(comb_j.logic);
 								let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
@@ -1015,8 +877,8 @@ impl PhysicalDesign {
 								if id_i == id_j {
 									continue;
 								}
-								let comb_i = &self.combs[self.idx_combs.get(id_i).unwrap().0];
-								let comb_j = &self.combs[self.idx_combs.get(id_j).unwrap().0];
+								let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
+								let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
 								let ld_node_i = logical.get_node(comb_i.logic);
 								let ld_node_j = logical.get_node(comb_j.logic);
 								let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
@@ -1055,14 +917,14 @@ impl PhysicalDesign {
 		&mut self,
 		ld_id_wire: ld::NodeId,
 		fanin_a: bool,
-		id_comb_a: CombinatorId,
+		id_comb_a: PhyId,
 		fanin_b: bool,
-		id_comb_b: CombinatorId,
+		id_comb_b: PhyId,
 		logical: &LogicalDesign,
 	) {
 		let id_wire = self.wires.len();
-		let comb_a = &self.combs[id_comb_a.0];
-		let comb_b = &self.combs[id_comb_b.0];
+		let comb_a = &self.nodes[id_comb_a.0];
+		let comb_b = &self.nodes[id_comb_b.0];
 		let ld_comb_a = logical.get_node(comb_a.logic);
 		let ld_comb_b = logical.get_node(comb_b.logic);
 		let color = if let ld::NodeFunction::WireSum(color) = logical.get_node(ld_id_wire).function
@@ -1132,7 +994,7 @@ impl PhysicalDesign {
 		const GREY: (u8, u8, u8) = (230, 230, 230);
 		let mut svg = SVG::new();
 		let mut rects = vec![];
-		for c in &self.combs {
+		for c in &self.nodes {
 			let node = ld.get_node(c.logic);
 			let mut x = (c.position.0 * (SCALE + 2.0)) as i32;
 			let y = (c.position.1 * (SCALE + 2.0)) as i32;
@@ -1193,7 +1055,7 @@ impl PhysicalDesign {
 	fn validate_against(&self, ld: &LogicalDesign) {
 		return;
 		unreachable!();
-		for c in &self.combs {
+		for c in &self.nodes {
 			let ld_comb = ld.get_node(c.logic);
 			if ld_comb.is_constant() {
 				let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
@@ -1201,12 +1063,12 @@ impl PhysicalDesign {
 				let n3 = self
 					.get_network(c.id, TerminalId::output_constant(WireColour::Red))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				let n4 = self
 					.get_network(c.id, TerminalId::output_constant(WireColour::Green))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				println!("\n\n{:?}", self.connected_wires);
 				assert_eq!(n1, n3);
@@ -1217,12 +1079,12 @@ impl PhysicalDesign {
 				let n3 = self
 					.get_network(c.id, TerminalId::input(WireColour::Red))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				let n4 = self
 					.get_network(c.id, TerminalId::input(WireColour::Green))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				assert_eq!(n1, n3);
 				assert_eq!(n2, n4);
@@ -1233,12 +1095,12 @@ impl PhysicalDesign {
 				let n3 = self
 					.get_network(c.id, TerminalId::output_combinator(WireColour::Red))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				let n4 = self
 					.get_network(c.id, TerminalId::output_combinator(WireColour::Green))
 					.iter()
-					.map(|(coid, _)| self.combs[coid.0].logic)
+					.map(|(coid, _)| self.nodes[coid.0].logic)
 					.collect();
 				assert_eq!(n1, n3);
 				assert_eq!(n2, n4);
@@ -1248,14 +1110,14 @@ impl PhysicalDesign {
 
 	pub(crate) fn get_network(
 		&self,
-		coid: CombinatorId,
+		coid: PhyId,
 		terminal: TerminalId,
-	) -> HashSet<(CombinatorId, TerminalId)> {
+	) -> HashSet<(PhyId, TerminalId)> {
 		let mut queue = LinkedList::new();
 		let mut seen: HashSet<WireId> = HashSet::new();
 		let mut retval = HashSet::new();
 		let add_wires_on_terminal =
-			|coid: CombinatorId, terminal: TerminalId, queue: &mut LinkedList<WireId>| {
+			|coid: PhyId, terminal: TerminalId, queue: &mut LinkedList<WireId>| {
 				for wiid in &self.connected_wires[coid.0] {
 					let wire = &self.wires[wiid.0];
 					if wire.node1_id == coid && wire.terminal1_id == terminal
@@ -1281,11 +1143,10 @@ impl PhysicalDesign {
 		retval
 	}
 
-	fn get_bfs_order(&self, coid: CombinatorId, ld: &LogicalDesign) -> Vec<CombinatorId> {
-		let connections = self.get_connectivity_as_vec(ld);
+	fn get_bfs_order(&self, coid: usize, connections: &Vec<Vec<usize>>) -> Vec<usize> {
 		let mut queue = LinkedList::new();
-		let mut seen_comb: HashSet<CombinatorId> = HashSet::new();
-		let mut retval = Vec::with_capacity(self.combs.len());
+		let mut seen_comb: HashS<usize> = hash_set();
+		let mut retval = Vec::with_capacity(self.nodes.len());
 		queue.push_back(coid);
 		retval.push(coid);
 		while !queue.is_empty() {
@@ -1295,16 +1156,31 @@ impl PhysicalDesign {
 			}
 			seen_comb.insert(coid);
 			retval.push(coid);
-			for coid_faninfanout in &connections[coid.0] {
+			for coid_faninfanout in &connections[coid] {
 				queue.push_back(*coid_faninfanout);
 			}
 		}
 		retval
 	}
 
-	pub fn get_connectivity_as_vec(&self, ld: &LogicalDesign) -> Vec<Vec<CombinatorId>> {
-		let mut connections = vec![vec![]; self.combs.len()];
-		for cell in &self.combs {
+	// Return two maps. First one local_to_global[partition][local_id] -> global_id.
+	// Second one global_to_local[partition][global_id] -> local_id.
+	// local_id : "the id in the partition"
+	// global_id : "the id in the self.combs array"
+	fn get_partition_id_mapping(&self) -> (Vec<Vec<usize>>, Vec<HashM<usize, usize>>) {
+		let mut local_to_global = vec![vec![]; self.n_partitions as usize];
+		let mut global_to_local = vec![util::hash_map(); self.n_partitions as usize];
+		for cell in &self.nodes {
+			let local_id = local_to_global[cell.partition as usize].len();
+			local_to_global[cell.partition as usize].push(cell.id.0);
+			global_to_local[cell.partition as usize].insert(cell.id.0, local_id);
+		}
+		(local_to_global, global_to_local)
+	}
+
+	pub fn get_connectivity_as_vec(&self, ld: &LogicalDesign) -> Vec<Vec<PhyId>> {
+		let mut connections = vec![vec![]; self.nodes.len()];
+		for cell in &self.nodes {
 			for ldid in ld.get_connected_combs(cell.logic) {
 				connections[cell.id.0].push(*self.idx_combs.get(&ldid).unwrap());
 			}
@@ -1313,8 +1189,8 @@ impl PhysicalDesign {
 	}
 
 	pub fn get_connectivity_as_vec_usize(&self, ld: &LogicalDesign) -> Vec<Vec<usize>> {
-		let mut connections = vec![vec![]; self.combs.len()];
-		for cell in &self.combs {
+		let mut connections = vec![vec![]; self.nodes.len()];
+		for cell in &self.nodes {
 			for ldid in ld.get_connected_combs(cell.logic) {
 				connections[cell.id.0].push(self.idx_combs.get(&ldid).unwrap().0);
 			}
@@ -1322,12 +1198,65 @@ impl PhysicalDesign {
 		connections
 	}
 
+	pub fn split_connections_to_local_and_global(
+		&self,
+		global_connections: &Vec<Vec<usize>>,
+	) -> (
+		Vec<Vec<Vec<usize>>>,
+		Vec<Vec<Vec<(i32, usize, usize)>>>,
+		Vec<Vec<usize>>,
+		Vec<HashM<usize, usize>>,
+	) {
+		let (local_to_global, global_to_local) = self.get_partition_id_mapping();
+		let mut partitions_local_connections = vec![];
+		for part in 0..self.n_partitions as usize {
+			partitions_local_connections.push(vec![vec![]; local_to_global[part].len()]);
+			let part_local_connections = partitions_local_connections.last_mut().unwrap();
+			for global_id in &local_to_global[part] {
+				let local_id = *global_to_local[part].get(global_id).unwrap();
+				for other_global_id in &global_connections[*global_id] {
+					let other_part = self.nodes[*other_global_id].partition;
+					if part == other_part as usize {
+						let other_local_id = *global_to_local[part].get(global_id).unwrap();
+						part_local_connections[local_id].push(other_local_id);
+					}
+				}
+			}
+		}
+		let mut partitions_global_connections = vec![];
+		for part in 0..self.n_partitions as usize {
+			partitions_global_connections.push(vec![vec![]; local_to_global[part].len()]);
+			let global_connections_part = partitions_global_connections.last_mut().unwrap();
+			for global_id in &local_to_global[part] {
+				let local_id = *global_to_local[part].get(global_id).unwrap();
+				for other_global_id in &global_connections[*global_id] {
+					let other_part = self.nodes[*other_global_id].partition;
+					if part != other_part as usize {
+						let other_local_id =
+							*global_to_local[other_part as usize].get(global_id).unwrap();
+						global_connections_part[local_id].push((
+							other_part,
+							other_local_id,
+							*other_global_id,
+						));
+					}
+				}
+			}
+		}
+		(
+			partitions_local_connections,
+			partitions_global_connections,
+			local_to_global,
+			global_to_local,
+		)
+	}
+
 	pub fn get_connectivity_as_matrix(
 		&self,
 		ld: &LogicalDesign,
 		triangular: bool,
 	) -> Vec<Vec<bool>> {
-		let mut connections = vec![vec![false; self.combs.len()]; self.combs.len()];
+		let mut connections = vec![vec![false; self.nodes.len()]; self.nodes.len()];
 		let conn_list = self.get_connectivity_as_vec(ld);
 		for (id_i, connected_i) in conn_list.iter().enumerate() {
 			for id_j in connected_i {
@@ -1358,37 +1287,337 @@ impl PhysicalDesign {
 		ret
 	}
 
-	pub fn partition(&self, ld: &LogicalDesign, target_size: usize) -> Vec<usize> {
-		let connectivity = self
-			.get_connectivity_as_vec(ld)
+	pub fn partition(&mut self, ld: &LogicalDesign, target_size: i32) {
+		let connectivity = self.get_connectivity_as_vec_usize(ld);
+		if target_size * 3 / 2 > connectivity.len() as i32 {
+			println!("Design small enough to skip partitioning.");
+			return;
+		}
+		let n_parts = (connectivity.len() as i32 / target_size) + 1;
+		let (partition, n_cuts) = partition::metis(&connectivity, n_parts);
+		partition::report_partition_quality(&partition, n_cuts, &connectivity, n_parts);
+		self.n_edges_cut = n_cuts;
+		self.n_partitions = n_parts;
+		for (id, p) in partition.iter().enumerate() {
+			assert!(*p >= 0, "");
+			self.nodes[id].partition = *p;
+		}
+		self.local_assignments = vec![vec![]; n_parts as usize];
+		let side_length = (n_parts as f64).sqrt().ceil() as usize;
+		self.partition_assignments = vec![];
+
+		for x in 0..side_length {
+			for y in 0..side_length {
+				self.partition_assignments.push((x, y));
+			}
+		}
+		self.partition_assignments = self
+			.partition_assignments
 			.iter()
-			.map(|v_of_coid| v_of_coid.iter().map(|coid| coid.0).collect_vec())
+			.take(n_parts as usize)
+			.cloned()
 			.collect_vec();
-		let n_cells = connectivity.len();
-
-		let n_partitions = n_cells / target_size;
-
-		let mut partitions: Vec<Vec<usize>> = vec![(0..n_cells).collect()];
-
-		while partitions.len() < n_partitions {
-			if let Some(idx) = partitions.iter().position(|p| p.len() > 1) {
-				let nodes = partitions.remove(idx);
-				let (part_a, part_b) = partition::kernighan_lin(&nodes, &connectivity);
-				partitions.push(part_a);
-				partitions.push(part_b);
-			} else {
-				break;
-			}
-		}
-
-		let mut result = vec![0; n_cells];
-		for (pid, part) in partitions.iter().enumerate() {
-			for &node in part.iter() {
-				result[node] = pid;
-			}
-		}
-		result
 	}
+
+	pub fn place_global(
+		&mut self,
+		partitions_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
+	) {
+		assert_eq!(
+			self.n_partitions as usize,
+			partitions_global_connectivity.len()
+		);
+		if self.n_partitions < 2 {
+			return;
+		}
+		// We need to have a way to simply connect those global cells. Each partition has an index, interior vec is the edges with weight.
+		let mut connectivity = vec![vec![]; self.n_partitions as usize];
+		// Sum up the number of edges between partitions, use as weight in algorithm.
+		for (pid, partition) in partitions_global_connectivity.iter().enumerate() {
+			let mut sum_edges = vec![0_usize; self.n_partitions as usize];
+			for single_node_edges in partition {
+				for edge in single_node_edges {
+					sum_edges[edge.0 as usize] += 1;
+				}
+			}
+			// Add an index to retain which partition it goes to, filter weight 0 edges.
+			connectivity[pid] = sum_edges
+				.into_iter()
+				.enumerate()
+				.filter(|(_, sum)| *sum > 0)
+				.collect_vec()
+		}
+	}
+
+	fn global_freeze(
+		&mut self,
+		logical: &LogicalDesign,
+		margin: usize,
+		partition_dims: (usize, usize),
+		local_to_global: &Vec<Vec<usize>>,
+	) {
+		for (part, (part_x, part_y)) in self.partition_assignments.clone().iter().enumerate() {
+			let mut failure = Ok(());
+			let comb_positions = self.local_assignments[part].clone();
+			for (idx, (x, y)) in comb_positions.iter().enumerate() {
+				let pos = (
+					(part_x * (partition_dims.0 + margin) + x + margin) as f64,
+					(part_y * (partition_dims.1 + margin) + y + margin) as f64,
+				);
+				let global_id = local_to_global[part][idx];
+				let res2 = self.place_comb_physical(pos, PhyId(global_id), logical, None);
+				match res2.clone() {
+					Ok(_) => {}
+					Err(e) => {
+						println!("Failed to place cell {idx} at position {:?}. {}", pos, e);
+					}
+				}
+				if failure.is_ok() {
+					failure = res2;
+				}
+			}
+		}
+	}
+
+	fn global_freeze_and_route(
+		&mut self,
+		logical: &LogicalDesign,
+		partition_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
+		local_to_global: &Vec<Vec<usize>>,
+		global_to_local: &Vec<HashM<usize, usize>>,
+	) {
+		let partition_dims = calculate_minimum_partition_dim(&self.local_assignments);
+		let edges_to_route =
+			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
+		for margin in 0..10 {
+			self.intra_partition_margin = margin;
+			self.reset_place_route();
+			self.global_freeze(logical, margin, partition_dims, local_to_global);
+			for (i, edge) in edges_to_route.iter().enumerate() {
+				let (input, output) = self.get_needed_routes(*edge, logical);
+				if input {
+					match self.route_single_edge(*edge) {
+						Ok(path) => {
+							self.commit_route(path, logical, PhyId(edge.0), PhyId(edge.1), true);
+						}
+						Err(s) => {
+							panic!("Failed durring routing on edge {i}: {s}");
+						}
+					}
+				}
+				if output {
+					match self.route_single_edge(*edge) {
+						Ok(path) => {
+							self.commit_route(path, logical, PhyId(edge.0), PhyId(edge.1), false);
+						}
+						Err(s) => {
+							panic!("Failed durring routing on edge {i}: {s}");
+						}
+					}
+				}
+			}
+		}
+	}
+
+	fn get_needed_routes(&self, edge: (usize, usize), logical: &LogicalDesign) -> (bool, bool) {
+		todo!()
+	}
+
+	fn commit_route(
+		&mut self,
+		mut path: Vec<SpaceIndex>,
+		logical: &LogicalDesign,
+		src: PhyId,
+		dst: PhyId,
+		is_input: bool,
+	) {
+		let mut last_id = {
+			let loc = path.pop().unwrap();
+			let id = PhyId(self.nodes.len());
+			let logic = self.nodes[src.0].logic;
+			self.nodes.push(PhyNode {
+				id,
+				logic,
+				wire_hop: WireHopType::Medium,
+				position: (loc.0 as f64, loc.1 as f64),
+				placed: true,
+				orientation: 4,
+				partition: -1,
+				is_pole: true,
+			});
+			self.global_space[(loc.0, loc.1)] = id;
+			let id_wire = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(id_wire),
+				logic,
+				node1_id: *self.idx_combs.get(&logic).unwrap(),
+				node2_id: id,
+				terminal1_id: ,
+				terminal2_id: (),
+			});
+			self.global_space[(loc.0, loc.1)] = id;
+			id_wire
+		};
+		while path.is_empty() {
+			let loc = path.pop().unwrap();
+			let id = PhyId(self.nodes.len());
+			self.nodes.push(PhyNode {
+				id,
+				logic: self.nodes[src.0].logic,
+				wire_hop: WireHopType::Medium,
+				position: (loc.0 as f64, loc.1 as f64),
+				placed: true,
+				orientation: 4,
+				partition: -1,
+				is_pole: true,
+			});
+			self.global_space[(loc.0, loc.1)] = id;
+		}
+	}
+
+	fn route_single_edge(&mut self, edge: (usize, usize)) -> Result<Vec<SpaceIndex>, String> {
+		let comb1 = &self.nodes[edge.0];
+		let comb2 = &self.nodes[edge.1];
+		let neig1 = self.get_neighbors(
+			&SpaceIndex(comb1.position.0 as usize, comb1.position.1 as usize),
+			&SpaceIndex(0, 0),
+		);
+
+		let neig2 = self.get_neighbors(
+			&SpaceIndex(comb1.position.0 as usize, comb1.position.1 as usize),
+			&SpaceIndex(0, 0),
+		);
+
+		let a = neig1
+			.into_iter()
+			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb1.position) <= 9.0)
+			.collect_vec();
+		let b = neig2
+			.into_iter()
+			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb2.position) <= 9.0)
+			.collect_vec();
+		let ret = route::a_star_initial_set(self, &a, &b, None, None);
+		if ret.is_empty() {
+			return Result::Err(format!("Could not route {} -> {}", edge.0, edge.1));
+		}
+		Result::Ok(ret)
+	}
+
+	fn get_neighbors(&self, index: &SpaceIndex, goal: &SpaceIndex) -> SpaceIter {
+		if index.0 < 0 || index.1 < 0 || goal.0 < 0 || goal.1 < 0 {
+			panic!("Tried to route in negative space.");
+		}
+		let min_x = (index.0 - 9).max(0);
+		let min_y = (index.1 + 9).max(0);
+		let max_x = index.0 - 9;
+		let max_y = index.1 + 9;
+		let mut ret = vec![];
+		for x in min_x..=max_x {
+			for y in min_y..=max_y {
+				let dx = x.abs_diff(index.0) as f32;
+				let dy = y.abs_diff(index.1) as f32;
+				let distance = (dx * dx + dy * dy).sqrt();
+				if distance <= 9.0 && self.global_space[(x, y)] == PhyId::default() {
+					ret.push(SpaceIndex(x, y));
+				}
+			}
+		}
+		SpaceIter { points: ret }
+	}
+}
+
+pub(crate) fn calculate_minimum_partition_dim(
+	local_assignments: &Vec<Vec<(usize, usize)>>,
+) -> (usize, usize) {
+	let mut max_x = 0;
+	let mut max_y = 0;
+	for p in local_assignments {
+		for (x, y) in p {
+			max_x = max_x.max(*x);
+			max_y = max_y.max(*y);
+		}
+	}
+	(max_x, max_y)
+}
+
+pub(crate) fn adjacency_to_edges(
+	conn_list: &Vec<Vec<usize>>,
+	triangular: bool,
+) -> Vec<(usize, usize)> {
+	let mut ret = vec![];
+	for (id_i, connected_j) in conn_list.iter().enumerate() {
+		for id_j in connected_j {
+			if triangular && *id_j < id_i {
+				continue;
+			}
+			ret.push((id_i, *id_j));
+		}
+	}
+	ret
+}
+
+pub(crate) fn adjacency_to_edges_global_edges(
+	partition_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
+	local_to_global: &Vec<Vec<usize>>,
+) -> Vec<(usize, usize)> {
+	let mut ret = vec![];
+	for (part, edges) in partition_global_connectivity.iter().enumerate() {
+		for (local_id, adjacency) in edges.iter().enumerate() {
+			let global_id = local_to_global[part][local_id];
+			for neighbor in adjacency {
+				if global_id < neighbor.2 {
+					ret.push((global_id, neighbor.2));
+				}
+			}
+		}
+	}
+	ret
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+struct SpaceIndex(usize, usize);
+
+impl route::TopologyIndex for SpaceIndex {}
+
+struct SpaceIter {
+	points: Vec<SpaceIndex>,
+}
+
+impl Iterator for SpaceIter {
+	type Item = SpaceIndex;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.points.pop()
+	}
+}
+
+impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
+	type Iter = SpaceIter;
+
+	// Horribly inefficient. but w/e, we will see how slow.
+	fn neighbors(&'iter self, index: &SpaceIndex, goal: &SpaceIndex) -> Self::Iter {
+		self.get_neighbors(index, goal)
+	}
+
+	fn contains(&self, _index: &SpaceIndex) -> bool {
+		true
+	}
+
+	fn distance(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
+		let dx = b.0.abs_diff(a.0) as f32;
+		let dy = b.1.abs_diff(a.1) as f32;
+		(dx * dx + dy * dy).sqrt()
+	}
+
+	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
+		self.distance(a, b)
+	}
+}
+
+fn distance_diff(a: &(f64, f64), b: &(f64, f64)) -> f64 {
+	let dx = a.0 - b.0;
+	let dy = a.1 - b.1;
+	(dx * dx + dy * dy).sqrt()
 }
 
 #[allow(dead_code)]
@@ -1492,14 +1721,14 @@ mod test {
 	fn new() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_simple_logical_design();
-		p.build_from(&l, PlacementStrategy::default());
+		p.build_from(&l);
 	}
 
 	#[test]
 	fn n_combs() {
 		let mut p = PhysicalDesign::new();
 		let l = get_large_logical_design(200);
-		p.build_from(&l, PlacementStrategy::ConnectivityAveraging);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg");
 	}
 
@@ -1508,14 +1737,14 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_simple_logical_design();
 		println!("{l}");
-		p.build_from(&l, PlacementStrategy::ConnectivityAveraging);
+		p.build_from(&l);
 	}
 
 	#[test]
 	fn complex_40_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/complex40_mcmc_coarse15.svg");
 	}
 
@@ -1523,7 +1752,7 @@ mod test {
 	fn memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_large_memory_test_design(2_000);
-		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
 	}
 
@@ -1531,7 +1760,7 @@ mod test {
 	fn dense_memory_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_large_dense_memory_test_design(1_024);
-		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/dense_memory_n_mcmc_dense.svg");
 
 		let mut s = serializable_design::SerializableDesign::new();
@@ -1547,7 +1776,7 @@ mod test {
 			println!("==============={x}===============");
 			let mut p = PhysicalDesign::new();
 			let l = get_large_logical_design(x);
-			p.build_from(&l, PlacementStrategy::MCMCSADense);
+			p.build_from(&l);
 		}
 	}
 
@@ -1555,7 +1784,7 @@ mod test {
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = get_large_logical_design(500);
-		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
 
@@ -1563,7 +1792,7 @@ mod test {
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = get_large_logical_design_2d(50);
-		p.build_from(&l, PlacementStrategy::MCMCSADense);
+		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}
 }

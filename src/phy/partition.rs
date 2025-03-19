@@ -105,9 +105,9 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 	(by_median, by_sign)
 }
 
-pub(crate) fn metis(connectivity: &Vec<Vec<usize>>) -> (Vec<i32>, i32) {
+pub(crate) fn metis(connectivity: &Vec<Vec<usize>>, n_parts: i32) -> (Vec<i32>, i32) {
 	let (adj, idx_adj) = convert_connectivity_to_csr(connectivity);
-	let graph = metis::Graph::new(1, 2, &idx_adj, &adj).unwrap();
+	let graph = metis::Graph::new(1, n_parts, &idx_adj, &adj).unwrap();
 	let mut partition = vec![0; connectivity.len()];
 	let ret = graph.part_recursive(&mut partition).unwrap();
 	(partition, ret)
@@ -125,6 +125,38 @@ pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, 
 		idx_adj.push(idx);
 	}
 	(adj, idx_adj)
+}
+
+pub(crate) fn report_partition_quality(
+	part: &Vec<i32>,
+	n_cuts: i32,
+	connectivity: &Vec<Vec<usize>>,
+	n_parts: i32,
+) {
+	let n_edges: usize = connectivity.iter().map(|conn| conn.iter().count()).sum();
+	println!("Partition quality:");
+	println!(
+		"Edges cut: {n_cuts} ({:.3}%)",
+		n_cuts as f64 / n_edges as f64 * 100.0
+	);
+	println!("Edge cuts per partition: {})", n_cuts * 2 / n_parts,);
+	println!("N edges: {n_edges}");
+	println!("N nodes: {}", connectivity.len());
+	println!("N partitions: {}", n_parts);
+	let mut sizes = vec![0; n_parts as usize];
+	for x in part {
+		sizes[*x as usize] += 1;
+	}
+	let min_size = sizes.iter().min().unwrap();
+	let max_size = sizes.iter().max().unwrap();
+	let mut histogram = vec![0; (max_size - min_size + 1) as usize];
+	for x in &sizes {
+		histogram[x - min_size] += 1;
+	}
+	println!("Histogram of partition sizes:");
+	for (i, x) in histogram.iter().enumerate() {
+		println!("{:4}: {:4}", i + min_size, x);
+	}
 }
 
 #[cfg(test)]
@@ -209,7 +241,7 @@ mod test {
 			vec![3, 5],
 			vec![3, 4],
 		];
-		let (part, _ncuts) = metis(&connectivity);
+		let (part, _ncuts) = metis(&connectivity, 2);
 		assert_eq!(part.len(), 6);
 		assert_eq!(part[0], part[1]);
 		assert_eq!(part[0], part[2]);
@@ -221,25 +253,25 @@ mod test {
 
 	#[test]
 	fn metis_n_synthetic() {
-		let l = crate::logical_design::get_large_logical_design(30_000);
+		let n = 30_000;
+		let n_parts = n / 1000;
+		let l = crate::logical_design::get_large_logical_design(n as usize);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
-		let connectvity = p.get_connectivity_as_vec_usize(&l);
-		let (_part, ncuts) = metis(&connectvity);
-		println!("Edges cut: {ncuts}");
-		println!("N nodes: {}", connectvity.len());
-		//println!("Partition: {:?}", part);
+		let connectivity = p.get_connectivity_as_vec_usize(&l);
+		let (part, n_cuts) = metis(&connectivity, n_parts);
+		report_partition_quality(&part, n_cuts, &connectivity, n_parts);
 	}
 
 	#[test]
 	fn metis_2d_synthetic() {
-		let l = crate::logical_design::get_large_logical_design_2d(400);
+		let n = 500;
+		let n_parts = n * n / 1000;
+		let l = crate::logical_design::get_large_logical_design_2d(n as usize);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
-		let connectvity = p.get_connectivity_as_vec_usize(&l);
-		let (_part, ncuts) = metis(&connectvity);
-		println!("Edges cut: {ncuts}");
-		println!("N nodes: {}", connectvity.len());
-		//println!("Partition: {:?}", part);
+		let connectivity = p.get_connectivity_as_vec_usize(&l);
+		let (part, n_cuts) = metis(&connectivity, n_parts);
+		report_partition_quality(&part, n_cuts, &connectivity, n_parts);
 	}
 }

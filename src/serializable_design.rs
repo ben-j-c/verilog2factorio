@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::logical_design::{
 	self, ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal,
 };
-use crate::phy::{Combinator, CombinatorId, PhysicalDesign};
+use crate::phy::{PhyId, PhyNode, PhysicalDesign};
 use crate::signal_lookup_table;
 
 #[derive(Debug, Clone, Serialize)]
@@ -250,8 +250,8 @@ impl SerializableDesign {
 
 	pub fn build_from(&mut self, physical: &PhysicalDesign, logical: &LogicalDesign) {
 		let mut entities = vec![];
-		let mut idx_entities: HashMap<CombinatorId, usize> = HashMap::new();
-		physical.for_all_combinators(|comb| {
+		let mut idx_entities: HashMap<PhyId, usize> = HashMap::new();
+		physical.for_all_phy(|comb| {
 			entities.push(Entity {
 				entity_number: entities.len() + 1,
 				name: comb.resolve_name(logical),
@@ -267,7 +267,6 @@ impl SerializableDesign {
 			});
 			idx_entities.insert(comb.id, entities.len());
 		});
-		physical.for_all_poles(|_pole| {});
 		let mut wires = vec![];
 		physical.for_all_wires(|wire| {
 			wires.push(BlueprintWire {
@@ -282,7 +281,7 @@ impl SerializableDesign {
 	}
 }
 
-impl Combinator {
+impl PhyNode {
 	fn resolve_name(&self, logical: &LogicalDesign) -> &'static str {
 		match &logical.get_node(self.logic).function {
 			logical_design::NodeFunction::Arithmetic { .. } => "arithmetic-combinator",
@@ -524,7 +523,6 @@ fn resolve_network(val: (bool, bool)) -> Option<HashMap<String, bool>> {
 
 #[cfg(test)]
 mod test {
-	use crate::phy::PlacementStrategy;
 
 	use super::*;
 	#[test]
@@ -532,7 +530,7 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
 		let l = logical_design::get_simple_logical_design();
-		p.build_from(&l, PlacementStrategy::default());
+		p.build_from(&l);
 		s.build_from(&p, &l);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("{}", blueprint_json);
