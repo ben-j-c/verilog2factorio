@@ -251,21 +251,24 @@ impl SerializableDesign {
 	pub fn build_from(&mut self, physical: &PhysicalDesign, logical: &LogicalDesign) {
 		let mut entities = vec![];
 		let mut idx_entities: HashMap<PhyId, usize> = HashMap::new();
-		physical.for_all_phy(|comb| {
+		physical.for_all_phy(|node| {
+			if node.is_pole {
+				todo!()
+			}
 			entities.push(Entity {
 				entity_number: entities.len() + 1,
-				name: comb.resolve_name(logical),
-				position: comb.position.into(),
-				direction: Some(comb.orientation),
+				name: node.resolve_name(logical),
+				position: node.position.into(),
+				direction: Some(node.orientation),
 				connections: None,
 				neighbours: None,
-				control_behavior: comb.resolve_control_behaviour(logical),
+				control_behavior: node.resolve_control_behaviour(logical),
 				variation: None,
 				switch_state: None,
 				tags: None,
-				player_description: comb.resolve_description(logical),
+				player_description: node.resolve_description(logical),
 			});
-			idx_entities.insert(comb.id, entities.len());
+			idx_entities.insert(node.id, entities.len());
 		});
 		let mut wires = vec![];
 		physical.for_all_wires(|wire| {

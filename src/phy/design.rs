@@ -70,7 +70,6 @@ pub struct Route {
 pub struct PhyNode {
 	pub id: PhyId,
 	pub logic: ld::NodeId,
-	pub wire_hop: WireHopType,
 	pub position: (f64, f64),
 	pub placed: bool,
 	pub orientation: u32,
@@ -205,7 +204,6 @@ impl PhysicalDesign {
 				self.nodes.push(PhyNode {
 					id,
 					logic: ld_node.id,
-					wire_hop: WireHopType::Medium,
 					position: (0.0, 0.0),
 					placed: false,
 					orientation: 4,
@@ -907,6 +905,14 @@ impl PhysicalDesign {
 				_ => { /* Do nothing for non-wires */ }
 			}
 		});
+		for (id, node) in self.nodes.iter().enumerate() {
+			if node.is_pole {
+				break;
+			}
+			for route in &node.routes {
+				global_edges.push(todo!());
+			}
+		}
 		for wires in global_edges {
 			for edge in wires.1 {
 				self.connect_wire(
@@ -1428,6 +1434,8 @@ impl PhysicalDesign {
 	}
 
 	fn get_needed_routes(&self, edge: (usize, usize), logical: &LogicalDesign) -> (bool, bool) {
+		let logic_id0 = self.nodes[edge.0].logic;
+		let logic_id1 = self.nodes[edge.1].logic;
 		todo!()
 	}
 
@@ -1439,7 +1447,6 @@ impl PhysicalDesign {
 			self.nodes.push(PhyNode {
 				id,
 				logic,
-				wire_hop: WireHopType::Medium,
 				position: (loc.0 as f64, loc.1 as f64),
 				placed: true,
 				orientation: 4,
@@ -1459,7 +1466,6 @@ impl PhysicalDesign {
 			self.nodes.push(PhyNode {
 				id,
 				logic: self.nodes[src.0].logic,
-				wire_hop: WireHopType::Medium,
 				position: (loc.0 as f64, loc.1 as f64),
 				placed: true,
 				orientation: 4,
@@ -1474,8 +1480,8 @@ impl PhysicalDesign {
 				logic: self.nodes[src.0].logic,
 				node1_id: last_id,
 				node2_id: id,
-				terminal1_id: TerminalId(1),
-				terminal2_id: TerminalId(1),
+				terminal1_id: TerminalId::input(WireColour::Red),
+				terminal2_id: TerminalId::input(WireColour::Red),
 			});
 			let wire_id = self.wires.len();
 			self.wires.push(Wire {
@@ -1483,11 +1489,12 @@ impl PhysicalDesign {
 				logic: self.nodes[src.0].logic,
 				node1_id: last_id,
 				node2_id: id,
-				terminal1_id: TerminalId(2),
-				terminal2_id: TerminalId(2),
+				terminal1_id: TerminalId::input(WireColour::Green),
+				terminal2_id: TerminalId::input(WireColour::Green),
 			});
 			self.global_space[(loc.0, loc.1)] = id;
 			last_id = id;
+			far_side_pole_id = last_id;
 		}
 
 		self.nodes[src.0].routes.push(Route {
@@ -1528,9 +1535,6 @@ impl PhysicalDesign {
 	}
 
 	fn get_neighbors(&self, index: &SpaceIndex, goal: &SpaceIndex) -> SpaceIter {
-		if index.0 < 0 || index.1 < 0 || goal.0 < 0 || goal.1 < 0 {
-			panic!("Tried to route in negative space.");
-		}
 		let min_x = (index.0 - 9).max(0);
 		let min_y = (index.1 + 9).max(0);
 		let max_x = index.0 - 9;

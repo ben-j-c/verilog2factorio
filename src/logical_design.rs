@@ -40,15 +40,8 @@ use crate::{
 	checked_design::CheckedDesign,
 	connected_design::CoarseExpr,
 	mapped_design::{BitSliceOps, MappedDesign},
+	util::{hash_set, HashS},
 };
-
-fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
-	HashSet::default()
-}
-
-fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64>> {
-	HashMap::default()
-}
 
 pub const NET_RED_GREEN: (bool, bool) = (true, true);
 pub const NET_RED: (bool, bool) = (true, false);
@@ -1666,11 +1659,7 @@ impl LogicalDesign {
 		ret.into_iter().collect_vec()
 	}
 
-	pub(crate) fn get_fanin_network(
-		&self,
-		ldid: NodeId,
-		colour: WireColour,
-	) -> HashSet<NodeId, BuildHasherDefault<FNV1aHasher64>> {
+	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
@@ -1681,11 +1670,7 @@ impl LogicalDesign {
 		retval
 	}
 
-	pub(crate) fn get_fanout_network(
-		&self,
-		ldid: NodeId,
-		colour: WireColour,
-	) -> HashSet<NodeId, BuildHasherDefault<FNV1aHasher64>> {
+	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
