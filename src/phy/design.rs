@@ -58,8 +58,13 @@ impl TerminalId {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PoleId(usize);
+#[derive(Debug)]
+pub struct Route {
+	input_sided: bool,
+	far_side_id: PhyId,
+	near_side_pole_id: PhyId,
+	far_side_pole_id: PhyId,
+}
 
 #[derive(Debug)]
 pub struct PhyNode {
@@ -71,7 +76,8 @@ pub struct PhyNode {
 	pub orientation: u32,
 	pub partition: i32,
 	pub is_pole: bool,
-	pub routes: Vec<(TerminalId, PhyId, TerminalId, PhyId, PhyId)>
+	pub routes: Vec<Route>,
+	pub foreign_routes: Vec<PhyId>,
 }
 
 #[allow(dead_code)]
@@ -205,6 +211,8 @@ impl PhysicalDesign {
 					orientation: 4,
 					partition: 0,
 					is_pole: false,
+					routes: vec![],
+					foreign_routes: vec![],
 				});
 				self.idx_combs.insert(ld_node.id, id);
 				self.connected_wires.push(vec![]);
@@ -1398,7 +1406,7 @@ impl PhysicalDesign {
 				if input {
 					match self.route_single_edge(*edge) {
 						Ok(path) => {
-							self.commit_route(path, logical, PhyId(edge.0), PhyId(edge.1), true);
+							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), true);
 						}
 						Err(s) => {
 							panic!("Failed durring routing on edge {i}: {s}");
@@ -1408,7 +1416,7 @@ impl PhysicalDesign {
 				if output {
 					match self.route_single_edge(*edge) {
 						Ok(path) => {
-							self.commit_route(path, logical, PhyId(edge.0), PhyId(edge.1), false);
+							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), false);
 						}
 						Err(s) => {
 							panic!("Failed durring routing on edge {i}: {s}");
@@ -1423,14 +1431,7 @@ impl PhysicalDesign {
 		todo!()
 	}
 
-	fn commit_route(
-		&mut self,
-		mut path: Vec<SpaceIndex>,
-		logical: &LogicalDesign,
-		src: PhyId,
-		dst: PhyId,
-		is_input: bool,
-	) {
+	fn commit_route(&mut self, mut path: Vec<SpaceIndex>, src: PhyId, dst: PhyId, is_input: bool) {
 		let mut last_id = {
 			let loc = path.pop().unwrap();
 			let id = PhyId(self.nodes.len());
@@ -1444,20 +1445,14 @@ impl PhysicalDesign {
 				orientation: 4,
 				partition: -1,
 				is_pole: true,
+				routes: vec![],
+				foreign_routes: vec![],
 			});
 			self.global_space[(loc.0, loc.1)] = id;
-			let id_wire = self.wires.len();
-			self.wires.push(Wire {
-				id: WireId(id_wire),
-				logic,
-				node1_id: *self.idx_combs.get(&logic).unwrap(),
-				node2_id: id,
-				terminal1_id: ,
-				terminal2_id: (),
-			});
-			self.global_space[(loc.0, loc.1)] = id;
-			id_wire
+			id
 		};
+		let near_side_pole_id = last_id;
+		let mut far_side_pole_id = last_id;
 		while path.is_empty() {
 			let loc = path.pop().unwrap();
 			let id = PhyId(self.nodes.len());
@@ -1470,9 +1465,38 @@ impl PhysicalDesign {
 				orientation: 4,
 				partition: -1,
 				is_pole: true,
+				routes: vec![],
+				foreign_routes: vec![],
+			});
+			let wire_id = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(wire_id),
+				logic: self.nodes[src.0].logic,
+				node1_id: last_id,
+				node2_id: id,
+				terminal1_id: TerminalId(1),
+				terminal2_id: TerminalId(1),
+			});
+			let wire_id = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(wire_id),
+				logic: self.nodes[src.0].logic,
+				node1_id: last_id,
+				node2_id: id,
+				terminal1_id: TerminalId(2),
+				terminal2_id: TerminalId(2),
 			});
 			self.global_space[(loc.0, loc.1)] = id;
+			last_id = id;
 		}
+
+		self.nodes[src.0].routes.push(Route {
+			input_sided: is_input,
+			far_side_id: dst,
+			near_side_pole_id,
+			far_side_pole_id,
+		});
+		self.nodes[dst.0].foreign_routes.push(src);
 	}
 
 	fn route_single_edge(&mut self, edge: (usize, usize)) -> Result<Vec<SpaceIndex>, String> {
