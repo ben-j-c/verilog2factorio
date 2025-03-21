@@ -108,7 +108,6 @@ pub struct PhysicalDesign {
 	wires: Vec<Wire>,
 
 	idx_combs: HashM<ld::NodeId, PhyId>,
-	idx_wires: HashM<ld::NodeId, WireId>,
 	space: Vec<Arr2<PhyId>>,
 
 	connected_wires: Vec<Vec<WireId>>,
@@ -134,7 +133,6 @@ impl PhysicalDesign {
 			nodes: vec![],
 			wires: vec![],
 			idx_combs: hash_map(),
-			idx_wires: hash_map(),
 			space: vec![],
 			connected_wires: vec![],
 
@@ -182,15 +180,14 @@ impl PhysicalDesign {
 
 		self.place_global(&partition_global_connectivity);
 		self.place_local(logical, &partition_local_connectivity, &local_to_global);
-		for i in 0..self.n_partitions {
-			self.connect_combs(logical, i);
-		}
 		self.global_freeze_and_route(
 			logical,
 			&partition_global_connectivity,
 			&local_to_global,
 			&global_to_local,
 		);
+		self.connected_wires = vec![vec![]; self.nodes.len()];
+		self.connect_combs(logical);
 		self.validate_against(logical);
 	}
 
@@ -360,7 +357,6 @@ impl PhysicalDesign {
 					println!("WARN: {}", e.0);
 					let _ =
 						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
-					self.connect_combs(logical, partition);
 					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
 					panic!("failed to place");
 				}
@@ -1099,12 +1095,10 @@ impl PhysicalDesign {
 			self.space[p as usize] =
 				Arr2::new([self.side_length_partitions, self.side_length_partitions]);
 		}
-		for x in &mut self.connected_wires {
-			x.clear();
-		}
 		for c in &mut self.nodes {
 			c.placed = false;
 		}
+		self.wires.clear();
 	}
 
 	fn place_comb_physical(
@@ -1160,7 +1154,7 @@ impl PhysicalDesign {
 		Result::Ok(())
 	}
 
-	fn connect_combs(&mut self, logical: &LogicalDesign, partition: i32) {
+	fn connect_combs(&mut self, logical: &LogicalDesign) {
 		let mut global_edges: Vec<(ld::NodeId, Vec<(bool, ld::NodeId, bool, ld::NodeId)>)> = vec![];
 		logical.for_all(|_, ld_node| {
 			match &ld_node.function {
@@ -1301,6 +1295,8 @@ impl PhysicalDesign {
 				);
 			}
 		}
+		#[cfg(debug_assertions)]
+		println!("Wires {:?}", self.connected_wires);
 	}
 
 	fn connect_wire_to_pole(
@@ -1417,11 +1413,25 @@ impl PhysicalDesign {
 		const SCALE: f64 = 20.0;
 		const GREY: (u8, u8, u8) = (230, 230, 230);
 		let mut svg = SVG::new();
+		svg.add_rect(
+			0,
+			0,
+			SCALE as i32 * self.global_space.dims().0 as i32,
+			SCALE as i32 * self.global_space.dims().1 as i32,
+			(255, 255, 255),
+			None,
+			None,
+		);
 		let mut rects = vec![];
 		for c in &self.nodes {
 			let node = ld.get_node(c.logic);
 			let mut x = (c.position.0 * (SCALE + 2.0)) as i32;
 			let y = (c.position.1 * (SCALE + 2.0)) as i32;
+			if c.is_pole {
+				// Otter brown
+				rects.push(svg.add_circle(x, y, SCALE as i32 / 4, (101, 67, 33), None, None));
+				continue;
+			}
 			let (w, h, label, hover) = match &node.function {
 				ld::NodeFunction::Arithmetic { op, .. } => {
 					x -= SCALE as i32 / 2;

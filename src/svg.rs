@@ -49,6 +49,14 @@ enum Shape {
 		// (angle, cx, cy) for rotation; if None, no transform is applied.
 		rotate: Option<(f32, i32, i32)>,
 	},
+	Circle {
+		cx: i32,
+		cy: i32,
+		r: i32,
+		colour: (u8, u8, u8),
+		label: Option<String>,
+		hover: Option<String>,
+	},
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -173,6 +181,26 @@ impl SVG {
 			attachment_b,
 		};
 		self.shapes.push(Shape::Wire(line));
+		self.shapes.len() - 1
+	}
+
+	pub fn add_circle(
+		&mut self,
+		cx: i32,
+		cy: i32,
+		r: i32,
+		colour: (u8, u8, u8),
+		label: Option<String>,
+		hover: Option<String>,
+	) -> ShapeId {
+		self.shapes.push(Shape::Circle {
+			cx,
+			cy,
+			r,
+			colour,
+			label,
+			hover,
+		});
 		self.shapes.len() - 1
 	}
 
@@ -410,6 +438,31 @@ impl SVG {
 							font_size,
 							anchor.clone().unwrap_or_else(|| "start".to_string()),
 							text
+						));
+					}
+				}
+				Shape::Circle {
+					cx,
+					cy,
+					r,
+					colour,
+					label,
+					hover,
+				} => {
+					let colour_str = colour_to_string(*colour);
+					svg_data.push_str(&format!(
+						r#"<circle cx="{}" cy="{}" r="{}" fill="{}">"#,
+						cx, cy, r, colour_str
+					));
+					if let Some(txt) = &hover {
+						svg_data.push_str(&format!(r#"<title>{}</title>"#, txt));
+					}
+					svg_data.push_str("</circle>");
+
+					if let Some(txt) = &label {
+						svg_data.push_str(&format!(
+							r#"<text x="{}" y="{}" text-anchor="middle" alignment-baseline="middle" fill="black">{}</text>"#,
+							cx, cy, txt
 						));
 					}
 				}
