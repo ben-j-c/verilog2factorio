@@ -72,17 +72,15 @@ pub fn a_star<'a, T: Topology<'a, N, X>, N, X: TopologyIndex>(
 	topology: &'a T,
 	a: &X,
 	b: &X,
-	b_alt_condition: Option<f32>,
 	relaxion_param: Option<f32>,
 ) -> Vec<X> {
-	a_star_initial_set(topology, &[*a], &[*b], b_alt_condition, relaxion_param)
+	a_star_initial_set(topology, &[*a], &[*b], relaxion_param)
 }
 
 pub fn a_star_initial_set<'a, T: Topology<'a, N, X>, N, X: TopologyIndex>(
 	topology: &'a T,
 	a: &[X],
 	b: &[X],
-	b_alt_condition: Option<f32>,
 	relaxation: Option<f32>,
 ) -> Vec<X> {
 	if a.iter().any(|a| !topology.contains(a)) || !topology.contains(&b[0]) {
@@ -104,9 +102,7 @@ pub fn a_star_initial_set<'a, T: Topology<'a, N, X>, N, X: TopologyIndex>(
 	while !open_set.is_empty() {
 		let curr = open_set.pop().unwrap();
 		open_set_check.remove(&curr.id);
-		if b.contains(&curr.id)
-			|| b_alt_condition.is_some_and(|thresh| topology.distance(&curr.id, &b[0]) < thresh)
-		{
+		if b.contains(&curr.id) {
 			let mut just_came_from = curr.id;
 			let mut retval: Vec<X> = vec![];
 			while !a.contains(&just_came_from) {

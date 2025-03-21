@@ -1042,13 +1042,8 @@ impl Placement {
 	}
 }
 
-mod global {
-	use std::{
-		collections::{BTreeSet, HashSet},
-		hash::BuildHasherDefault,
-		mem::swap,
-		ops::Index,
-	};
+pub mod global {
+	use std::{collections::HashSet, hash::BuildHasherDefault, mem::swap};
 
 	use hashers::fnv::FNV1aHasher64;
 	use itertools::Itertools;

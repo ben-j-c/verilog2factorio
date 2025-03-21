@@ -438,6 +438,13 @@ impl LogicalDesign {
 		)
 	}
 
+	/// Add a combinator fitting the pattern that I call "no-operation". Converts the input signal to an output signal using an arithmetic combinator.
+	///
+	/// Returns the id for that new combinator.
+	pub fn add_nop_simple(&mut self) -> NodeId {
+		self.add_nop(Signal::Everything, Signal::Everything)
+	}
+
 	/// Add a combinator fitting the pattern that I call "negation". Equivalent to `!x` in Rust.
 	///
 	/// Returns the id for that new combinator.
@@ -1626,15 +1633,88 @@ impl LogicalDesign {
 	}
 
 	pub(crate) fn have_shared_wire(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
+		let (input, output) = self.have_shared_wire_discriminate_side(ldid_1, ldid_2);
+		input || output
+	}
+
+	pub(crate) fn have_shared_wire_discriminate_side(
+		&self,
+		ldid_1: NodeId,
+		ldid_2: NodeId,
+	) -> (bool, bool) {
+		let mut input_side = false;
+		let mut output_side = false;
 		let node = &self.nodes[ldid_1.0];
-		for wire in node.iter_fanin_both().chain(node.iter_fanout_both()) {
+		for wire in node.iter_fanin_both() {
 			if self
 				.get_node(*wire)
 				.iter_fanin_both()
 				.chain(self.get_node(*wire).iter_fanout_both())
 				.any(|id| *id == ldid_2)
 			{
-				return true;
+				input_side = true;
+				break;
+			}
+		}
+
+		for wire in node.iter_fanout_both() {
+			if self
+				.get_node(*wire)
+				.iter_fanin_both()
+				.chain(self.get_node(*wire).iter_fanout_both())
+				.any(|id| *id == ldid_2)
+			{
+				output_side = true;
+				break;
+			}
+		}
+		(input_side, output_side)
+	}
+
+	pub(crate) fn have_shared_wire_detailed(
+		&self,
+		id1: NodeId,
+		id2: NodeId,
+		colour: WireColour,
+		id1_input: bool,
+		id2_input: bool,
+	) -> bool {
+		let node = &self.nodes[id1.0];
+		if id1_input {
+			if id2_input {
+				for wire in node.iter_fanin(colour) {
+					return self
+						.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanout(colour))
+						.any(|id| *id == id2);
+				}
+			} else {
+				for wire in node.iter_fanin(colour) {
+					return self
+						.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanin(colour))
+						.any(|id| *id == id2);
+				}
+			}
+		} else {
+			if id2_input {
+				for wire in node.iter_fanout(colour) {
+					return self
+						.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanout(colour))
+						.any(|id| *id == id2);
+				}
+			} else {
+				for wire in node.iter_fanout(colour) {
+					return self
+						.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanin(colour))
+						.any(|id| *id == id2);
+				}
 			}
 		}
 		false

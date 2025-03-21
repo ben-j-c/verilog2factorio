@@ -47,17 +47,19 @@
 					"--no-run",
 					"--bin=v2f",
 					"--package=v2f",
-					"logical_design::test::ram",
-					"--",
-					"--exact",
-					"--show-output"
 				],
 				"filter": {
 					"name": "v2f",
-					"kind": "bin"
+					"kind": "bin",
 				}
 			},
-			"args": [],
+			"args": [
+				"--nocapture",
+				"phy::design::test::comb_pair",
+				"--",
+				"--exact",
+				"--show-output"
+			],
 			"cwd": "${workspaceFolder}"
 		}
 	]

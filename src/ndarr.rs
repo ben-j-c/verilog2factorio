@@ -45,6 +45,14 @@ where
 			dims: dims,
 		}
 	}
+
+	pub fn index_good(&self, idx: (usize, usize)) -> bool {
+		idx.0 < self.dims[0] && idx.1 < self.dims[1]
+	}
+
+	pub fn dims(&self) -> (usize, usize) {
+		(self.dims[0], self.dims[0])
+	}
 }
 
 #[cfg(test)]
