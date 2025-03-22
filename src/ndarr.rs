@@ -51,7 +51,7 @@ where
 	}
 
 	pub fn dims(&self) -> (usize, usize) {
-		(self.dims[0], self.dims[0])
+		(self.dims[0], self.dims[1])
 	}
 }
 

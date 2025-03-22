@@ -162,7 +162,7 @@ impl PhysicalDesign {
 	}
 
 	pub fn build_from(&mut self, logical: &LogicalDesign) {
-		let partition_size = self.user_partition_size.unwrap_or(1024);
+		let partition_size = self.user_partition_size.unwrap_or(32);
 		let scale_factor = 1.5;
 		self.side_length_single_partition =
 			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
@@ -741,7 +741,7 @@ impl PhysicalDesign {
 	}
 
 	pub fn solve_as_mcmc_global(
-		connections_per_node: &Vec<Vec<usize>>,
+		connections_per_node: &Vec<Vec<(usize, usize)>>,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
 		side_length: usize,
@@ -749,13 +749,13 @@ impl PhysicalDesign {
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
 		let num_cells = connections_per_node.len();
 
-		let connections = adjacency_to_edges(connections_per_node, true);
+		let connections = adjacency_to_edges_weighted(connections_per_node, false);
 
 		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
 		let mut curr =
 			GlobalPlacement::from_initialization(vec![(0, 0); num_cells], side_length, cell_size);
 
-		let mut max_density = 15;
+		let mut max_density = 1;
 
 		if initializations.is_empty() {
 			for cell in 0..num_cells {
@@ -803,7 +803,7 @@ impl PhysicalDesign {
 
 		let mut temp = init_temp.unwrap_or(20.0 + 5.0 * (num_cells as f64));
 		let cooling_rate = 1.0 - 1E-7;
-		let mut iterations = 20_000_000;
+		let iterations = 2_000;
 
 		let check_invariant_density = |plc: &GlobalPlacement, max_density: i32| {
 			for x in 0..plc.side_length {
@@ -821,20 +821,6 @@ impl PhysicalDesign {
 				if let Some(idx_prior) = seen.insert((x, y), idx) {
 					assert!(false);
 				}
-				assert!(x % 2 == 0);
-			}
-		};
-		let check_invariant_position = |plc: &GlobalPlacement| {
-			for x in 0..plc.side_length {
-				for y in 0..plc.side_length {
-					let count = plc.density((x, y));
-					if count > 0 && x % 2 == 1 {
-						assert!(false);
-					}
-				}
-			}
-			for (x, _) in plc.assignments.iter() {
-				assert!(x % 2 == 0);
 			}
 		};
 		let check_invariant_blocks_assignments_congruent = |plc: &GlobalPlacement| {
@@ -851,38 +837,14 @@ impl PhysicalDesign {
 		};
 		let check_invariants = |plc: &GlobalPlacement, max_density: i32| {
 			check_invariant_density(plc, max_density);
-			check_invariant_position(plc);
 			check_invariant_blocks_assignments_congruent(plc);
 		};
 
 		let mut new_best = false;
-		let mut stage_2 = false;
-		let mut final_stage = false;
 		let mut step = 0;
 		let mut trend_of_bests = vec![];
 		while step < iterations {
-			if best_cost.1 && !final_stage {
-				check_invariants(&curr, 1);
-				final_stage = true;
-				if (step as f64 / iterations as f64) < 0.05 {
-					iterations = (step as f64 * 4.0) as i32;
-				} else {
-					iterations = (step as f64 * 1.3) as i32;
-				}
-
-				println!("Entering final compacting stage.");
-				if best_cost.0 <= 0.0 {
-					break;
-				}
-			}
-
-			if !stage_2 && best_cost.2 * 100 < num_cells as i32 && max_density <= 1 {
-				//stage_2 = true;
-				//curr = best.clone();
-				//assignments_cost = best_cost;
-				//println!("Entering stage 2");
-			}
-
+			step += 1;
 			let mut new = curr.clone();
 
 			type METHOD = (
@@ -893,7 +855,7 @@ impl PhysicalDesign {
 					rng: &mut StdRng,
 					curr: &GlobalPlacement,
 					new: &mut GlobalPlacement,
-					connections_per_node: &Vec<Vec<usize>>,
+					connections_per_node: &Vec<Vec<(usize, usize)>>,
 					side_length: usize,
 					max_density: i32,
 				),
@@ -919,46 +881,26 @@ impl PhysicalDesign {
 				mthd!(10, false, true, glb::swap_random_energy_method),
 				mthd!(100, true, true, glb::swap_local_energy_method),
 			];
-			const METHODS_2: &[METHOD] = &[
-				mthd!(100, false, false, glb::ripup_replace_method),
-				mthd!(100, true, false, glb::swap_local_method),
-				mthd!(100, false, false, glb::swap_random_method),
-				mthd!(100, false, false, glb::ripup_range_method),
-				mthd!(100, false, false, glb::crack_in_two_method),
-				mthd!(100, true, false, glb::slide_puzzle_method),
-				mthd!(100, false, false, glb::slide_puzzle_method_worst_cells),
-				mthd!(100, false, false, glb::overflowing_cells_swap_local_method),
-				mthd!(100, false, true, glb::simulated_spring_method),
-				//mthd!(1000, false, true, glb::slide_puzzle_method_on_violations),
-				mthd!(10, true, true, glb::swap_local_energy_method),
-			];
 
 			// Select weighted method
 			{
-				let total_weight: usize = if stage_2 && !final_stage {
-					METHODS_2
-				} else {
-					METHODS
-				}
-				.iter()
-				.filter(|(_, can_run_if_final, after_best_found, _, _)| {
-					if final_stage {
-						*can_run_if_final
-					} else if new_best {
-						*after_best_found
-					} else {
-						true
-					}
-				})
-				.map(|(weight, _, _, _, _)| *weight)
-				.sum();
+				let total_weight: usize = METHODS
+					.iter()
+					.filter(
+						|(_, _can_run_if_final, after_best_found, _, _)| {
+							if new_best {
+								*after_best_found
+							} else {
+								true
+							}
+						},
+					)
+					.map(|(weight, _, _, _, _)| *weight)
+					.sum();
 
 				let pick = rng.random_range(0..total_weight);
 				let mut cumulative = 0;
-				for (weight, can_run_if_final, _, func, method_name) in METHODS {
-					if final_stage && !can_run_if_final {
-						continue;
-					}
+				for (weight, _can_run_if_final, _, func, _method_name) in METHODS {
 					cumulative += weight;
 					if pick < cumulative {
 						func(
@@ -970,8 +912,6 @@ impl PhysicalDesign {
 							max_density,
 						);
 						check_invariant_blocks_assignments_congruent(&new);
-						// This invariant should always be true, if not then a step has placed a node into an odd x block and is incorrect.
-						check_invariant_position(&new);
 						break;
 					}
 				}
@@ -1015,27 +955,19 @@ impl PhysicalDesign {
 				graph.save("svg/cost.svg").unwrap();
 			}
 
-			if !final_stage && (delta < 0.0 || new_cost.1)
-				|| final_stage && (delta < 0.0 && new_cost.1)
-			{
-				new.draw_placement(&connections, max_density)
-					.save("svg/global_placement.svg")
-					.unwrap();
+			if delta < 0.0 {
+				new.draw_placement(
+					&connections.iter().map(|(a, b, _w)| (*a, *b)).collect_vec(),
+					max_density,
+				)
+				.save("svg/global_placement.svg")
+				.unwrap();
 				best = new.clone();
 				curr = new;
 				best_cost = new_cost;
 				assignments_cost = best_cost;
 				println!("Best cost {} ({}), temp {}", best_cost.0, best_cost.2, temp);
 				trend_of_bests.push(best_cost);
-				if !final_stage && iterations - step < iterations / 10 {
-					println!("Boosting iterations {}", best_cost.0);
-					iterations = iterations * 25 / 20;
-					temp *= 1.12;
-				}
-
-				if final_stage {
-					check_invariant_unique_position(&best);
-				}
 			} else {
 				let p = f64::exp(-delta / temp);
 				if p > 1.0 || rng.random_bool(p) {
@@ -1228,11 +1160,12 @@ impl PhysicalDesign {
 			}
 		});
 
+		println!("{}", logical);
 		// Connect through routes.
 		let mut route_edges = vec![];
 		for (id, node) in self.nodes.iter().enumerate() {
 			if node.is_pole {
-				break;
+				continue;
 			}
 			for route in &node.routes {
 				route_edges.push((
@@ -1282,6 +1215,7 @@ impl PhysicalDesign {
 		}
 		for wire in route_edges {
 			self.connect_wire_to_pole(wire.0, wire.1, wire.2, logical, wire.3);
+			self.save_svg(logical, "svg/tmp.svg");
 		}
 		for wires in global_edges {
 			for edge in wires.1 {
@@ -1435,7 +1369,14 @@ impl PhysicalDesign {
 			let y = (c.position.1 * (SCALE + 2.0)) as i32;
 			if c.is_pole {
 				// Otter brown
-				rects.push(svg.add_circle(x, y, SCALE as i32 / 4, (101, 67, 33), None, None));
+				rects.push(svg.add_circle(
+					x + SCALE as i32,
+					y + SCALE as i32,
+					SCALE as i32 / 4,
+					(101, 67, 33),
+					None,
+					None,
+				));
 				continue;
 			}
 			let (w, h, label, hover) = match &node.function {
@@ -1790,6 +1731,18 @@ impl PhysicalDesign {
 				.filter(|(_, sum)| *sum > 0)
 				.collect_vec()
 		}
+		match Self::solve_as_mcmc_global(
+			&connectivity,
+			&vec![self.partition_assignments.clone()],
+			None,
+			self.side_length_partitions,
+			1,
+		) {
+			Ok(pos) => self.partition_assignments = pos,
+			Err((err, _)) => {
+				println!("Failed to do global placement, defaulting to dumb initialization. {err}")
+			}
+		}
 	}
 
 	fn global_freeze(
@@ -1827,24 +1780,28 @@ impl PhysicalDesign {
 	}
 
 	fn print_ascii_global_space(&self) {
-		println!("global_space:");
+		println!(
+			"global_space {} x {}:",
+			self.global_space.dims().0,
+			self.global_space.dims().1
+		);
 		print!("   ");
 		for i in 0..self.global_space.dims().0 {
-			print!(" {} ", i % 10);
+			print!(" {:3} ", i);
 		}
 		println!();
 		for y in 0..self.global_space.dims().1 {
 			print!("{y:3} ");
 			for x in 0..self.global_space.dims().0 {
 				if self.global_space[(x, y)] == PhyId::default() {
-					print!(" _ ");
+					print!(" ___ ");
 					continue;
 				}
 				let node = &self.nodes[self.global_space[(x, y)].0];
 				if node.is_pole {
-					print!(" P ");
+					print!(" _P_ ");
 				} else {
-					print!(" {} ", self.global_space[(x, y)].0)
+					print!(" {:3} ", self.global_space[(x, y)].0)
 				}
 			}
 			println!();
@@ -1865,12 +1822,17 @@ impl PhysicalDesign {
 		);
 		let edges_to_route =
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
-		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(0..=10);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(10..=10);
 		for margin in margin_range {
 			self.intra_partition_margin = margin;
 			self.reset_place_route();
 			self.global_freeze(logical, margin, partition_dims, local_to_global);
 			for (i, edge) in edges_to_route.iter().enumerate() {
+				#[cfg(debug_assertions)]
+				{
+					println!("Before routing {i}.");
+					//self.print_ascii_global_space();
+				}
 				let (input_sided, output_sided) = self.get_needed_routes(*edge, logical);
 				if input_sided {
 					match self.route_single_edge(*edge) {
@@ -1901,8 +1863,10 @@ impl PhysicalDesign {
 					}
 				}
 			}
-			#[cfg(debug_assertions)]
-			self.print_ascii_global_space();
+		}
+		#[cfg(debug_assertions)]
+		{
+			//self.print_ascii_global_space();
 		}
 	}
 
@@ -1998,10 +1962,10 @@ impl PhysicalDesign {
 
 		let a = neig1
 			.into_iter()
-			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb1.position) <= 8.0)
+			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb1.position) <= 7.0)
 			.collect_vec();
 		let b = neig2
-			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb2.position) <= 8.0)
+			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb2.position) <= 7.0)
 			.collect_vec();
 		let ret = route::a_star_initial_set(self, &a, &b, None);
 		if ret.is_empty() {
@@ -2011,8 +1975,8 @@ impl PhysicalDesign {
 	}
 
 	fn get_neighbors(&self, index: &SpaceIndex, _goal: &SpaceIndex) -> SpaceIter {
-		let min_x = index.0 - 9;
-		let min_y = index.1 - 9;
+		let min_x = (index.0 as isize - 9).max(0) as usize;
+		let min_y = (index.1 as isize - 9).max(0) as usize;
 		let max_x = index.0 + 9;
 		let max_y = index.1 + 9;
 		let mut ret = vec![];
@@ -2045,6 +2009,22 @@ pub(crate) fn calculate_minimum_partition_dim(
 		}
 	}
 	(max_x + 2, max_y + 1)
+}
+
+pub(crate) fn adjacency_to_edges_weighted(
+	conn_list: &Vec<Vec<(usize, usize)>>,
+	triangular: bool,
+) -> Vec<(usize, usize, usize)> {
+	let mut ret = vec![];
+	for (id_i, connected_j) in conn_list.iter().enumerate() {
+		for id_j in connected_j {
+			if triangular && id_j.0 < id_i {
+				continue;
+			}
+			ret.push((id_i, id_j.0, id_j.1));
+		}
+	}
+	ret
 }
 
 pub(crate) fn adjacency_to_edges(

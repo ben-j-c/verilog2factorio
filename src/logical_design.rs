@@ -1682,42 +1682,49 @@ impl LogicalDesign {
 		let node = &self.nodes[id1.0];
 		if id1_input {
 			if id2_input {
-				for wire in node.iter_fanin(colour) {
-					return self
-						.get_node(*wire)
-						.iter_fanin_both()
-						.chain(self.get_node(*wire).iter_fanout(colour))
-						.any(|id| *id == id2);
-				}
+				return node
+					.iter_fanin(colour)
+					.map(|wire| {
+						self.get_node(*wire)
+							.iter_fanin_both()
+							.chain(self.get_node(*wire).iter_fanout(colour))
+							.any(|id| *id == id2)
+					})
+					.any(|b| b);
 			} else {
-				for wire in node.iter_fanin(colour) {
-					return self
-						.get_node(*wire)
-						.iter_fanin_both()
-						.chain(self.get_node(*wire).iter_fanin(colour))
-						.any(|id| *id == id2);
-				}
+				return node
+					.iter_fanin(colour)
+					.map(|wire| {
+						self.get_node(*wire)
+							.iter_fanin_both()
+							.chain(self.get_node(*wire).iter_fanin(colour))
+							.any(|id| *id == id2)
+					})
+					.any(|b| b);
 			}
 		} else {
 			if id2_input {
-				for wire in node.iter_fanout(colour) {
-					return self
-						.get_node(*wire)
-						.iter_fanin_both()
-						.chain(self.get_node(*wire).iter_fanout(colour))
-						.any(|id| *id == id2);
-				}
+				return node
+					.iter_fanout(colour)
+					.map(|wire| {
+						self.get_node(*wire)
+							.iter_fanin_both()
+							.chain(self.get_node(*wire).iter_fanout(colour))
+							.any(|id| *id == id2)
+					})
+					.any(|b| b);
 			} else {
-				for wire in node.iter_fanout(colour) {
-					return self
-						.get_node(*wire)
-						.iter_fanin_both()
-						.chain(self.get_node(*wire).iter_fanin(colour))
-						.any(|id| *id == id2);
-				}
+				return node
+					.iter_fanout(colour)
+					.map(|wire| {
+						self.get_node(*wire)
+							.iter_fanin_both()
+							.chain(self.get_node(*wire).iter_fanin(colour))
+							.any(|id| *id == id2)
+					})
+					.any(|b| b);
 			}
 		}
-		false
 	}
 
 	pub(crate) fn get_connected_combs(&self, ldid: NodeId) -> Vec<NodeId> {

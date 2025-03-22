@@ -1261,14 +1261,18 @@ pub mod global {
 			&self.pos_map[assignment]
 		}
 
-		pub(crate) fn energy(&self, id: Num, connections_per_node: &Vec<Vec<usize>>) -> Num {
+		pub(crate) fn energy(
+			&self,
+			id: Num,
+			connections_per_node: &Vec<Vec<(usize, usize)>>,
+		) -> Num {
 			let mut retval = 0;
 			let (x1, y1) = self.assignment(id);
 			for neighbor in &connections_per_node[id] {
-				let (x2, y2) = self.assignment(*neighbor);
+				let (x2, y2) = self.assignment(neighbor.0);
 				let dx = x1.abs_diff(x2);
 				let dy = y1.abs_diff(y2);
-				retval += dx * dx + dy * dy;
+				retval += (dx * dx + dy * dy) * neighbor.1;
 			}
 			retval
 		}
@@ -1277,35 +1281,35 @@ pub mod global {
 			&self,
 			id: Num,
 			assignment: (Num, Num),
-			connections_per_node: &Vec<Vec<usize>>,
+			connections_per_node: &Vec<Vec<(usize, usize)>>,
 		) -> Num {
 			let mut retval = 0;
 			let (x1, y1) = assignment;
 			for neighbor in &connections_per_node[id] {
-				let (x2, y2) = self.assignment(*neighbor);
+				let (x2, y2) = self.assignment(neighbor.0);
 				let dx = x1.abs_diff(x2);
 				let dy = y1.abs_diff(y2);
-				retval += dx * dx + dy * dy;
+				retval += (dx * dx + dy * dy) * neighbor.1;
 			}
 			retval
 		}
 
 		pub(crate) fn compute_cost(
 			&self,
-			connections: &Vec<(usize, usize)>,
+			connections: &Vec<(usize, usize, usize)>,
 			max_density: i32,
 		) -> (f64, bool, i32) {
 			let mut cost = 0.0;
 			let mut sat_count = 0;
 			let mut sat = true;
-			for &(i, j) in connections {
+			for &(i, j, weight) in connections {
 				let (x_i, y_i) = self.assignment(i);
 				let (x_j, y_j) = self.assignment(j);
 				let dx = (x_i as isize - x_j as isize).abs() as f64;
 				let dy = (y_i as isize - y_j as isize).abs() as f64;
 				let r2distance = dx.powi(2) + dy.powi(2);
 				if dx > 1.0 || dy > 1.0 || dx == 1.0 && dy == 1.0 {
-					cost += r2distance.sqrt() / 10.0;
+					cost += weight as f64 * r2distance.sqrt() / 10.0;
 				}
 			}
 			for cell in 0..self.num_cells() {
@@ -1361,7 +1365,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		max_density: i32,
 	) {
@@ -1383,7 +1387,7 @@ pub mod global {
 		for cell in &ripup_cells {
 			loop {
 				let cxcy = (
-					rng.random_range(0..side_length) / 2 * 2,
+					rng.random_range(0..side_length),
 					rng.random_range(0..side_length),
 				);
 				if new.density(cxcy) < max_density {
@@ -1398,7 +1402,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		_max_density: i32,
 	) {
@@ -1443,7 +1447,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		_side_length: usize,
 		_max_density: i32,
 	) {
@@ -1469,12 +1473,15 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		max_density: i32,
 	) {
-		let region_w = rng.random_range(1..=10);
-		let region_h = rng.random_range(1..=10);
+		if side_length < 10 {
+			return;
+		}
+		let region_w = rng.random_range(1..=3);
+		let region_h = rng.random_range(1..=3);
 
 		let sx = rng.random_range(0..(side_length - region_w).max(1));
 		let sy = rng.random_range(0..(side_length - region_h).max(1));
@@ -1504,7 +1511,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		max_density: i32,
 	) {
@@ -1574,7 +1581,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		max_density: i32,
 	) {
@@ -1649,7 +1656,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		_side_length: usize,
 		max_density: i32,
 	) {
@@ -1681,7 +1688,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		_connections_per_node: &Vec<Vec<usize>>,
+		_connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		_max_density: i32,
 	) {
@@ -1722,7 +1729,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		connections_per_node: &Vec<Vec<usize>>,
+		connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		max_density: i32,
 	) {
@@ -1745,11 +1752,14 @@ pub mod global {
 						idx,
 						connections_per_node[idx]
 							.iter()
-							.map(|idx2| {
+							.map(|(idx2, weight)| {
 								let (x1, y1) = new.assignment(*idx2);
 								let dx = x1 as isize - *x0 as isize;
 								let dy = y1 as isize - *y0 as isize;
-								(dx * dx * dx.signum(), dy * dy * dy.signum())
+								(
+									dx * dx * dx.signum() * *weight as isize,
+									dy * dy * dy.signum() * *weight as isize,
+								)
 							})
 							.reduce(|(x0, y0), (x1, y1)| (x0 + x1, y0 + y1))
 							.unwrap_or((0, 0)),
@@ -1770,7 +1780,11 @@ pub mod global {
 						continue;
 					}
 					for cell2 in new.id_at(check_pos) {
-						if connections_per_node[cell1].contains(cell2) {
+						if connections_per_node[cell1]
+							.iter()
+							.map(|(a, b)| a)
+							.contains(cell2)
+						{
 							continue;
 						}
 						let (idx, (fx, fy)) = force[*cell2];
@@ -1901,12 +1915,12 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		connections_per_node: &Vec<Vec<usize>>,
+		connections_per_node: &Vec<Vec<(usize, usize)>>,
 		_side_length: usize,
 		_max_density: i32,
 	) {
 		let num_cells = new.num_cells();
-		let swap_count = exponential_distr_sample(rng.random(), 0.05, num_cells);
+		let swap_count = exponential_distr_sample(rng.random(), 0.05, num_cells) / 2 * 2;
 		let mut picked = vec![];
 
 		while picked.len() < swap_count {
@@ -1916,7 +1930,7 @@ pub mod global {
 			}
 		}
 
-		for i in 0..swap_count {
+		for i in (0..swap_count).step_by(2) {
 			let c1 = picked[i];
 			let c2 = picked[i + 1];
 			let e_before = new.energy(c1, connections_per_node) as f64
@@ -1937,7 +1951,7 @@ pub mod global {
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
 		new: &mut GlobalPlacement,
-		connections_per_node: &Vec<Vec<usize>>,
+		connections_per_node: &Vec<Vec<(usize, usize)>>,
 		side_length: usize,
 		_max_density: i32,
 	) {
