@@ -1296,7 +1296,13 @@ impl PhysicalDesign {
 			}
 		}
 		#[cfg(debug_assertions)]
-		println!("Wires {:?}", self.connected_wires);
+		{
+			println!("Wires {:?}", self.connected_wires);
+			println!("Detailed wires:");
+			for x in &self.wires {
+				println!("{:?}", x);
+			}
+		}
 	}
 
 	fn connect_wire_to_pole(
@@ -1477,8 +1483,8 @@ impl PhysicalDesign {
 		}
 		for wire in &self.wires {
 			svg.add_wire(
-				wire.node1_id.0,
-				wire.node2_id.0,
+				wire.node1_id.0 + 1,
+				wire.node2_id.0 + 1,
 				wire.terminal1_id.0 - 1,
 				wire.terminal2_id.0 - 1,
 			);

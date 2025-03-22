@@ -381,13 +381,21 @@ impl SVG {
 						1 | 3 => "green",
 						_ => unreachable!(),
 					};
-					let (rect_a, rect_b) =
-						match (self.shapes.get(l.shape_a), self.shapes.get(l.shape_b)) {
-							(Some(Shape::Rect(ra)), Some(Shape::Rect(rb))) => (ra, rb),
-							_ => panic!("Wire references non-rectangle shape!"),
-						};
-					let (x1, y1) = rect_attachment(rect_a, l.attachment_a);
-					let (x2, y2) = rect_attachment(rect_b, l.attachment_b);
+					let (x1, y1) = match self.shapes.get(l.shape_a) {
+						Some(Shape::Rect(ra)) => rect_attachment(ra, l.attachment_a),
+						Some(Shape::Circle { cx, cy, r, .. }) => {
+							circ_attachment(*cx, *cy, *r, l.attachment_a)
+						}
+						_ => panic!("Wire {:?} references invalid shape!", shape),
+					};
+
+					let (x2, y2) = match self.shapes.get(l.shape_b) {
+						Some(Shape::Rect(rb)) => rect_attachment(rb, l.attachment_b),
+						Some(Shape::Circle { cx, cy, r, .. }) => {
+							circ_attachment(*cx, *cy, *r, l.attachment_b)
+						}
+						_ => panic!("Wire {:?} references invalid shape!", shape),
+					};
 
 					svg_data.push_str(&format!(
 						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="1" />"#,
@@ -478,10 +486,25 @@ impl SVG {
 }
 
 fn rect_attachment(r: &RectData, attachment_index: u32) -> (i32, i32) {
-	let wx1 = r.x + (r.w as f32 * 0.25) as i32;
-	let wx2 = r.x + (r.w as f32 * 0.75) as i32;
-	let wy1 = r.y + (r.h as f32 * 0.25) as i32;
-	let wy2 = r.y + (r.h as f32 * 0.75) as i32;
+	let wx1 = r.x + (r.w as f32 * 0.75) as i32;
+	let wx2 = r.x + (r.w as f32 * 0.25) as i32;
+	let wy1 = r.y + (r.h as f32 * 0.75) as i32;
+	let wy2 = r.y + (r.h as f32 * 0.25) as i32;
+
+	match attachment_index {
+		3 => (wx1, wy1),
+		2 => (wx1, wy2),
+		1 => (wx2, wy1),
+		0 => (wx2, wy2),
+		_ => unreachable!(),
+	}
+}
+
+fn circ_attachment(cx: i32, cy: i32, r: i32, attachment_index: u32) -> (i32, i32) {
+	let wx1 = cx + (r as f32 * 0.75) as i32;
+	let wx2 = cx + (r as f32 * 0.25) as i32;
+	let wy1 = cy + (r as f32 * 0.75) as i32;
+	let wy2 = cy + (r as f32 * 0.25) as i32;
 
 	match attachment_index {
 		3 => (wx1, wy1),
