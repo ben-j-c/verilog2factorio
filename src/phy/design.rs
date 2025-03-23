@@ -14,6 +14,7 @@ use std::{
 	vec,
 };
 
+use crate::logical_design::NodeId;
 use crate::ndarr::Arr2;
 use crate::phy::placement::*;
 use crate::util::{self, hash_map, hash_set, HashM, HashS};
@@ -124,6 +125,8 @@ pub struct PhysicalDesign {
 
 	user_partition_margin: Option<usize>,
 	user_partition_size: Option<usize>,
+
+	route_cache: HashM<(usize, bool), (Vec<SpaceIndex>, Vec<PhyId>)>,
 }
 
 #[allow(dead_code)]
@@ -148,6 +151,7 @@ impl PhysicalDesign {
 
 			user_partition_margin: None,
 			user_partition_size: None,
+			route_cache: hash_map(),
 		}
 	}
 
@@ -162,7 +166,7 @@ impl PhysicalDesign {
 	}
 
 	pub fn build_from(&mut self, logical: &LogicalDesign) {
-		let partition_size = self.user_partition_size.unwrap_or(32);
+		let partition_size = self.user_partition_size.unwrap_or(64);
 		let scale_factor = 1.5;
 		self.side_length_single_partition =
 			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
@@ -187,6 +191,7 @@ impl PhysicalDesign {
 			&global_to_local,
 		);
 		self.connected_wires = vec![vec![]; self.nodes.len()];
+		println!("Connecting combs.");
 		self.connect_combs(logical);
 		self.validate_against(logical);
 	}
@@ -803,7 +808,7 @@ impl PhysicalDesign {
 
 		let mut temp = init_temp.unwrap_or(20.0 + 5.0 * (num_cells as f64));
 		let cooling_rate = 1.0 - 1E-7;
-		let iterations = 2_000;
+		let iterations = 20_000;
 
 		let check_invariant_density = |plc: &GlobalPlacement, max_density: i32| {
 			for x in 0..plc.side_length {
@@ -1031,6 +1036,7 @@ impl PhysicalDesign {
 			c.placed = false;
 		}
 		self.wires.clear();
+		self.route_cache = hash_map();
 	}
 
 	fn place_comb_physical(
@@ -1086,6 +1092,35 @@ impl PhysicalDesign {
 		Result::Ok(())
 	}
 
+	fn close_enough_to_connect(&self, logical: &LogicalDesign, id_i: NodeId, id_j: NodeId) -> bool {
+		let comb_i = &self.nodes[self.idx_combs.get(&id_i).unwrap().0];
+		let comb_j = &self.nodes[self.idx_combs.get(&id_j).unwrap().0];
+		let ld_node_i = logical.get_node(comb_i.logic);
+		let ld_node_j = logical.get_node(comb_j.logic);
+		let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
+		let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
+		let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
+		euclidean_distance_squared_f64_pair(comb_i.position, comb_j.position)
+			< min_distance * min_distance
+	}
+
+	fn close_enough_to_connect_phy(
+		&self,
+		logical: &LogicalDesign,
+		id_i: PhyId,
+		id_j: PhyId,
+	) -> bool {
+		let comb_i = &self.nodes[id_i.0];
+		let comb_j = &self.nodes[id_j.0];
+		let ld_node_i = logical.get_node(comb_i.logic);
+		let ld_node_j = logical.get_node(comb_j.logic);
+		let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
+		let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
+		let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
+		euclidean_distance_squared_f64_pair(comb_i.position, comb_j.position)
+			< min_distance * min_distance
+	}
+
 	fn connect_combs(&mut self, logical: &LogicalDesign) {
 		let mut global_edges: Vec<(ld::NodeId, Vec<(bool, ld::NodeId, bool, ld::NodeId)>)> = vec![];
 		logical.for_all(|_, ld_node| {
@@ -1094,16 +1129,7 @@ impl PhysicalDesign {
 					let mut edges = vec![];
 					for id_i in ld_node.iter_fanout(*c) {
 						for id_j in ld_node.iter_fanin(*c) {
-							let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
-							let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
-							let ld_node_i = logical.get_node(comb_i.logic);
-							let ld_node_j = logical.get_node(comb_j.logic);
-							let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
-							let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
-							let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
-							if euclidean_distance_squared_f64_pair(comb_i.position, comb_j.position)
-								< min_distance * min_distance
-							{
+							if self.close_enough_to_connect(logical, *id_i, *id_j) {
 								edges.push((false, *id_j, true, *id_i));
 							}
 						}
@@ -1114,18 +1140,7 @@ impl PhysicalDesign {
 								if id_i == id_j {
 									continue;
 								}
-								let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
-								let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
-								let ld_node_i = logical.get_node(comb_i.logic);
-								let ld_node_j = logical.get_node(comb_j.logic);
-								let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
-								let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
-								let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
-								if euclidean_distance_squared_f64_pair(
-									comb_i.position,
-									comb_j.position,
-								) < min_distance * min_distance
-								{
+								if self.close_enough_to_connect(logical, *id_i, *id_j) {
 									edges.push((false, *id_j, false, *id_i));
 								}
 							}
@@ -1137,18 +1152,7 @@ impl PhysicalDesign {
 								if id_i == id_j {
 									continue;
 								}
-								let comb_i = &self.nodes[self.idx_combs.get(id_i).unwrap().0];
-								let comb_j = &self.nodes[self.idx_combs.get(id_j).unwrap().0];
-								let ld_node_i = logical.get_node(comb_i.logic);
-								let ld_node_j = logical.get_node(comb_j.logic);
-								let hop_spec_i = ld_node_i.function.wire_hop_type().wire_hop_spec();
-								let hop_spec_j = ld_node_j.function.wire_hop_type().wire_hop_spec();
-								let min_distance = f64::min(hop_spec_i.reach, hop_spec_j.reach);
-								if euclidean_distance_squared_f64_pair(
-									comb_i.position,
-									comb_j.position,
-								) < min_distance * min_distance
-								{
+								if self.close_enough_to_connect(logical, *id_i, *id_j) {
 									edges.push((true, *id_j, true, *id_i));
 								}
 							}
@@ -1160,7 +1164,6 @@ impl PhysicalDesign {
 			}
 		});
 
-		println!("{}", logical);
 		// Connect through routes.
 		let mut route_edges = vec![];
 		for (id, node) in self.nodes.iter().enumerate() {
@@ -1215,7 +1218,6 @@ impl PhysicalDesign {
 		}
 		for wire in route_edges {
 			self.connect_wire_to_pole(wire.0, wire.1, wire.2, logical, wire.3);
-			self.save_svg(logical, "svg/tmp.svg");
 		}
 		for wires in global_edges {
 			for edge in wires.1 {
@@ -1227,14 +1229,6 @@ impl PhysicalDesign {
 					*self.idx_combs.get(&edge.3).unwrap(),
 					logical,
 				);
-			}
-		}
-		#[cfg(debug_assertions)]
-		{
-			println!("Wires {:?}", self.connected_wires);
-			println!("Detailed wires:");
-			for x in &self.wires {
-				println!("{:?}", x);
 			}
 		}
 	}
@@ -1822,12 +1816,16 @@ impl PhysicalDesign {
 		);
 		let edges_to_route =
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
-		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(10..=10);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=3);
 		for margin in margin_range {
+			println!("Starting routing with margin {margin}");
 			self.intra_partition_margin = margin;
 			self.reset_place_route();
 			self.global_freeze(logical, margin, partition_dims, local_to_global);
 			for (i, edge) in edges_to_route.iter().enumerate() {
+				if self.close_enough_to_connect_phy(logical, PhyId(edge.0), PhyId(edge.1)) {
+					continue;
+				}
 				#[cfg(debug_assertions)]
 				{
 					println!("Before routing {i}.");
@@ -1835,7 +1833,7 @@ impl PhysicalDesign {
 				}
 				let (input_sided, output_sided) = self.get_needed_routes(*edge, logical);
 				if input_sided {
-					match self.route_single_edge(*edge) {
+					match self.route_single_edge(*edge, true) {
 						Ok(path) => {
 							println!(
 								"Comitting route (input sided) {:?} -> {:?}: {:?}",
@@ -1844,12 +1842,13 @@ impl PhysicalDesign {
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), true);
 						}
 						Err(s) => {
-							panic!("Failed durring routing on edge {i}: {s}");
+							println!("Failed durring routing on edge {i}: {s}");
+							continue;
 						}
 					}
 				}
 				if output_sided {
-					match self.route_single_edge(*edge) {
+					match self.route_single_edge(*edge, false) {
 						Ok(path) => {
 							println!(
 								"Comitting route (output sided) {:?} -> {:?}: {:?}",
@@ -1858,7 +1857,8 @@ impl PhysicalDesign {
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), false);
 						}
 						Err(s) => {
-							panic!("Failed durring routing on edge {i}: {s}");
+							println!("Failed durring routing on edge {i}: {s}");
+							continue;
 						}
 					}
 				}
@@ -1877,7 +1877,13 @@ impl PhysicalDesign {
 	}
 
 	fn commit_route(&mut self, mut path: Vec<SpaceIndex>, src: PhyId, dst: PhyId, is_input: bool) {
-		let mut last_id = {
+		let cached_route: &mut (Vec<SpaceIndex>, Vec<PhyId>) =
+			self.route_cache.entry((src.0, is_input)).or_default();
+		let mut last_id = if let Some(idx) =
+			(0..cached_route.0.len()).find(|idx| cached_route.0[*idx] == path[0])
+		{
+			cached_route.1[idx]
+		} else {
 			let loc = path.pop().unwrap();
 			let id = PhyId(self.nodes.len());
 			let logic = self.nodes[src.0].logic;
@@ -1893,6 +1899,8 @@ impl PhysicalDesign {
 				foreign_routes: vec![],
 			});
 			self.global_space[(loc.0, loc.1)] = id;
+			cached_route.0.push(loc);
+			cached_route.1.push(id);
 			id
 		};
 		let near_side_pole_id = last_id;
@@ -1928,6 +1936,8 @@ impl PhysicalDesign {
 				terminal2_id: TerminalId::input(WireColour::Green),
 			});
 			self.global_space[(loc.0, loc.1)] = id;
+			cached_route.0.push(loc);
+			cached_route.1.push(id);
 			last_id = id;
 			far_side_pole_id = last_id;
 		}
@@ -1941,7 +1951,11 @@ impl PhysicalDesign {
 		self.nodes[dst.0].foreign_routes.push(src);
 	}
 
-	fn route_single_edge(&mut self, edge: (usize, usize)) -> Result<Vec<SpaceIndex>, String> {
+	fn route_single_edge(
+		&mut self,
+		edge: (usize, usize),
+		is_input: bool,
+	) -> Result<Vec<SpaceIndex>, String> {
 		let comb1 = &self.nodes[edge.0];
 		let comb2 = &self.nodes[edge.1];
 		let neig1 = self.get_neighbors(
@@ -1960,13 +1974,20 @@ impl PhysicalDesign {
 		.into_iter()
 		.chain(neig2);
 
-		let a = neig1
+		let mut a = neig1
 			.into_iter()
 			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb1.position) <= 7.0)
 			.collect_vec();
 		let b = neig2
 			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb2.position) <= 7.0)
 			.collect_vec();
+		a.extend(
+			self.route_cache
+				.entry((edge.0, is_input))
+				.or_default()
+				.0
+				.iter(),
+		);
 		let ret = route::a_star_initial_set(self, &a, &b, None);
 		if ret.is_empty() {
 			return Result::Err(format!("Could not route {} -> {}", edge.0, edge.1));
@@ -2235,7 +2256,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(500);
+		let l = get_large_logical_design(1000);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
