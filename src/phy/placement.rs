@@ -1308,9 +1308,9 @@ pub mod global {
 				let dx = (x_i as isize - x_j as isize).abs() as f64;
 				let dy = (y_i as isize - y_j as isize).abs() as f64;
 				let r2distance = dx.powi(2) + dy.powi(2);
-				if dx > 1.0 || dy > 1.0 || dx == 1.0 && dy == 1.0 {
-					cost += weight as f64 * r2distance.sqrt() / 10.0;
-				}
+				//if dx > 1.0 || dy > 1.0 || dx == 1.0 && dy == 1.0 {
+				cost += weight as f64 * r2distance.sqrt();
+				//}
 			}
 			for cell in 0..self.num_cells() {
 				let count = self.density(self.assignment(cell));

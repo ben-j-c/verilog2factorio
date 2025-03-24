@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"phy::design::test::synthetic_n_mcmc_dense",
+				"phy::design::test::memory_n_mcmc",
 				"--",
 				"--exact",
 				"--show-output"

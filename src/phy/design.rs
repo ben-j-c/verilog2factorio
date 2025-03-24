@@ -530,13 +530,14 @@ impl PhysicalDesign {
 			check_invariant_blocks_assignments_congruent(plc);
 		};
 
-		let mut new_best = false;
+		let mut new_best = true;
 		let mut stage_2 = false;
 		let mut final_stage = false;
 		let mut step = 0;
 		let mut trend_of_bests = vec![];
 		while step < iterations {
 			if best_cost.1 && !final_stage {
+				max_density = 1;
 				check_invariants(&curr, 1);
 				final_stage = true;
 				if (step as f64 / iterations as f64) < 0.05 {
@@ -546,7 +547,7 @@ impl PhysicalDesign {
 				}
 
 				println!("Entering final compacting stage.");
-				if best_cost.0 <= 0.0 {
+				if best_cost.0 <= 0.0 && step > 1_000 {
 					break;
 				}
 			}
@@ -846,7 +847,7 @@ impl PhysicalDesign {
 		};
 
 		let mut new_best = false;
-		let mut step = 0;
+		let mut step = 1000;
 		let mut trend_of_bests = vec![];
 		while step < iterations {
 			step += 1;
@@ -1131,6 +1132,8 @@ impl PhysicalDesign {
 						for id_j in ld_node.iter_fanin(*c) {
 							if self.close_enough_to_connect(logical, *id_i, *id_j) {
 								edges.push((false, *id_j, true, *id_i));
+							} else {
+								println!("WARN {}, {}", id_i.0, id_j.0);
 							}
 						}
 					}
@@ -1142,6 +1145,8 @@ impl PhysicalDesign {
 								}
 								if self.close_enough_to_connect(logical, *id_i, *id_j) {
 									edges.push((false, *id_j, false, *id_i));
+								} else {
+									println!("WARN");
 								}
 							}
 						}
@@ -1154,6 +1159,8 @@ impl PhysicalDesign {
 								}
 								if self.close_enough_to_connect(logical, *id_i, *id_j) {
 									edges.push((true, *id_j, true, *id_i));
+								} else {
+									println!("WARN");
 								}
 							}
 						}
@@ -1592,7 +1599,7 @@ impl PhysicalDesign {
 				for other_global_id in &global_connections[*global_id] {
 					let other_part = self.nodes[*other_global_id].partition;
 					if part == other_part as usize {
-						let other_local_id = *global_to_local[part].get(global_id).unwrap();
+						let other_local_id = *global_to_local[part].get(other_global_id).unwrap();
 						part_local_connections[local_id].push(other_local_id);
 					}
 				}
@@ -1816,9 +1823,11 @@ impl PhysicalDesign {
 		);
 		let edges_to_route =
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
-		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=3);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=10);
+		let mut success = false;
 		for margin in margin_range {
 			println!("Starting routing with margin {margin}");
+			success = true;
 			self.intra_partition_margin = margin;
 			self.reset_place_route();
 			self.global_freeze(logical, margin, partition_dims, local_to_global);
@@ -1842,6 +1851,7 @@ impl PhysicalDesign {
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), true);
 						}
 						Err(s) => {
+							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
 							continue;
 						}
@@ -1857,11 +1867,15 @@ impl PhysicalDesign {
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), false);
 						}
 						Err(s) => {
+							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
 							continue;
 						}
 					}
 				}
+			}
+			if success {
+				break;
 			}
 		}
 		#[cfg(debug_assertions)]
@@ -2206,41 +2220,25 @@ mod test {
 	}
 
 	#[test]
-	fn simple_connectivity_averaging() {
+	fn memory_n_mcmc() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_simple_logical_design();
-		println!("{l}");
+		let l = ld::get_large_memory_test_design(40);
 		p.build_from(&l);
+		p.save_svg(&l, "svg/memory_n_mcmc.svg");
 	}
 
 	#[test]
-	fn complex_40_mcmc_dense() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_complex_40_logical_design();
-		p.build_from(&l);
-		p.save_svg(&l, "svg/complex40_mcmc_coarse15.svg");
-	}
-
-	#[test]
-	fn memory_n_mcmc_dense() {
-		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(2_000);
-		p.build_from(&l);
-		p.save_svg(&l, "svg/memory_n_mcmc_dense.svg");
-	}
-
-	#[test]
-	fn dense_memory_n_mcmc_dense() {
+	fn dense_memory_n_mcmc() {
 		let mut p = PhysicalDesign::new();
 		let l = ld::get_large_dense_memory_test_design(1_024);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/dense_memory_n_mcmc_dense.svg");
+		p.save_svg(&l, "svg/dense_memory_n_mcmc.svg");
 
-		let mut s = serializable_design::SerializableDesign::new();
-		s.build_from(&p, &l);
-		let blueprint_json: String = serde_json::to_string(&s).unwrap();
-		let mut output = File::create("./output/dense_memory_n_mcmc_dense.json").unwrap();
-		output.write_all(blueprint_json.as_bytes()).unwrap();
+		//let mut s = serializable_design::SerializableDesign::new();
+		//s.build_from(&p, &l);
+		//let blueprint_json: String = serde_json::to_string(&s).unwrap();
+		//let mut output = File::create("./output/dense_memory_n_mcmc_dense.json").unwrap();
+		//output.write_all(blueprint_json.as_bytes()).unwrap();
 	}
 
 	#[test]
