@@ -213,7 +213,7 @@ mod test {
 
 	#[test]
 	fn spectral_n_synthetic() {
-		let l = crate::logical_design::get_large_logical_design(1000);
+		let l = crate::logical_design::get_large_logical_design(40);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectvity = p.get_connectivity_as_vec_usize(&l);

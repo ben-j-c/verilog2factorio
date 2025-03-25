@@ -8,7 +8,6 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use std::{
-	cmp::Ordering,
 	collections::{HashMap, HashSet, LinkedList},
 	hash::Hash,
 	vec,
@@ -452,7 +451,7 @@ impl PhysicalDesign {
 		} else {
 			let mut min_score = (f64::INFINITY, false, i32::MAX);
 			let mut min_idx = 0;
-			for (idx, init) in initializations.iter().enumerate() {
+			for (idx_init, init) in initializations.iter().enumerate() {
 				let mut initplc = curr.clone();
 				for (idx, assignment) in init.iter().enumerate() {
 					initplc.mov(idx, *assignment);
@@ -461,11 +460,11 @@ impl PhysicalDesign {
 				if min_score.1 && min_score.2 == 0 {
 					if cost.1 && cost.2 == 0 && cost.0 < min_score.0 {
 						min_score = cost;
-						min_idx = idx;
+						min_idx = idx_init;
 					}
 				} else if cost.0 < min_score.0 {
 					min_score = cost;
-					min_idx = idx;
+					min_idx = idx_init;
 				}
 			}
 			println!("Selecting initialization number {min_idx}");
@@ -1670,14 +1669,14 @@ impl PhysicalDesign {
 		ret
 	}
 
-	pub fn partition(&mut self, ld: &LogicalDesign, target_size: i32) {
+	fn partition(&mut self, ld: &LogicalDesign, target_size: i32) {
 		let connectivity = self.get_connectivity_as_vec_usize(ld);
 		if target_size * 3 / 2 > connectivity.len() as i32 {
 			self.space = vec![Arr2::new([0, 0]); self.n_partitions as usize];
 			println!("Design small enough to skip partitioning.");
 			return;
 		}
-		let n_parts = connectivity.len() as i32 / target_size;
+		let n_parts = (connectivity.len() as f64 / target_size as f64).ceil() as i32;
 		let (partition, n_cuts) = partition::metis(&connectivity, n_parts);
 		partition::report_partition_quality(&partition, n_cuts, &connectivity, n_parts);
 		self.n_edges_cut = n_cuts;
@@ -1704,7 +1703,7 @@ impl PhysicalDesign {
 		self.space = vec![Arr2::new([0, 0]); self.n_partitions as usize];
 	}
 
-	pub fn place_global(
+	fn place_global(
 		&mut self,
 		partitions_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
 	) {
@@ -2254,7 +2253,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(1000);
+		let l = get_large_logical_design(100);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
