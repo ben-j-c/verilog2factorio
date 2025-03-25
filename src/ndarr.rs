@@ -53,6 +53,11 @@ where
 	pub fn dims(&self) -> (usize, usize) {
 		(self.dims[0], self.dims[1])
 	}
+
+	pub fn extend_dim0(&mut self, extension: usize) {
+		self.dims[0] += extension;
+		self.data.resize(self.dims[0] * self.dims[1], T::default());
+	}
 }
 
 #[cfg(test)]

@@ -15,6 +15,8 @@ mod phy;
 mod serializable_design;
 pub mod signal_lookup_table;
 
+pub mod model_checker;
+
 mod ndarr;
 mod svg;
 
