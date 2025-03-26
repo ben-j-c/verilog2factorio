@@ -29,6 +29,7 @@ use std::{
 	fmt::Display,
 	fs::read,
 	hash::{BuildHasherDefault, Hash},
+	net,
 	slice::Iter,
 	usize, vec,
 };
@@ -1776,6 +1777,24 @@ impl LogicalDesign {
 	}
 
 	fn get_local_cell_io_network(&self, nodeid: NodeId) -> Vec<NodeId> {
+		let network = self.get_wire_network(nodeid);
+		if network.is_empty() {
+			return network;
+		}
+		let colour = self.get_wire_colour(nodeid);
+		network
+			.iter()
+			.map(|wire_id| {
+				self.nodes[wire_id.0]
+					.iter_fanin(colour)
+					.chain(self.nodes[wire_id.0].iter_fanout(colour))
+			})
+			.flatten()
+			.copied()
+			.collect_vec()
+	}
+
+	pub(crate) fn get_wire_network(&self, nodeid: NodeId) -> Vec<NodeId> {
 		let colour = if !self.is_wire(nodeid) {
 			return vec![];
 		} else {
@@ -1793,6 +1812,7 @@ impl LogicalDesign {
 			let node = self.get_node(curid);
 			match node.function {
 				NodeFunction::WireSum(wire_colour) => {
+					retval.push(curid);
 					if wire_colour == colour {
 						for foid in node.iter_fanout(colour) {
 							queue.insert((*foid, false));
@@ -1802,21 +1822,18 @@ impl LogicalDesign {
 						}
 					}
 				}
-				_ => {
-					retval.push(curid);
-					match direction {
-						true => {
-							for foid in node.iter_fanout(colour) {
-								queue.insert((*foid, false));
-							}
-						}
-						false => {
-							for fiid in node.iter_fanin(colour) {
-								queue.insert((*fiid, true));
-							}
+				_ => match direction {
+					true => {
+						for foid in node.iter_fanout(colour) {
+							queue.insert((*foid, false));
 						}
 					}
-				}
+					false => {
+						for fiid in node.iter_fanin(colour) {
+							queue.insert((*fiid, true));
+						}
+					}
+				},
 			}
 		}
 		retval
