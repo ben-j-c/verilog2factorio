@@ -359,6 +359,15 @@ impl SimState {
 		}
 	}
 
+	fn compute_decider_comb(
+		&self,
+		node: &Node,
+		new_state_red: &mut Arr2<i32>,
+		new_state_green: &mut Arr2<i32>,
+	) {
+		todo!()
+	}
+
 	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
 		let n_ids = signal_lookup_table::n_ids();
 		let logd = self.logd.borrow();
@@ -367,15 +376,8 @@ impl SimState {
 				NodeFunction::Arithmetic { .. } => {
 					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
 				}
-				NodeFunction::Decider {
-					expressions,
-					expression_conj_disj,
-					input_left_networks,
-					input_right_networks,
-					output_network,
-					use_input_count,
-				} => {
-					todo!()
+				NodeFunction::Decider { .. } => {
+					self.compute_decider_comb(node, new_state_red, new_state_green);
 				}
 				NodeFunction::Constant { enabled, constants } => {
 					if !*enabled {

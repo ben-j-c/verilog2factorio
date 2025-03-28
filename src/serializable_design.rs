@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use itertools::izip;
+use metis::option::Opt;
 use serde::Serialize;
 
 use crate::logical_design::{
@@ -173,6 +174,8 @@ struct DeciderCombinatorCondition {
 struct DeciderCombinatorOutput {
 	signal: SignalID,
 	copy_count_from_input: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	constant: Option<i32>,
 	networks: Option<HashMap<String, bool>>,
 }
 
@@ -333,6 +336,7 @@ impl PhyNode {
 				input_left_networks: input_left_network,
 				input_right_networks: input_right_network,
 				output_network,
+				constants,
 			} => Some(ControlBehavior {
 				circuit_enabled: None,
 				is_on: None,
@@ -371,16 +375,16 @@ impl PhyNode {
 						},
 					)
 					.collect(),
-					outputs: node
-						.output
-						.iter()
-						.zip(output_network.iter())
+					outputs: izip!(node.output.iter(), output_network.iter(), constants.iter())
 						.enumerate()
-						.map(|(idx, (signal, network))| DeciderCombinatorOutput {
-							signal: signal.resolve_signal_id().unwrap(),
-							copy_count_from_input: use_input_count[idx],
-							networks: resolve_network(*network),
-						})
+						.map(
+							|(idx, (signal, network, constant))| DeciderCombinatorOutput {
+								signal: signal.resolve_signal_id().unwrap(),
+								copy_count_from_input: use_input_count[idx],
+								networks: resolve_network(*network),
+								constant: *constant,
+							},
+						)
 						.collect(),
 				}),
 				circuit_condition: None,

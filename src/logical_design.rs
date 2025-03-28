@@ -36,6 +36,7 @@ use std::{
 
 use hashers::fnv::FNV1aHasher64;
 use itertools::{izip, Itertools};
+use metis::option::Opt;
 
 use crate::{
 	checked_design::CheckedDesign,
@@ -151,6 +152,7 @@ pub enum NodeFunction {
 		input_right_networks: Vec<(bool, bool)>,
 		output_network: Vec<(bool, bool)>,
 		use_input_count: Vec<bool>,
+		constants: Vec<Option<i32>>,
 	},
 	/// Game entity.
 	Constant { enabled: bool, constants: Vec<i32> },
@@ -1161,6 +1163,7 @@ impl LogicalDesign {
 				input_left_networks: vec![],
 				input_right_networks: vec![],
 				output_network: vec![],
+				constants: vec![],
 			},
 			vec![],
 		)
@@ -1211,10 +1214,12 @@ impl LogicalDesign {
 			NodeFunction::Decider {
 				use_input_count,
 				output_network,
+				constants,
 				..
 			} => {
 				use_input_count.push(use_input_count_for_output);
 				output_network.push(network);
+				constants.push(None);
 				self.nodes[id.0].output.push(output);
 			}
 			_ => assert!(
