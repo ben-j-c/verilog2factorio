@@ -50,7 +50,7 @@ pub const NET_GREEN: (bool, bool) = (false, true);
 pub const NET_NONE: (bool, bool) = (false, false);
 
 // Supported Arithmetic Combinator operations as in the game.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ArithmeticOperator {
 	Mult,
 	Div,
@@ -431,7 +431,7 @@ impl LogicalDesign {
 			NodeFunction::Arithmetic {
 				op: ArithmeticOperator::Add,
 				input_1: input,
-				input_2: Signal::Constant(0),
+				input_2: Signal::None,
 				input_left_network: NET_RED_GREEN,
 				input_right_network: NET_RED_GREEN,
 			},
@@ -443,7 +443,7 @@ impl LogicalDesign {
 	///
 	/// Returns the id for that new combinator.
 	pub fn add_nop_simple(&mut self) -> NodeId {
-		self.add_nop(Signal::Everything, Signal::Everything)
+		self.add_nop(Signal::Each, Signal::Each)
 	}
 
 	/// Add a combinator fitting the pattern that I call "negation". Equivalent to `!x` in Rust.
@@ -1301,7 +1301,7 @@ impl LogicalDesign {
 		assert!(!self.is_wire(fanin), "Can't add wires to wires.");
 		assert!(!self.is_wire(fanout), "Can't add wires to wires.");
 		let id = self.add_node(
-			NodeFunction::WireSum(WireColour::Green),
+			NodeFunction::WireSum(WireColour::Red),
 			vec![Signal::Everything],
 		);
 		self.connect_red(fanin, id);

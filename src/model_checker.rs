@@ -1,18 +1,26 @@
 use std::{
 	cell::{Ref, RefCell},
+	default,
+	os::linux::net,
+	path::Display,
+	process::Output,
 	rc::Rc,
+	usize,
 };
 
 use itertools::Itertools;
 use metis::option::Opt;
 
 use crate::{
-	logical_design::{LogicalDesign, NodeFunction, NodeId, Signal, WireColour},
+	logical_design::{
+		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
+	},
 	ndarr::Arr2,
 	signal_lookup_table,
 	util::{hash_map, hash_set, HashM},
 };
 
+#[derive(Debug, Clone)]
 struct WireNetwork {
 	fanin: Vec<NodeId>,
 	fanout: Vec<NodeId>,
@@ -22,6 +30,12 @@ struct WireNetwork {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetId(usize);
+
+impl Default for NetId {
+	fn default() -> Self {
+		Self(usize::MAX)
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct NetMapEntry {
@@ -162,18 +176,196 @@ impl SimState {
 		}
 	}
 
-	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
-		let logd = self.logd.borrow();
-		for node in &logd.nodes {
-			match &node.function {
-				NodeFunction::Arithmetic {
+	fn execute_arith_op(left: i32, op: ArithmeticOperator, right: i32) -> i32 {
+		match op {
+			ArithmeticOperator::Mult => left * right,
+			ArithmeticOperator::Div => left / right,
+			ArithmeticOperator::Add => left + right,
+			ArithmeticOperator::Sub => left - right,
+			ArithmeticOperator::Mod => left % right,
+			ArithmeticOperator::Exp => left.checked_pow(right as u32).unwrap_or(0),
+			ArithmeticOperator::Sll => left << right,
+			ArithmeticOperator::Srl => left >> right,
+			ArithmeticOperator::And => left & right,
+			ArithmeticOperator::Or => left | right,
+			ArithmeticOperator::Xor => left ^ right,
+		}
+	}
+
+	fn get_seen_signal_count(&self, node: NodeId, id: i32, colours: (bool, bool)) -> i32 {
+		let mut ret = 0;
+		let output_red_entry = self.netmap[node.0].output_red;
+		if colours.0 && output_red_entry.is_some() {
+			let first_wire = self.network[output_red_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			ret += self.state_red[first_wire][id as usize];
+		}
+		let output_green_entry = self.netmap[node.0].output_green;
+		if colours.1 && output_green_entry.is_some() {
+			let first_wire = self.network[output_green_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			ret += self.state_green[first_wire][id as usize];
+		}
+		ret
+	}
+
+	fn compute_arithmetic_comb(
+		&self,
+		node: &Node,
+		new_state_red: &mut Arr2<i32>,
+		new_state_green: &mut Arr2<i32>,
+	) {
+		let n_ids = signal_lookup_table::n_ids();
+		let (op, input_1, input_2, input_left_network, input_right_network) =
+			if let NodeFunction::Arithmetic {
+				op,
+				input_1,
+				input_2,
+				input_left_network,
+				input_right_network,
+			} = &node.function
+			{
+				(
 					op,
 					input_1,
 					input_2,
 					input_left_network,
 					input_right_network,
-				} => {
-					todo!()
+				)
+			} else {
+				panic!("compute_arithmetic_comb called on non arithmetic combinator")
+			};
+		assert!(*input_1 != Signal::Anything);
+		assert!(*input_1 != Signal::Everything);
+		assert!(*input_2 != Signal::Anything);
+		assert!(*input_2 != Signal::Everything);
+		assert!(node.output.len() == 1);
+		let output = *node.output.first().unwrap();
+		if output == Signal::None {
+			return;
+		}
+
+		if *node.output.first().unwrap() == Signal::Each {
+			match (*input_1 == Signal::Each, *input_2 == Signal::Each) {
+				(true, true) => {
+					for id in 0..n_ids {
+						let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+						let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+						new_state_red[node.id.0][id as usize] =
+							Self::execute_arith_op(left, *op, right);
+						new_state_green[node.id.0][id as usize] =
+							new_state_red[node.id.0][id as usize];
+					}
+				}
+				(true, false) => {
+					let right = if let Signal::Id(id) = *input_2 {
+						self.get_seen_signal_count(node.id, id, *input_right_network)
+					} else {
+						0
+					};
+					for id in 0..n_ids {
+						let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+						new_state_red[node.id.0][id as usize] =
+							Self::execute_arith_op(left, *op, right);
+						new_state_green[node.id.0][id as usize] =
+							new_state_red[node.id.0][id as usize]
+					}
+				}
+				(false, true) => {
+					let left = if let Signal::Id(id) = *input_1 {
+						self.get_seen_signal_count(node.id, id, *input_left_network)
+					} else {
+						0
+					};
+					for id in 0..n_ids {
+						let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+						new_state_red[node.id.0][id as usize] =
+							Self::execute_arith_op(left, *op, right);
+						new_state_green[node.id.0][id as usize] =
+							new_state_red[node.id.0][id as usize]
+					}
+				}
+				(false, false) => panic!("Invalid output setting"),
+			}
+			return;
+		}
+		// Else we got a single output and we need to sum
+		let output = if let Signal::Id(output) = output {
+			output
+		} else {
+			panic!("Invalid output setting");
+		};
+		match (*input_1 == Signal::Each, *input_2 == Signal::Each) {
+			(true, true) => {
+				for id in 0..n_ids {
+					let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+					let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+					new_state_red[node.id.0][output as usize] +=
+						Self::execute_arith_op(left, *op, right);
+					new_state_green[node.id.0][output as usize] =
+						new_state_red[node.id.0][output as usize]
+				}
+			}
+			(true, false) => {
+				let right = if let Signal::Id(id) = *input_2 {
+					self.get_seen_signal_count(node.id, id, *input_right_network)
+				} else {
+					0
+				};
+				for id in 0..n_ids {
+					let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+					new_state_red[node.id.0][output as usize] +=
+						Self::execute_arith_op(left, *op, right);
+					new_state_green[node.id.0][output as usize] =
+						new_state_red[node.id.0][output as usize]
+				}
+			}
+			(false, true) => {
+				let left = if let Signal::Id(id) = *input_1 {
+					self.get_seen_signal_count(node.id, id, *input_left_network)
+				} else {
+					0
+				};
+				for id in 0..n_ids {
+					let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+					new_state_red[node.id.0][output as usize] +=
+						Self::execute_arith_op(left, *op, right);
+					new_state_green[node.id.0][output as usize] =
+						new_state_red[node.id.0][output as usize];
+				}
+			}
+			(false, false) => {
+				let left = if let Signal::Id(id) = *input_1 {
+					self.get_seen_signal_count(node.id, id, *input_left_network)
+				} else {
+					0
+				};
+				let right = if let Signal::Id(id) = *input_2 {
+					self.get_seen_signal_count(node.id, id, *input_right_network)
+				} else {
+					0
+				};
+				new_state_red[node.id.0][output as usize] =
+					Self::execute_arith_op(left, *op, right);
+				new_state_green[node.id.0][output as usize] =
+					new_state_red[node.id.0][output as usize];
+			}
+		}
+	}
+
+	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
+		let n_ids = signal_lookup_table::n_ids();
+		let logd = self.logd.borrow();
+		for node in &logd.nodes {
+			match &node.function {
+				NodeFunction::Arithmetic { .. } => {
+					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
 				}
 				NodeFunction::Decider {
 					expressions,
@@ -205,8 +397,36 @@ impl SimState {
 	}
 
 	pub fn compute_nets(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
-		let logd = self.logd.borrow();
-		for net in &self.network {}
+		let n_ids = signal_lookup_table::n_ids() as usize;
+		for net in &self.network {
+			let mut new_state = vec![0; n_ids];
+			for fiid in &net.fanin {
+				let fanin_state = match net.colour {
+					WireColour::Red => &mut new_state_red[fiid.0],
+					WireColour::Green => &mut new_state_green[fiid.0],
+				};
+				for (sigid, x) in fanin_state.iter().enumerate() {
+					new_state[sigid] += x;
+				}
+			}
+			for wireid in &net.wires {
+				let wire_state = match net.colour {
+					WireColour::Red => &mut new_state_red[wireid.0],
+					WireColour::Green => &mut new_state_green[wireid.0],
+				};
+				for (sigid, x) in new_state.iter().enumerate() {
+					wire_state[sigid] = *x
+				}
+			}
+		}
+	}
+
+	fn print(&self) {
+		println!("--------------");
+		println!("RED:\n{:?}", self.state_red);
+		println!("GREEN:\n{:?}", self.state_green);
+		println!("Nes:\n{:?}", self.network);
+		println!("--------------");
 	}
 }
 
@@ -215,7 +435,7 @@ mod test {
 	use std::{cell::RefCell, rc::Rc};
 
 	use super::SimState;
-	use crate::logical_design::LogicalDesign;
+	use crate::logical_design::{LogicalDesign, Signal};
 
 	#[test]
 	fn new() {
@@ -227,5 +447,73 @@ mod test {
 		sim.step(10);
 		logd.borrow_mut().nodes[nop.0].description = Some("The description2".to_owned());
 		sim.step(10);
+	}
+
+	#[test]
+	fn constant_through_nop() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, nop, wire) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
+			let nop = logd.add_nop_simple();
+			let wire = logd.add_wire_red_simple(c1, nop);
+			println!("{:?}", logd);
+			(c1, nop, wire)
+		};
+		let mut sim = SimState::new(logd.clone());
+		sim.print();
+		for x in sim.probe_red_output(c1) {
+			assert_eq!(*x, 0);
+		}
+		for x in sim.probe_red_output(nop) {
+			assert_eq!(*x, 0);
+		}
+		for x in sim.probe_red_output(wire) {
+			assert_eq!(*x, 0);
+		}
+
+		sim.step(1);
+		sim.print();
+		for (id, x) in sim.probe_red_output(c1).iter().enumerate() {
+			if id == 10 {
+				assert_eq!(*x, 1234);
+			} else {
+				assert_eq!(*x, 0);
+			}
+		}
+		for x in sim.probe_red_output(nop) {
+			assert_eq!(*x, 0);
+		}
+		for (id, x) in sim.probe_red_output(wire).iter().enumerate() {
+			if id == 10 {
+				assert_eq!(*x, 1234);
+			} else {
+				assert_eq!(*x, 0);
+			}
+		}
+
+		sim.step(1);
+		sim.print();
+		for (id, x) in sim.probe_red_output(c1).iter().enumerate() {
+			if id == 10 {
+				assert_eq!(*x, 1234);
+			} else {
+				assert_eq!(*x, 0);
+			}
+		}
+		for (id, x) in sim.probe_red_output(nop).iter().enumerate() {
+			if id == 10 {
+				assert_eq!(*x, 1234);
+			} else {
+				assert_eq!(*x, 0);
+			}
+		}
+		for (id, x) in sim.probe_red_output(wire).iter().enumerate() {
+			if id == 10 {
+				assert_eq!(*x, 1234);
+			} else {
+				assert_eq!(*x, 0);
+			}
+		}
 	}
 }

@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"phy::design::test::synthetic_n_mcmc_dense",
+				"model_checker::test::constant_through_nop",
 				"--",
 				"--exact",
 				"--show-output"
