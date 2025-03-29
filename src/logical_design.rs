@@ -68,7 +68,7 @@ pub enum ArithmeticOperator {
 
 // Supported Decider Combinator operations as in the game.
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,

@@ -8,12 +8,13 @@ use std::{
 	usize,
 };
 
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 use metis::option::Opt;
 
 use crate::{
 	logical_design::{
-		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
+		ArithmeticOperator, DeciderOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal,
+		WireColour,
 	},
 	ndarr::Arr2,
 	signal_lookup_table,
@@ -341,13 +342,77 @@ impl SimState {
 		}
 	}
 
+	fn execute_decider_op(left: i32, op: DeciderOperator, right: i32) -> bool {
+		match op {
+			DeciderOperator::LessThan => left < right,
+			DeciderOperator::GreaterThan => left > right,
+			DeciderOperator::Equal => left == right,
+			DeciderOperator::NotEqual => left != right,
+			DeciderOperator::GreaterThanEqual => left >= right,
+			DeciderOperator::LessThanEqual => left <= right,
+		}
+	}
+
+	fn evaluate_decider_condition(
+		&self,
+		node: &Node,
+		expr: &(Signal, DeciderOperator, Signal),
+		left_network: &(bool, bool),
+		right_network: &(bool, bool),
+	) -> bool {
+		if expr.0 == Signal::Anything {
+			todo!()
+		} else if expr.0 == Signal::Everything {
+			todo!()
+		} else if expr.0 == Signal::Each {
+			todo!()
+		}
+		// Must have valid single numerical values.
+		let left = if let Signal::Id(id) = expr.0 {
+			self.get_seen_signal_count(node.id, id, *left_network)
+		} else {
+			0
+		};
+		let right = if let Signal::Id(id) = expr.2 {
+			self.get_seen_signal_count(node.id, id, *right_network)
+		} else {
+			0
+		};
+		Self::execute_decider_op(left, expr.1, right)
+	}
+
 	fn compute_decider_comb(
 		&self,
 		node: &Node,
 		new_state_red: &mut Arr2<i32>,
 		new_state_green: &mut Arr2<i32>,
 	) {
-		let param = node.function.unwrap_decider();
+		let (
+			expressions,
+			expression_conj_disj,
+			input_left_networks,
+			input_right_networks,
+			output_network,
+			use_input_count,
+			constants,
+		) = node.function.unwrap_decider();
+		let n_expr = expressions.len();
+		let outp_state = &mut new_state_red[node.id.0];
+		let mut sat_or = false;
+		let mut and_sat = true;
+		for idx in 0..n_expr {
+			let sat = self.evaluate_decider_condition(
+				node,
+				&expressions[idx],
+				&input_left_networks[idx],
+				&input_right_networks[idx],
+			);
+		}
+		sat_or |= and_sat;
+		for out in &node.output {}
+		for (id, x) in outp_state.iter().enumerate() {
+			new_state_green[node.id.0][id] = *x;
+		}
 	}
 
 	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
