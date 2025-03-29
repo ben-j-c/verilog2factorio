@@ -164,6 +164,72 @@ pub enum NodeFunction {
 	WireSum(WireColour),
 }
 
+impl NodeFunction {
+	pub fn unwrap_decider(
+		&self,
+	) -> (
+		&Vec<(Signal, DeciderOperator, Signal)>,
+		&Vec<DeciderRowConjDisj>,
+		&Vec<(bool, bool)>,
+		&Vec<(bool, bool)>,
+		&Vec<(bool, bool)>,
+		&Vec<bool>,
+		&Vec<Option<i32>>,
+	) {
+		if let NodeFunction::Decider {
+			expressions,
+			expression_conj_disj,
+			input_left_networks,
+			input_right_networks,
+			output_network,
+			use_input_count,
+			constants,
+		} = self
+		{
+			(
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				output_network,
+				use_input_count,
+				constants,
+			)
+		} else {
+			panic!("Unwrapped node as decider when it was, in fact, not one.");
+		}
+	}
+
+	pub fn unwrap_arithmetic(
+		&self,
+	) -> (
+		ArithmeticOperator,
+		Signal,
+		Signal,
+		(bool, bool),
+		(bool, bool),
+	) {
+		if let NodeFunction::Arithmetic {
+			op,
+			input_1,
+			input_2,
+			input_left_network,
+			input_right_network,
+		} = self
+		{
+			(
+				*op,
+				*input_1,
+				*input_2,
+				*input_left_network,
+				*input_right_network,
+			)
+		} else {
+			panic!("Unwrapped node as arithmetic combinator when it was, in fact, not one.");
+		}
+	}
+}
+
 /// An id that is unique in a design. Can be used to uniquely identify a node in a design. Use this id to make connections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);

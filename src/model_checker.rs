@@ -223,28 +223,11 @@ impl SimState {
 	) {
 		let n_ids = signal_lookup_table::n_ids();
 		let (op, input_1, input_2, input_left_network, input_right_network) =
-			if let NodeFunction::Arithmetic {
-				op,
-				input_1,
-				input_2,
-				input_left_network,
-				input_right_network,
-			} = &node.function
-			{
-				(
-					op,
-					input_1,
-					input_2,
-					input_left_network,
-					input_right_network,
-				)
-			} else {
-				panic!("compute_arithmetic_comb called on non arithmetic combinator")
-			};
-		assert!(*input_1 != Signal::Anything);
-		assert!(*input_1 != Signal::Everything);
-		assert!(*input_2 != Signal::Anything);
-		assert!(*input_2 != Signal::Everything);
+			node.function.unwrap_arithmetic();
+		assert!(input_1 != Signal::Anything);
+		assert!(input_1 != Signal::Everything);
+		assert!(input_2 != Signal::Anything);
+		assert!(input_2 != Signal::Everything);
 		assert!(node.output.len() == 1);
 		let output = *node.output.first().unwrap();
 		if output == Signal::None {
@@ -252,41 +235,41 @@ impl SimState {
 		}
 
 		if *node.output.first().unwrap() == Signal::Each {
-			match (*input_1 == Signal::Each, *input_2 == Signal::Each) {
+			match (input_1 == Signal::Each, input_2 == Signal::Each) {
 				(true, true) => {
 					for id in 0..n_ids {
-						let left = self.get_seen_signal_count(node.id, id, *input_left_network);
-						let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+						let left = self.get_seen_signal_count(node.id, id, input_left_network);
+						let right = self.get_seen_signal_count(node.id, id, input_right_network);
 						new_state_red[node.id.0][id as usize] =
-							Self::execute_arith_op(left, *op, right);
+							Self::execute_arith_op(left, op, right);
 						new_state_green[node.id.0][id as usize] =
 							new_state_red[node.id.0][id as usize];
 					}
 				}
 				(true, false) => {
-					let right = if let Signal::Id(id) = *input_2 {
-						self.get_seen_signal_count(node.id, id, *input_right_network)
+					let right = if let Signal::Id(id) = input_2 {
+						self.get_seen_signal_count(node.id, id, input_right_network)
 					} else {
 						0
 					};
 					for id in 0..n_ids {
-						let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+						let left = self.get_seen_signal_count(node.id, id, input_left_network);
 						new_state_red[node.id.0][id as usize] =
-							Self::execute_arith_op(left, *op, right);
+							Self::execute_arith_op(left, op, right);
 						new_state_green[node.id.0][id as usize] =
 							new_state_red[node.id.0][id as usize]
 					}
 				}
 				(false, true) => {
-					let left = if let Signal::Id(id) = *input_1 {
-						self.get_seen_signal_count(node.id, id, *input_left_network)
+					let left = if let Signal::Id(id) = input_1 {
+						self.get_seen_signal_count(node.id, id, input_left_network)
 					} else {
 						0
 					};
 					for id in 0..n_ids {
-						let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+						let right = self.get_seen_signal_count(node.id, id, input_right_network);
 						new_state_red[node.id.0][id as usize] =
-							Self::execute_arith_op(left, *op, right);
+							Self::execute_arith_op(left, op, right);
 						new_state_green[node.id.0][id as usize] =
 							new_state_red[node.id.0][id as usize]
 					}
@@ -301,58 +284,57 @@ impl SimState {
 		} else {
 			panic!("Invalid output setting");
 		};
-		match (*input_1 == Signal::Each, *input_2 == Signal::Each) {
+		match (input_1 == Signal::Each, input_2 == Signal::Each) {
 			(true, true) => {
 				for id in 0..n_ids {
-					let left = self.get_seen_signal_count(node.id, id, *input_left_network);
-					let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+					let left = self.get_seen_signal_count(node.id, id, input_left_network);
+					let right = self.get_seen_signal_count(node.id, id, input_right_network);
 					new_state_red[node.id.0][output as usize] +=
-						Self::execute_arith_op(left, *op, right);
+						Self::execute_arith_op(left, op, right);
 					new_state_green[node.id.0][output as usize] =
 						new_state_red[node.id.0][output as usize]
 				}
 			}
 			(true, false) => {
-				let right = if let Signal::Id(id) = *input_2 {
-					self.get_seen_signal_count(node.id, id, *input_right_network)
+				let right = if let Signal::Id(id) = input_2 {
+					self.get_seen_signal_count(node.id, id, input_right_network)
 				} else {
 					0
 				};
 				for id in 0..n_ids {
-					let left = self.get_seen_signal_count(node.id, id, *input_left_network);
+					let left = self.get_seen_signal_count(node.id, id, input_left_network);
 					new_state_red[node.id.0][output as usize] +=
-						Self::execute_arith_op(left, *op, right);
+						Self::execute_arith_op(left, op, right);
 					new_state_green[node.id.0][output as usize] =
 						new_state_red[node.id.0][output as usize]
 				}
 			}
 			(false, true) => {
-				let left = if let Signal::Id(id) = *input_1 {
-					self.get_seen_signal_count(node.id, id, *input_left_network)
+				let left = if let Signal::Id(id) = input_1 {
+					self.get_seen_signal_count(node.id, id, input_left_network)
 				} else {
 					0
 				};
 				for id in 0..n_ids {
-					let right = self.get_seen_signal_count(node.id, id, *input_right_network);
+					let right = self.get_seen_signal_count(node.id, id, input_right_network);
 					new_state_red[node.id.0][output as usize] +=
-						Self::execute_arith_op(left, *op, right);
+						Self::execute_arith_op(left, op, right);
 					new_state_green[node.id.0][output as usize] =
 						new_state_red[node.id.0][output as usize];
 				}
 			}
 			(false, false) => {
-				let left = if let Signal::Id(id) = *input_1 {
-					self.get_seen_signal_count(node.id, id, *input_left_network)
+				let left = if let Signal::Id(id) = input_1 {
+					self.get_seen_signal_count(node.id, id, input_left_network)
 				} else {
 					0
 				};
-				let right = if let Signal::Id(id) = *input_2 {
-					self.get_seen_signal_count(node.id, id, *input_right_network)
+				let right = if let Signal::Id(id) = input_2 {
+					self.get_seen_signal_count(node.id, id, input_right_network)
 				} else {
 					0
 				};
-				new_state_red[node.id.0][output as usize] =
-					Self::execute_arith_op(left, *op, right);
+				new_state_red[node.id.0][output as usize] = Self::execute_arith_op(left, op, right);
 				new_state_green[node.id.0][output as usize] =
 					new_state_red[node.id.0][output as usize];
 			}
@@ -365,7 +347,7 @@ impl SimState {
 		new_state_red: &mut Arr2<i32>,
 		new_state_green: &mut Arr2<i32>,
 	) {
-		todo!()
+		let param = node.function.unwrap_decider();
 	}
 
 	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
