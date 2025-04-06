@@ -595,4 +595,133 @@ mod test {
 		assert_eq!(sim.probe_red_output(d1)[10], 0);
 		assert_eq!(sim.probe_red_output(d1)[20], 1);
 	}
+
+	#[test]
+	fn decider_simple2() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, d1, wire) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
+			let d1 = logd.add_decider_comb();
+			let wire = logd.add_wire_red_simple(c1, d1);
+			logd.add_decider_comb_input(
+				d1,
+				(
+					Signal::Id(10),
+					DeciderOperator::GreaterThan,
+					Signal::Constant(1233),
+				),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+			logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+			println!("{}", logd);
+			(c1, d1, wire)
+		};
+		let mut sim = SimState::new(logd.clone());
+		sim.step(1);
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(c1)[10], 1234);
+		sim.step(1);
+		sim.print();
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(d1)[10], 0);
+		assert_eq!(sim.probe_red_output(d1)[20], 2);
+	}
+
+	#[test]
+	fn decider_simple3() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, d1, wire) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
+			let d1 = logd.add_decider_comb();
+			let wire = logd.add_wire_red_simple(c1, d1);
+			logd.add_decider_comb_input(
+				d1,
+				(
+					Signal::Id(10),
+					DeciderOperator::GreaterThan,
+					Signal::Constant(1233),
+				),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_input(
+				d1,
+				(
+					Signal::Id(10),
+					DeciderOperator::LessThan,
+					Signal::Constant(1235),
+				),
+				DeciderRowConjDisj::And,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+			logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+			println!("{}", logd);
+			(c1, d1, wire)
+		};
+		let mut sim = SimState::new(logd.clone());
+		sim.step(1);
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(c1)[10], 1234);
+		sim.step(1);
+		sim.print();
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(d1)[10], 0);
+		assert_eq!(sim.probe_red_output(d1)[20], 2);
+	}
+
+	#[test]
+	fn decider_simple4() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, d1, d2, wire, wire2) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
+			let d1 = logd.add_decider_comb();
+			let d2 = logd.add_decider_comb();
+			let wire = logd.add_wire_red(vec![c1], vec![d1, d2]);
+			let wire2 = logd.add_wire_red(vec![d1, d2], vec![]);
+			logd.add_decider_comb_input(
+				d1,
+				(
+					Signal::Id(10),
+					DeciderOperator::GreaterThan,
+					Signal::Constant(1233),
+				),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_input(
+				d2,
+				(
+					Signal::Id(10),
+					DeciderOperator::LessThan,
+					Signal::Constant(1235),
+				),
+				DeciderRowConjDisj::And,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+			logd.add_decider_comb_output(d2, Signal::Id(20), false, NET_RED_GREEN);
+			println!("{}", logd);
+			(c1, d1, d2, wire, wire2)
+		};
+		let mut sim = SimState::new(logd.clone());
+		sim.step(1);
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(c1)[10], 1234);
+		sim.step(1);
+		sim.print();
+		assert_eq!(sim.probe_red_output(wire)[10], 1234);
+		assert_eq!(sim.probe_red_output(wire2)[10], 0);
+		assert_eq!(sim.probe_red_output(wire2)[20], 2);
+	}
 }

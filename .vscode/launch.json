@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"sim::test::decider_simple",
+				"sim::test",
 				"--",
 				"--exact",
 				"--show-output"

@@ -142,6 +142,8 @@ impl SimState {
 			self.get_seen_signal_count(node.id, id, *left_network)
 		} else if let Some(id) = each_check_left {
 			self.get_seen_signal_count(node.id, id, *left_network)
+		} else if let Signal::Constant(c) = expr.0 {
+			c
 		} else {
 			0
 		};
@@ -151,6 +153,8 @@ impl SimState {
 			self.get_seen_signal_count(node.id, id, *right_network)
 		} else if let Some(id) = each_check_right {
 			self.get_seen_signal_count(node.id, id, *right_network)
+		} else if let Signal::Constant(c) = expr.2 {
+			c
 		} else {
 			0
 		};
