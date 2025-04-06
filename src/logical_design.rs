@@ -1301,7 +1301,7 @@ impl LogicalDesign {
 		assert_eq!(
 			output.len(),
 			counts.len(),
-			"Tried to crea constant combinator with mismatched outputs and counts"
+			"Tried to create constant combinator with mismatched outputs and counts"
 		);
 
 		self.add_node(
@@ -1311,6 +1311,15 @@ impl LogicalDesign {
 			},
 			output,
 		)
+	}
+
+	pub fn set_ith_output_count(&mut self, id: NodeId, i: usize, count: i32) {
+		match &mut self.nodes[id.0].function {
+			NodeFunction::Constant { constants, .. } => {
+				constants[i] = count;
+			}
+			_ => assert!(false, "Tried to set count for non-constant combinator node"),
+		}
 	}
 
 	/// Add a lamp entity to this design, configured to light up based on the provided condition tuple (Signal, DeciderOperator, Signal).
@@ -2114,8 +2123,11 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 
 #[cfg(test)]
 mod test {
+	use std::rc::Rc;
+
 	use crate::{
 		phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
+		sim::SimState,
 	};
 
 	use super::*;
@@ -2520,5 +2532,70 @@ mod test {
 		s.build_from(&p, &d);
 		let blueprint_json = serde_json::to_string(&s).unwrap();
 		println!("\n{}\n", blueprint_json);
+	}
+
+	#[test]
+	fn sim_dff() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (data_c, clock_c, comb_out) = {
+			let mut logd = logd.borrow_mut();
+			let (wire_data, wire_clk, comb_out) =
+				logd.add_dff(Signal::Id(0), Signal::Id(1), Signal::Id(2));
+			let c1 = logd.add_constant_comb(vec![Signal::Id(0)], vec![0]);
+			let c2 = logd.add_constant_comb(vec![Signal::Id(1)], vec![0]);
+			logd.connect_red(c1, wire_data);
+			logd.connect_red(c2, wire_clk);
+			(c1, c2, comb_out)
+		};
+		let mut sim = SimState::new(logd.clone());
+		sim.add_trace(data_c);
+		sim.add_trace(clock_c);
+		sim.add_trace(comb_out);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![]);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(data_c, 0, 100);
+		}
+		sim.step(10);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 100)]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![]);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(clock_c, 0, 1);
+		}
+		sim.step(10);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 100)]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![(1, 1)]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(data_c, 0, 200);
+			logd.set_ith_output_count(clock_c, 0, 0);
+		}
+		sim.step(10);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 200)]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(data_c, 0, 300);
+		}
+		sim.step(10);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 300)]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(clock_c, 0, 1);
+		}
+		sim.step(10);
+		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 300)]);
+		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![(1, 1)]);
+		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 300)]);
+		let traces = sim.render_traces();
+		traces.save("svg/sim_dff_traces.svg").unwrap();
 	}
 }

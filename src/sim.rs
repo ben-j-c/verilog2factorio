@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, usize};
+use std::{cell::RefCell, fmt::format, os::linux::net, rc::Rc, usize};
 
 use itertools::Itertools;
 
@@ -13,7 +13,8 @@ use crate::{
 	},
 	ndarr::Arr2,
 	signal_lookup_table::{self, n_ids},
-	util::{hash_map, hash_set, HashM},
+	svg::SVG,
+	util::{hash_map, hash_set, HashM, HashS},
 };
 
 #[derive(Debug, Clone)]
@@ -71,13 +72,21 @@ impl NetMapEntry {
 	}
 }
 
-struct SimState {
+pub struct Trace {
+	red: Vec<(usize, Vec<(i32, i32)>)>,
+	green: Vec<(usize, Vec<(i32, i32)>)>,
+}
+
+pub struct SimState {
 	network: Vec<WireNetwork>,
 	netmap: Vec<NetMapEntry>,
 	logd: Rc<RefCell<LogicalDesign>>,
 	step_number: usize,
 	state_red: Arr2<i32>,
 	state_green: Arr2<i32>,
+
+	traces: Vec<Trace>,
+	trace_set: Vec<NodeId>,
 }
 
 impl SimState {
@@ -89,6 +98,8 @@ impl SimState {
 			step_number: 0,
 			state_red: Arr2::new([0, signal_lookup_table::n_ids() as usize]),
 			state_green: Arr2::new([0, signal_lookup_table::n_ids() as usize]),
+			traces: vec![],
+			trace_set: vec![],
 		};
 		ret.update_logical_design();
 		ret
@@ -96,10 +107,17 @@ impl SimState {
 
 	pub fn update_logical_design(&mut self) {
 		let logd = self.logd.borrow();
-		for (nodeid, node) in logd.nodes.iter().enumerate().skip(self.netmap.len()) {
+		let netmap_len = self.netmap.len();
+		for _ in logd.nodes.iter().skip(netmap_len) {
 			self.state_red.extend_dim0(1);
 			self.state_green.extend_dim0(1);
 			self.netmap.push(NetMapEntry::default());
+			self.traces.push(Trace {
+				red: vec![],
+				green: vec![],
+			});
+		}
+		for (nodeid, node) in logd.nodes.iter().enumerate().skip(netmap_len) {
 			let colour = if let NodeFunction::WireSum(colour) = node.function {
 				colour
 			} else {
@@ -144,6 +162,17 @@ impl SimState {
 		}
 	}
 
+	pub fn add_trace(&mut self, node: NodeId) {
+		if self.trace_set.contains(&node) {
+			return;
+		}
+		self.trace_set.push(node);
+		self.traces[node.0] = Trace {
+			red: vec![(self.step_number, self.probe_red_output_sparse(node))],
+			green: vec![(self.step_number, self.probe_green_output_sparse(node))],
+		};
+	}
+
 	pub fn probe_red_output(&self, id: NodeId) -> &[i32] {
 		&self.state_red[id.0]
 	}
@@ -152,8 +181,41 @@ impl SimState {
 		&self.state_green[id.0]
 	}
 
+	pub fn probe_red_output_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
+		let mut ret = vec![];
+		for i in 0..self.state_red.dims().1 {
+			if self.state_red[id.0][i] != 0 {
+				ret.push((i as i32, self.state_red[id.0][i]));
+			}
+		}
+		ret
+	}
+
+	pub fn probe_green_output_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
+		let mut ret = vec![];
+		for i in 0..self.state_green.dims().1 {
+			if self.state_green[id.0][i] != 0 {
+				ret.push((i as i32, self.state_green[id.0][i]));
+			}
+		}
+		ret
+	}
+
 	pub fn probe_lamp_state(&self, id: NodeId) -> bool {
 		todo!()
+	}
+
+	fn capture_trace(&mut self) {
+		for nodeid in &self.trace_set {
+			let new_capture_red = self.probe_red_output_sparse(*nodeid);
+			let new_capture_green = self.probe_green_output_sparse(*nodeid);
+			self.traces[nodeid.0]
+				.red
+				.push((self.step_number, new_capture_red));
+			self.traces[nodeid.0]
+				.green
+				.push((self.step_number, new_capture_green));
+		}
 	}
 
 	pub fn step(&mut self, steps: usize) {
@@ -169,6 +231,7 @@ impl SimState {
 			self.state_red = new_state_red;
 			self.state_green = new_state_green;
 			self.step_number += 1;
+			self.capture_trace();
 		}
 	}
 
@@ -470,6 +533,275 @@ impl SimState {
 		}
 		println!("Nes:\n {:?}", self.network);
 		println!("--------------");
+	}
+
+	pub fn render_traces(&self) -> SVG {
+		let mut svg = SVG::new();
+		const TICK_SIZE: i32 = 50;
+		const TICK_CORNER: i32 = 8;
+		const TRACE_HEIGHT: i32 = 25;
+		const TRACE_SPACING_INTRA: i32 = 6;
+		const TRACE_SPACING_INTER: i32 = 25;
+
+		let mut max_step = 0;
+		let mut max_height = 0;
+		let mut unique_red = vec![];
+		let mut unique_green = vec![];
+		for id in &self.trace_set {
+			let trace = &self.traces[id.0];
+			let mut unique_ids_red = hash_set();
+			let mut unique_ids_green = hash_set();
+			for (step, values) in &trace.red {
+				max_step = max_step.max(*step);
+				for (sig_id, _) in values {
+					unique_ids_red.insert(*sig_id);
+				}
+			}
+			for (step, values) in &trace.green {
+				max_step = max_step.max(*step);
+				for (sig_id, _) in values {
+					unique_ids_green.insert(*sig_id);
+				}
+			}
+			max_height += (unique_ids_red.len() as i32 + unique_ids_green.len() as i32)
+				* (TRACE_HEIGHT + TRACE_SPACING_INTRA);
+			unique_red.push(unique_ids_red);
+			unique_green.push(unique_ids_green);
+		}
+		let mut y = 100;
+		let x = 400;
+		// Background
+		svg.add_rect(
+			0,
+			0,
+			max_step as i32 * TICK_SIZE + x,
+			max_height + y,
+			(255, 255, 255),
+			None,
+			None,
+		);
+		//Title
+		svg.add_rect(
+			0,
+			0,
+			200,
+			25,
+			(200, 200, 200),
+			Some("Simulation".to_owned()),
+			None,
+		);
+		for (idx, nodeid) in self.trace_set.iter().enumerate() {
+			let y1 = y;
+			let trace = &self.traces[nodeid.0];
+			let unique_ids_red = unique_red[idx].iter().cloned().sorted().collect_vec();
+			for sig_id in &unique_ids_red {
+				let mut map_last = hash_map();
+				svg.add_rect(
+					x / 2 + 1,
+					y + TRACE_SPACING_INTRA / 2,
+					x / 2 - 2,
+					TRACE_HEIGHT,
+					(200, 200, 200),
+					Some(format!(
+						"{} ({})",
+						signal_lookup_table::lookup_str(*sig_id).0,
+						sig_id
+					)),
+					None,
+				);
+				for (step, values) in &trace.red {
+					let mut map = HashM::from_iter(values.iter().cloned());
+					let last = map_last.get(sig_id).cloned();
+					if !map.contains_key(sig_id) {
+						map.insert(*sig_id, 0);
+					}
+					draw_trace_tick(
+						&mut svg,
+						last,
+						map[sig_id],
+						x + *step as i32 * TICK_SIZE,
+						y,
+						TICK_SIZE,
+						TRACE_HEIGHT,
+						TICK_CORNER,
+						WireColour::Red,
+						*step as i32,
+					);
+					map_last = map;
+				}
+				y += TRACE_HEIGHT + TRACE_SPACING_INTRA;
+			}
+			let unique_ids_green = unique_green[idx].iter().cloned().sorted().collect_vec();
+			for sig_id in &unique_ids_green {
+				let mut map_last = hash_map();
+				svg.add_rect(
+					x / 2 + 1,
+					y + TRACE_SPACING_INTRA / 2,
+					x / 2 - 2,
+					TRACE_HEIGHT,
+					(200, 200, 200),
+					Some(format!(
+						"{} ({})",
+						signal_lookup_table::lookup_str(*sig_id).0,
+						sig_id
+					)),
+					None,
+				);
+				for (step, values) in &trace.green {
+					let mut map = HashM::from_iter(values.iter().cloned());
+					let last = map_last.get(sig_id).cloned();
+					if !map.contains_key(sig_id) {
+						map.insert(*sig_id, 0);
+					}
+					draw_trace_tick(
+						&mut svg,
+						last,
+						map[sig_id],
+						x + *step as i32 * TICK_SIZE,
+						y,
+						TICK_SIZE,
+						TRACE_HEIGHT,
+						TICK_CORNER,
+						WireColour::Green,
+						*step as i32,
+					);
+
+					map_last = map;
+				}
+				y += TRACE_HEIGHT + TRACE_SPACING_INTRA;
+			}
+			let y2 = y;
+			svg.add_rect(
+				1,
+				y1,
+				x / 2 - 2,
+				y2 - y1,
+				(200, 200, 200),
+				Some(format!("{:?}", nodeid)),
+				None,
+			);
+			y += TRACE_SPACING_INTER;
+		}
+		svg
+	}
+}
+
+fn draw_transition_edge(
+	svg: &mut SVG,
+	x: i32,
+	y: i32,
+	height: i32,
+	corner_size: i32,
+	colour: &str,
+	level: i32,
+) {
+	svg.add_line(
+		x - corner_size / 2,
+		y + height * level,
+		x + corner_size / 2,
+		y + height * (1 - level),
+		Some(colour.to_owned()),
+		None,
+	);
+}
+
+fn draw_signal_level(
+	svg: &mut SVG,
+	x: i32,
+	y: i32,
+	width: i32,
+	height: i32,
+	corner_size: i32,
+	colour: &str,
+	level: i32,
+) {
+	svg.add_line(
+		x + corner_size / 2,
+		y + height * (1 - level),
+		x + width - corner_size / 2,
+		y + height * (1 - level),
+		Some(colour.to_owned()),
+		Some(1),
+	);
+}
+
+fn draw_no_edge(
+	svg: &mut SVG,
+	x: i32,
+	y: i32,
+	height: i32,
+	corner_size: i32,
+	colour: &str,
+	level: i32,
+) {
+	svg.add_line(
+		x - corner_size / 2,
+		y + height * (1 - level),
+		x + corner_size / 2,
+		y + height * (1 - level),
+		Some(colour.to_owned()),
+		Some(1),
+	);
+}
+
+fn draw_trace_tick(
+	svg: &mut SVG,
+	last: Option<i32>,
+	now: i32,
+	x: i32,
+	y: i32,
+	width: i32,
+	height: i32,
+	corner_size: i32,
+	w_colour: WireColour,
+	step_num: i32,
+) {
+	let colour = match w_colour {
+		WireColour::Red => "red",
+		WireColour::Green => "green",
+	};
+	if let Some(last) = last {
+		if last == now {
+			// No change, so no edges
+			if now == 0 || now == 1 {
+				draw_no_edge(svg, x, y, height, corner_size, colour, now);
+			} else {
+				draw_no_edge(svg, x, y, height, corner_size, colour, 0);
+				draw_no_edge(svg, x, y, height, corner_size, colour, 1);
+			}
+		} else {
+			// Change
+			svg.add_rect(
+				x,
+				y,
+				width,
+				height,
+				(230, 230, 230),
+				Some(format!("{now}")),
+				Some(format!("{step_num}")),
+			);
+			if now == 0 || now == 1 {
+				// Single edge
+				draw_transition_edge(svg, x, y, height, corner_size, colour, now);
+				if last != 0 && last != 1 {
+					draw_no_edge(svg, x, y, height, corner_size, colour, now);
+				}
+			} else {
+				// One or two edges
+				draw_transition_edge(svg, x, y, height, corner_size, colour, 1);
+				if last == 0 || last == 1 {
+					draw_no_edge(svg, x, y, height, corner_size, colour, last);
+				} else {
+					draw_transition_edge(svg, x, y, height, corner_size, colour, 0);
+				}
+			}
+		}
+	}
+	if now == 0 || now == 1 {
+		draw_signal_level(svg, x, y, width, height, corner_size, colour, now);
+	} else {
+		draw_signal_level(svg, x, y, width, height, corner_size, colour, 0);
+		draw_signal_level(svg, x, y, width, height, corner_size, colour, 1);
 	}
 }
 

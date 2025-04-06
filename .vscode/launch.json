@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"sim::test",
+				"logical_design::test::sim_dff",
 				"--",
 				"--exact",
 				"--show-output"
