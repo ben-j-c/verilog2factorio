@@ -1,7 +1,7 @@
 use itertools::izip;
 
 use crate::{
-	logical_design::{DeciderOperator, Node, Signal},
+	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, Signal},
 	ndarr::Arr2,
 	signal_lookup_table::n_ids,
 };
@@ -33,20 +33,65 @@ impl SimState {
 	pub(super) fn execute_decider_output_signal_model(
 		&self,
 		node: &Node,
-		outp_state_red: &[i32],
-		outp_state_green: &[i32],
+		output_signals: &mut [i32],
 		network: (bool, bool),
 		constant: Option<i32>,
+		output_id: i32,
 	) {
-		let (
-			expressions,
-			expression_conj_disj,
-			input_left_networks,
-			input_right_networks,
-			output_network,
-			use_input_count,
-			constants,
-		) = node.function.unwrap_decider();
+		let (expressions, expression_conj_disj, input_left_networks, input_right_networks, ..) =
+			node.function.unwrap_decider();
+		let end = if expressions.iter().any(|e| e.0 == Signal::Each) {
+			n_ids()
+		} else {
+			1
+		};
+		let mut sat_vec = vec![false; end as usize];
+		for each_id in 0..end {
+			let n_expr = expressions.len();
+			let mut sat_or = false;
+			let mut sat_and = true;
+			for idx in 0..n_expr {
+				let expr = &expressions[idx];
+				let each_left = if end == 1 || expr.0 != Signal::Each {
+					None
+				} else {
+					Some(each_id)
+				};
+				let each_right = if end == 1 || expr.2 != Signal::Each {
+					None
+				} else {
+					Some(each_id)
+				};
+				let sat = self.evaluate_decider_condition(
+					node,
+					expr,
+					&input_left_networks[idx],
+					&input_right_networks[idx],
+					each_left,
+					each_right,
+				);
+				sat_and &= sat;
+				if expression_conj_disj[idx] == DeciderRowConjDisj::Or {
+					sat_or |= sat_and;
+					sat_and = true;
+				}
+			}
+			if n_expr > 0 {
+				sat_or |= sat_and;
+			}
+			sat_vec[each_id as usize] = sat_or;
+		}
+		for sat in sat_vec {
+			if !sat {
+				continue;
+			}
+			if let Some(c) = constant {
+				output_signals[output_id as usize] += c;
+			} else {
+				output_signals[output_id as usize] += constant
+					.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+			}
+		}
 	}
 
 	pub(super) fn execute_decider_output_each_model(
@@ -87,20 +132,22 @@ impl SimState {
 		each_check_left: Option<i32>,
 		each_check_right: Option<i32>,
 	) -> bool {
-		if expr.0 == Signal::Anything {
-			todo!()
-		} else if expr.0 == Signal::Everything {
+		if expr.0 == Signal::Everything {
 			todo!()
 		}
 		// Simple case
-		let left = if let Signal::Id(id) = expr.0 {
+		let left = if expr.0 == Signal::Anything {
+			self.get_seen_signal_count_any(node.id, *left_network).0
+		} else if let Signal::Id(id) = expr.0 {
 			self.get_seen_signal_count(node.id, id, *left_network)
 		} else if let Some(id) = each_check_left {
 			self.get_seen_signal_count(node.id, id, *left_network)
 		} else {
 			0
 		};
-		let right = if let Signal::Id(id) = expr.2 {
+		let right = if expr.0 == Signal::Anything {
+			self.get_seen_signal_count_any(node.id, *right_network).0
+		} else if let Signal::Id(id) = expr.2 {
 			self.get_seen_signal_count(node.id, id, *right_network)
 		} else if let Some(id) = each_check_right {
 			self.get_seen_signal_count(node.id, id, *right_network)
@@ -162,8 +209,7 @@ impl SimState {
 			use_input_count,
 			constants,
 		) = node.function.unwrap_decider();
-		let outp_red = vec![0; n_ids() as usize];
-		let outp_green = vec![0; n_ids() as usize];
+		let mut state_out = vec![0; n_ids() as usize];
 
 		for (sig, network, use_input_count, constant) in izip!(
 			node.output.iter(),
@@ -171,40 +217,33 @@ impl SimState {
 			use_input_count.iter(),
 			constants.iter()
 		) {
+			let constant = constant.or(if !*use_input_count { Some(1) } else { None });
 			match sig {
-				Signal::Id(_) => self.execute_decider_output_signal_model(
+				Signal::Id(id) => self.execute_decider_output_signal_model(
 					node,
-					&outp_red,
-					&outp_green,
+					&mut state_out,
 					*network,
-					*constant,
+					constant,
+					*id,
 				),
 				Signal::Everything => self.execute_decider_output_everything_model(
-					node,
-					&outp_red,
-					&outp_green,
-					*network,
-					*constant,
+					node, &state_out, &state_out, *network, constant,
 				),
 				Signal::Anything => self.execute_decider_output_anything_model(
-					node,
-					&outp_red,
-					&outp_green,
-					*network,
-					*constant,
+					node, &state_out, &state_out, *network, constant,
 				),
 				Signal::Each => self.execute_decider_output_each_model(
-					node,
-					&outp_red,
-					&outp_green,
-					*network,
-					*constant,
+					node, &state_out, &state_out, *network, constant,
 				),
 				Signal::Constant(_) => {
 					panic!("Decider combinator has a constant as an output, which isn't valid.")
 				}
 				Signal::None => continue,
 			}
+		}
+		for idx in 0..state_out.len() {
+			new_state_red[node.id.0][idx] = state_out[idx];
+			new_state_green[node.id.0][idx] = state_out[idx];
 		}
 	}
 }

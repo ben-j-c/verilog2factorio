@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"model_checker::test::constant_through_nop",
+				"sim::test::decider_simple",
 				"--",
 				"--exact",
 				"--show-output"

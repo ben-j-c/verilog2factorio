@@ -86,7 +86,7 @@ pub enum DeciderOperator {
 ///
 /// This enum can be thought of as an OR or an AND prefix to every expression in the decider.
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeciderRowConjDisj {
 	And,
 	Or,
