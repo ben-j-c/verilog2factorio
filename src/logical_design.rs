@@ -2558,7 +2558,7 @@ mod test {
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 100);
 		}
-		sim.step(10);
+		sim.step(5);
 		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 100)]);
 		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
 		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![]);
@@ -2566,7 +2566,7 @@ mod test {
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
-		sim.step(10);
+		sim.step(5);
 		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 100)]);
 		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![(1, 1)]);
 		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
@@ -2575,7 +2575,7 @@ mod test {
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
-		sim.step(10);
+		sim.step(5);
 		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 200)]);
 		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
 		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
@@ -2583,7 +2583,7 @@ mod test {
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
-		sim.step(10);
+		sim.step(5);
 		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 300)]);
 		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![]);
 		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 100)]);
@@ -2591,7 +2591,7 @@ mod test {
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
-		sim.step(10);
+		sim.step(5);
 		assert_eq!(sim.probe_red_output_sparse(data_c), vec![(0, 300)]);
 		assert_eq!(sim.probe_red_output_sparse(clock_c), vec![(1, 1)]);
 		assert_eq!(sim.probe_red_output_sparse(comb_out), vec![(2, 300)]);

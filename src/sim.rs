@@ -564,7 +564,8 @@ impl SimState {
 				}
 			}
 			max_height += (unique_ids_red.len() as i32 + unique_ids_green.len() as i32)
-				* (TRACE_HEIGHT + TRACE_SPACING_INTRA);
+				* (TRACE_HEIGHT + TRACE_SPACING_INTRA)
+				+ TRACE_SPACING_INTER;
 			unique_red.push(unique_ids_red);
 			unique_green.push(unique_ids_green);
 		}
@@ -580,6 +581,25 @@ impl SimState {
 			None,
 			None,
 		);
+		for tick_bar in (0..(max_step + 5)).step_by(5) {
+			svg.add_rect(
+				x + tick_bar as i32 * TICK_SIZE,
+				y - TRACE_SPACING_INTRA - TRACE_HEIGHT,
+				TICK_SIZE,
+				TRACE_HEIGHT,
+				(230, 230, 230),
+				Some(format!("{tick_bar}")),
+				None,
+			);
+			svg.add_line(
+				x + tick_bar as i32 * TICK_SIZE,
+				y - TRACE_SPACING_INTRA - TRACE_HEIGHT,
+				x + tick_bar as i32 * TICK_SIZE,
+				y + max_height,
+				None,
+				None,
+			);
+		}
 		//Title
 		svg.add_rect(
 			0,
