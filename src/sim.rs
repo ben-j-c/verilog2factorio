@@ -1,10 +1,8 @@
-use std::{cell::RefCell, fmt::format, os::linux::net, rc::Rc, usize};
+use std::{cell::RefCell, rc::Rc, usize};
 
 use itertools::Itertools;
 
 mod decider_model;
-
-use decider_model::*;
 
 use crate::{
 	logical_design::{
@@ -168,8 +166,8 @@ impl SimState {
 		}
 		self.trace_set.push(node);
 		self.traces[node.0] = Trace {
-			red: vec![(self.step_number, self.probe_red_output_sparse(node))],
-			green: vec![(self.step_number, self.probe_green_output_sparse(node))],
+			red: vec![(self.step_number, self.probe_red_out_sparse(node))],
+			green: vec![(self.step_number, self.probe_green_out_sparse(node))],
 		};
 	}
 
@@ -181,7 +179,7 @@ impl SimState {
 		&self.state_green[id.0]
 	}
 
-	pub fn probe_red_output_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
+	pub fn probe_red_out_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
 		let mut ret = vec![];
 		for i in 0..self.state_red.dims().1 {
 			if self.state_red[id.0][i] != 0 {
@@ -191,7 +189,7 @@ impl SimState {
 		ret
 	}
 
-	pub fn probe_green_output_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
+	pub fn probe_green_out_sparse(&self, id: NodeId) -> Vec<(i32, i32)> {
 		let mut ret = vec![];
 		for i in 0..self.state_green.dims().1 {
 			if self.state_green[id.0][i] != 0 {
@@ -207,8 +205,8 @@ impl SimState {
 
 	fn capture_trace(&mut self) {
 		for nodeid in &self.trace_set {
-			let new_capture_red = self.probe_red_output_sparse(*nodeid);
-			let new_capture_green = self.probe_green_output_sparse(*nodeid);
+			let new_capture_red = self.probe_red_out_sparse(*nodeid);
+			let new_capture_green = self.probe_green_out_sparse(*nodeid);
 			self.traces[nodeid.0]
 				.red
 				.push((self.step_number, new_capture_red));
@@ -445,7 +443,6 @@ impl SimState {
 	}
 
 	pub fn compute_combs(&self, new_state_red: &mut Arr2<i32>, new_state_green: &mut Arr2<i32>) {
-		let n_ids = signal_lookup_table::n_ids();
 		let logd = self.logd.borrow();
 		for node in &logd.nodes {
 			match &node.function {
@@ -691,15 +688,13 @@ impl SimState {
 				y += TRACE_HEIGHT + TRACE_SPACING_INTRA;
 			}
 			let y2 = y;
-			svg.add_rect(
-				1,
-				y1,
-				x / 2 - 2,
-				y2 - y1,
-				(200, 200, 200),
-				Some(format!("{:?}", nodeid)),
-				None,
-			);
+			let text = {
+				match &self.logd.borrow().get_node(*nodeid).description {
+					Some(desc) => desc.clone(),
+					None => format!("{:?}", nodeid),
+				}
+			};
+			svg.add_rect(1, y1, x / 2 - 2, y2 - y1, (200, 200, 200), Some(text), None);
 			y += TRACE_SPACING_INTER;
 		}
 		svg
@@ -1032,7 +1027,7 @@ mod test {
 	#[test]
 	fn decider_simple4() {
 		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
-		let (c1, d1, d2, wire, wire2) = {
+		let (c1, _, _, wire, wire2) = {
 			let mut logd = logd.borrow_mut();
 			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
 			let d1 = logd.add_decider_comb();

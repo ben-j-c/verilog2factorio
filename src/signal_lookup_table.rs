@@ -379,6 +379,13 @@ pub fn lookup_id(mapped_name: &str) -> Option<i32> {
 	None
 }
 
+pub fn lookup_sig(mapped_name: &str) -> crate::logical_design::Signal {
+	if let Some(id) = lookup_id(mapped_name) {
+		return crate::logical_design::Signal::Id(id);
+	}
+	panic!("Name doesn't match signal");
+}
+
 pub fn n_ids() -> i32 {
 	SIGNAL_MAP.0.len() as i32
 }
