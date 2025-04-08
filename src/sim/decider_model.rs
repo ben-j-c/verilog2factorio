@@ -123,7 +123,7 @@ impl SimState {
 	) {
 	}
 
-	fn evaluate_decider_condition(
+	pub(super) fn evaluate_decider_condition(
 		&self,
 		node: &Node,
 		expr: &(Signal, DeciderOperator, Signal),
@@ -133,7 +133,24 @@ impl SimState {
 		each_check_right: Option<i32>,
 	) -> bool {
 		if expr.0 == Signal::Everything {
-			todo!()
+			for i in 0..n_ids() {
+				let seen = self.get_seen_signal_count(node.id, i, *left_network);
+				if seen == 0 {
+					continue;
+				}
+				let expr = (Signal::Id(i), expr.1, expr.2);
+				if self.evaluate_decider_condition(
+					node,
+					&expr,
+					left_network,
+					right_network,
+					each_check_left,
+					each_check_right,
+				) {
+					return false;
+				}
+			}
+			return true;
 		}
 		// Simple case
 		let left = if expr.0 == Signal::Anything {

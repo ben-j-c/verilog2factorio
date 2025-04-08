@@ -7,7 +7,7 @@ mod decider_model;
 use crate::{
 	logical_design::{
 		ArithmeticOperator, DeciderOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal,
-		WireColour,
+		WireColour, NET_RED_GREEN,
 	},
 	ndarr::Arr2,
 	signal_lookup_table::{self, n_ids},
@@ -200,7 +200,19 @@ impl SimState {
 	}
 
 	pub fn probe_lamp_state(&self, id: NodeId) -> bool {
-		todo!()
+		let logd = self.logd.borrow();
+		let expr = match &logd.get_node(id).function {
+			NodeFunction::Lamp { expression } => expression,
+			_ => panic!("Probed lamp state for a node which is not a lamp."),
+		};
+		self.evaluate_decider_condition(
+			logd.get_node(id),
+			expr,
+			&NET_RED_GREEN,
+			&NET_RED_GREEN,
+			None,
+			None,
+		)
 	}
 
 	fn capture_trace(&mut self) {
