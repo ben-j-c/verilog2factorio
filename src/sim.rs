@@ -6,13 +6,13 @@ mod decider_model;
 
 use crate::{
 	logical_design::{
-		ArithmeticOperator, DeciderOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal,
-		WireColour, NET_RED_GREEN,
+		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
+		NET_RED_GREEN,
 	},
 	ndarr::Arr2,
 	signal_lookup_table::{self, n_ids},
 	svg::SVG,
-	util::{hash_map, hash_set, HashM, HashS},
+	util::{hash_map, hash_set, HashM},
 };
 
 #[derive(Debug, Clone)]
