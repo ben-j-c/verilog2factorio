@@ -10,6 +10,7 @@ pub static SIGNAL_MAP: Lazy<(
 	let mut id = 0;
 	let mut m = HashMap::new();
 	let mut m2 = HashMap::new();
+	#[allow(unused_assignments)]
 	let mut signal_type = Some("virtual");
 	macro_rules! sig_def {
 		($name:expr) => {{

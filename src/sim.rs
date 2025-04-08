@@ -18,6 +18,7 @@ use crate::{
 #[derive(Debug, Clone)]
 struct WireNetwork {
 	fanin: Vec<NodeId>,
+	#[allow(dead_code)]
 	fanout: Vec<NodeId>,
 	wires: Vec<NodeId>,
 	colour: WireColour,
@@ -55,6 +56,7 @@ impl NetMapEntry {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn output(&self, colour: WireColour) -> &Option<NetId> {
 		match colour {
 			WireColour::Red => &self.output_red,
@@ -508,6 +510,7 @@ impl SimState {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn print(&self) {
 		println!("--------------");
 		println!("RED: (signal_id, count)");
