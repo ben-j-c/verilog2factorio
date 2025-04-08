@@ -226,7 +226,7 @@ impl SVG {
 
 		// Total dimensions.
 		let total_width = left_margin + plot_width + right_margin;
-		let total_height = top_margin + plot_height + bottom_margin;
+		//let total_height = top_margin + plot_height + bottom_margin;
 
 		// Add axes (in black).
 		self.shapes.push(Shape::Line {
