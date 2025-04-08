@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use itertools::izip;
-use metis::option::Opt;
 use serde::Serialize;
 
 use crate::logical_design::{

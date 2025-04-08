@@ -1,6 +1,5 @@
 use std::{
 	collections::{BTreeSet, HashSet, LinkedList},
-	ops::Index,
 	usize, vec,
 };
 
@@ -255,7 +254,7 @@ impl CheckedDesign {
 	}
 
 	fn initialize_nodes(&mut self, mapped_design: &MappedDesign) {
-		mapped_design.for_all_top_level_io(|_, name, port| {
+		mapped_design.for_all_top_level_io(|_, name, _port| {
 			if lookup_id(name).is_some() {
 				self.new_node(name, NodeType::PortBody);
 			} else {
