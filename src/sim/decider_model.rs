@@ -116,11 +116,12 @@ impl SimState {
 	pub(super) fn execute_decider_output_anything_model(
 		&self,
 		node: &Node,
-		outp_state_red: &[i32],
-		outp_state_green: &[i32],
+		output_signals: &mut [i32],
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
+		let sig_id = self.get_seen_signal_count_any(node.id, network);
+		self.execute_decider_output_signal_model(node, output_signals, network, constant, sig_id.1);
 	}
 
 	pub(super) fn evaluate_decider_condition(
@@ -251,7 +252,10 @@ impl SimState {
 					node, &state_out, &state_out, *network, constant,
 				),
 				Signal::Anything => self.execute_decider_output_anything_model(
-					node, &state_out, &state_out, *network, constant,
+					node,
+					&mut state_out,
+					*network,
+					constant,
 				),
 				Signal::Each => self.execute_decider_output_each_model(
 					node, &state_out, &state_out, *network, constant,
