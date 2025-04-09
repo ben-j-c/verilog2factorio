@@ -1,6 +1,6 @@
 {
 	"name": "v2f dev container",
-	"image": "mcr.microsoft.com/vscode/devcontainers/rust:ubuntu",
+	"image": "mcr.microsoft.com/vscode/devcontainers/rust",
 	"postCreateCommand": "apt install -y metis libmetis-dev",
 	"customizations": {
 		"vscode": {
