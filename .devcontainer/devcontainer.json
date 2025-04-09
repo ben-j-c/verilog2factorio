@@ -1,7 +1,8 @@
 {
 	"name": "v2f dev container",
 	"image": "mcr.microsoft.com/vscode/devcontainers/rust",
-	"postCreateCommand": "sudo apt update && sudo apt install -y metis libmetis-dev",
+	"postCreateCommand": "sudo apt update && sudo apt install -y metis",
+	"postStartCommand": "cargo build",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -12,7 +13,10 @@
 			],
 			"settings": {
 				"editor.formatOnSave": true
-			}
+			},
+			"openFiles": [
+				"src/main.rs"
+			]
 		}
 	}
 }
