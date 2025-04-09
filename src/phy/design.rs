@@ -8,7 +8,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use std::{
-	 collections::{HashMap, HashSet, LinkedList},
+	collections::{HashMap, HashSet, LinkedList},
 	hash::Hash,
 	vec,
 };
