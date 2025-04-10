@@ -36,4 +36,4 @@ preferred mode of usage.
 3. Press the run button
 
 # Docs
-Read the docs to get a better understanding on how to use the APIs. The python
+Read the docs to get a better understanding on how to use the APIs. For beginners, the Python flow is recommended. It uses a more object oriented and type flexible design.
