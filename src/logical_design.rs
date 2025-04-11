@@ -439,7 +439,7 @@ impl LogicalDesign {
 	}
 
 	/// Add a node with the specific [`NodeFunction`] and the specific output [`Signal`]. Generally a low level API.
-	pub fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
+	pub(crate) fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
 		self.cache.get_mut().valid = false;
 		let id = NodeId(self.nodes.len());
 		self.nodes.push(Node {

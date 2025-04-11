@@ -15,11 +15,6 @@ use crate::{
 	util::{hash_map, hash_set, HashM},
 };
 
-#[derive(Debug)]
-pub enum SimulationError {
-	ChangeCausedIncoherency,
-}
-
 #[derive(Debug, Clone)]
 struct WireNetwork {
 	fanin: Vec<NodeId>,
@@ -106,11 +101,11 @@ impl SimState {
 			traces: vec![],
 			trace_set: vec![],
 		};
-		ret.update_logical_design().unwrap();
+		ret.update_logical_design();
 		ret
 	}
 
-	pub fn update_logical_design(&mut self) -> Result<(), SimulationError> {
+	pub fn update_logical_design(&mut self) {
 		let logd = self.logd.borrow();
 		let netmap_len = self.netmap.len();
 		for _ in logd.nodes.iter().skip(netmap_len) {
@@ -165,7 +160,6 @@ impl SimState {
 				colour,
 			});
 		}
-		Ok(())
 	}
 
 	pub fn add_trace(&mut self, node: NodeId) {
@@ -207,20 +201,20 @@ impl SimState {
 		ret
 	}
 
-	pub fn probe_lamp_state(&self, id: NodeId) -> bool {
+	pub fn probe_lamp_state(&self, id: NodeId) -> Option<bool> {
 		let logd = self.logd.borrow();
 		let expr = match &logd.get_node(id).function {
 			NodeFunction::Lamp { expression } => expression,
-			_ => panic!("Probed lamp state for a node which is not a lamp."),
+			_ => return None,
 		};
-		self.evaluate_decider_condition(
+		Some(self.evaluate_decider_condition(
 			logd.get_node(id),
 			expr,
 			&NET_RED_GREEN,
 			&NET_RED_GREEN,
 			None,
 			None,
-		)
+		))
 	}
 
 	fn capture_trace(&mut self) {
