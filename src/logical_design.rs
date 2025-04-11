@@ -169,7 +169,7 @@ pub enum NodeFunction {
 }
 
 impl NodeFunction {
-	pub fn unwrap_decider(
+	pub(crate) fn unwrap_decider(
 		&self,
 	) -> (
 		&Vec<(Signal, DeciderOperator, Signal)>,
@@ -204,7 +204,7 @@ impl NodeFunction {
 		}
 	}
 
-	pub fn unwrap_arithmetic(
+	pub(crate) fn unwrap_arithmetic(
 		&self,
 	) -> (
 		ArithmeticOperator,
@@ -307,7 +307,7 @@ impl Node {
 	}
 
 	/// Does this node not feed into any nodes?
-	pub fn fanout_empty(&self) -> bool {
+	pub(crate) fn fanout_empty(&self) -> bool {
 		self.fanout_green.is_empty() && self.fanout_red.is_empty()
 	}
 

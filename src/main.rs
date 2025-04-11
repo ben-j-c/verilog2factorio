@@ -9,7 +9,8 @@ use serializable_design::SerializableDesign;
 
 pub mod checked_design;
 mod connected_design;
-pub mod logical_design;
+mod logical_design;
+pub mod logical_design_safe;
 mod mapped_design;
 mod phy;
 mod serializable_design;
