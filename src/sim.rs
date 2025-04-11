@@ -15,6 +15,11 @@ use crate::{
 	util::{hash_map, hash_set, HashM},
 };
 
+#[derive(Debug)]
+pub enum SimulationError {
+	ChangeCausedIncoherency,
+}
+
 #[derive(Debug, Clone)]
 struct WireNetwork {
 	fanin: Vec<NodeId>,
@@ -101,11 +106,11 @@ impl SimState {
 			traces: vec![],
 			trace_set: vec![],
 		};
-		ret.update_logical_design();
+		ret.update_logical_design().unwrap();
 		ret
 	}
 
-	pub fn update_logical_design(&mut self) {
+	pub fn update_logical_design(&mut self) -> Result<(), SimulationError> {
 		let logd = self.logd.borrow();
 		let netmap_len = self.netmap.len();
 		for _ in logd.nodes.iter().skip(netmap_len) {
@@ -160,6 +165,7 @@ impl SimState {
 				colour,
 			});
 		}
+		Ok(())
 	}
 
 	pub fn add_trace(&mut self, node: NodeId) {

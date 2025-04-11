@@ -1,4 +1,0 @@
-FROM ubuntu:noble
-RUN apt update
-RUN apt install -y metis libmetis-dev
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh

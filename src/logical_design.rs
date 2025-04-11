@@ -270,7 +270,7 @@ pub struct Node {
 
 impl Node {
 	/// Iterate the fanin of a specific colour.
-	pub fn iter_fanin(&self, colour: WireColour) -> Iter<NodeId> {
+	pub(crate) fn iter_fanin(&self, colour: WireColour) -> Iter<NodeId> {
 		match colour {
 			WireColour::Red => self.fanin_red.iter(),
 			WireColour::Green => self.fanin_green.iter(),
@@ -278,7 +278,7 @@ impl Node {
 	}
 
 	/// Iterate the fanout of a specific colour.
-	pub fn iter_fanout(&self, colour: WireColour) -> Iter<NodeId> {
+	pub(crate) fn iter_fanout(&self, colour: WireColour) -> Iter<NodeId> {
 		match colour {
 			WireColour::Red => self.fanout_red.iter(),
 			WireColour::Green => self.fanout_green.iter(),
@@ -286,7 +286,7 @@ impl Node {
 	}
 
 	/// Iterate the fanout of both colours.
-	pub fn iter_fanout_both(
+	pub(crate) fn iter_fanout_both(
 		&self,
 	) -> std::iter::Chain<std::slice::Iter<'_, NodeId>, std::slice::Iter<'_, NodeId>> {
 		self.iter_fanout(WireColour::Red)
@@ -294,7 +294,7 @@ impl Node {
 	}
 
 	/// Iterate the fanin of both colours.
-	pub fn iter_fanin_both(
+	pub(crate) fn iter_fanin_both(
 		&self,
 	) -> std::iter::Chain<std::slice::Iter<'_, NodeId>, std::slice::Iter<'_, NodeId>> {
 		self.iter_fanin(WireColour::Red)
@@ -302,7 +302,7 @@ impl Node {
 	}
 
 	/// Does this node not have any nodes that feed into it?
-	pub fn fanin_empty(&self) -> bool {
+	pub(crate) fn fanin_empty(&self) -> bool {
 		self.fanin_green.is_empty() && self.fanin_red.is_empty()
 	}
 
@@ -430,7 +430,11 @@ impl LogicalDesign {
 	}
 
 	/// Automatically build from a [`CheckedDesign`]
-	pub fn build_from(&mut self, checked_design: &CheckedDesign, mapped_design: &MappedDesign) {
+	pub(crate) fn build_from(
+		&mut self,
+		checked_design: &CheckedDesign,
+		mapped_design: &MappedDesign,
+	) {
 		checked_design.apply_onto(self, mapped_design); // lmfao
 	}
 
@@ -1168,7 +1172,7 @@ impl LogicalDesign {
 	}
 
 	/// A pattern for bit manipulations. ehhhhh too lazy to spec it now. Raise an issue if you want me to.
-	pub fn add_swizzle(
+	pub(crate) fn add_swizzle(
 		&mut self,
 		input: Vec<Signal>,
 		fi_exprs: Vec<Option<CoarseExpr>>,
@@ -1767,7 +1771,7 @@ impl Display for LogicalDesign {
 }
 
 #[cfg(test)]
-pub fn get_simple_logical_design() -> LogicalDesign {
+pub(crate) fn get_simple_logical_design() -> LogicalDesign {
 	use ArithmeticOperator as Aop;
 	use DeciderOperator as Dop;
 	use Signal as Sig;
@@ -1782,7 +1786,7 @@ pub fn get_simple_logical_design() -> LogicalDesign {
 }
 
 #[cfg(test)]
-pub fn get_complex_40_logical_design() -> LogicalDesign {
+pub(crate) fn get_complex_40_logical_design() -> LogicalDesign {
 	use ArithmeticOperator as Aop;
 	use DeciderOperator as Dop;
 	use Signal as Sig;

@@ -164,7 +164,7 @@ impl PhysicalDesign {
 		ret
 	}
 
-	pub fn build_from(&mut self, logical: &LogicalDesign) {
+	pub(crate) fn build_from(&mut self, logical: &LogicalDesign) {
 		let partition_size = self.user_partition_size.unwrap_or(64);
 		let scale_factor = 1.5;
 		self.side_length_single_partition =
@@ -195,7 +195,7 @@ impl PhysicalDesign {
 		self.validate_against(logical);
 	}
 
-	pub fn for_all_phy<F>(&self, mut func: F)
+	pub(crate) fn for_all_phy<F>(&self, mut func: F)
 	where
 		F: FnMut(&PhyNode),
 	{
@@ -204,7 +204,7 @@ impl PhysicalDesign {
 		}
 	}
 
-	pub fn for_all_wires<F>(&self, mut func: F)
+	pub(crate) fn for_all_wires<F>(&self, mut func: F)
 	where
 		F: FnMut(&Wire),
 	{
@@ -238,7 +238,7 @@ impl PhysicalDesign {
 		});
 	}
 
-	pub fn get_logical<'a>(&self, id: PhyId, logical: &'a LogicalDesign) -> &'a ld::Node {
+	pub(crate) fn get_logical<'a>(&self, id: PhyId, logical: &'a LogicalDesign) -> &'a ld::Node {
 		let comb = &self.nodes[id.0];
 		let ld_node = logical.get_node(comb.logic);
 		ld_node
@@ -420,7 +420,7 @@ impl PhysicalDesign {
 		failure
 	}
 
-	pub fn solve_as_mcmc_dense(
+	fn solve_as_mcmc_dense(
 		connections_per_node: &Vec<Vec<usize>>,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
@@ -745,7 +745,7 @@ impl PhysicalDesign {
 		Ok(best.assignments)
 	}
 
-	pub fn solve_as_mcmc_global(
+	fn solve_as_mcmc_global(
 		connections_per_node: &Vec<Vec<(usize, usize)>>,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
@@ -1008,7 +1008,7 @@ impl PhysicalDesign {
 		Ok(best.assignments)
 	}
 
-	pub fn max_allowable_distance(
+	fn max_allowable_distance(
 		&self,
 		logical: &LogicalDesign,
 		id_comb_a: PhyId,
@@ -1559,7 +1559,7 @@ impl PhysicalDesign {
 		(local_to_global, global_to_local)
 	}
 
-	pub fn get_connectivity_as_vec(&self, ld: &LogicalDesign) -> Vec<Vec<PhyId>> {
+	fn get_connectivity_as_vec(&self, ld: &LogicalDesign) -> Vec<Vec<PhyId>> {
 		let mut connections = vec![vec![]; self.nodes.len()];
 		for cell in &self.nodes {
 			for ldid in ld.get_connected_combs(cell.logic) {
@@ -1569,7 +1569,7 @@ impl PhysicalDesign {
 		connections
 	}
 
-	pub fn get_connectivity_as_vec_usize(&self, ld: &LogicalDesign) -> Vec<Vec<usize>> {
+	pub(crate) fn get_connectivity_as_vec_usize(&self, ld: &LogicalDesign) -> Vec<Vec<usize>> {
 		let mut connections = vec![vec![]; self.nodes.len()];
 		for cell in &self.nodes {
 			for ldid in ld.get_connected_combs(cell.logic) {
@@ -1579,7 +1579,7 @@ impl PhysicalDesign {
 		connections
 	}
 
-	pub fn split_connections_to_local_and_global(
+	fn split_connections_to_local_and_global(
 		&self,
 		global_connections: &Vec<Vec<usize>>,
 	) -> (
@@ -1633,7 +1633,7 @@ impl PhysicalDesign {
 		)
 	}
 
-	pub fn get_connectivity_as_matrix(
+	pub(crate) fn get_connectivity_as_matrix(
 		&self,
 		ld: &LogicalDesign,
 		triangular: bool,
@@ -1651,7 +1651,7 @@ impl PhysicalDesign {
 		connections
 	}
 
-	pub fn get_connectivity_as_edges(
+	pub(crate) fn get_connectivity_as_edges(
 		&self,
 		ld: &LogicalDesign,
 		triangular: bool,
