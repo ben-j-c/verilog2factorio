@@ -120,8 +120,22 @@ impl SimState {
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
-		let sig_id = self.get_seen_signal_count_any(node.id, network);
-		self.execute_decider_output_signal_model(node, output_signals, network, constant, sig_id.1);
+		for sig_id in 0..n_ids() {
+			let mut output_signals2 = vec![0; output_signals.len()];
+			self.execute_decider_output_signal_model(
+				node,
+				&mut output_signals2,
+				network,
+				constant,
+				sig_id,
+			);
+			for sig_id in 0..n_ids() as usize {
+				if output_signals2[sig_id] != 0 {
+					output_signals[sig_id] += 1;
+					return;
+				}
+			}
+		}
 	}
 
 	pub(super) fn evaluate_decider_condition(
