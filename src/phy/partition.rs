@@ -213,7 +213,7 @@ mod test {
 
 	#[test]
 	fn spectral_n_synthetic() {
-		let l = crate::logical_design::get_large_logical_design(40);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(40);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectvity = p.get_connectivity_as_vec_usize(&l);
@@ -255,7 +255,7 @@ mod test {
 	fn metis_n_synthetic() {
 		let n = 30_000;
 		let n_parts = n / 1000;
-		let l = crate::logical_design::get_large_logical_design(n as usize);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(n as usize);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectivity = p.get_connectivity_as_vec_usize(&l);
@@ -267,7 +267,7 @@ mod test {
 	fn metis_2d_synthetic() {
 		let n = 500;
 		let n_parts = n * n / 1000;
-		let l = crate::logical_design::get_large_logical_design_2d(n as usize);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(n as usize);
 		let mut p = PhysicalDesign::new();
 		p.extract_combs(&l);
 		let connectivity = p.get_connectivity_as_vec_usize(&l);

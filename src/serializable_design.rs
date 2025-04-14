@@ -530,12 +530,14 @@ fn resolve_network(val: (bool, bool)) -> Option<HashMap<String, bool>> {
 #[cfg(test)]
 mod test {
 
+	use crate::tests;
+
 	use super::*;
 	#[test]
 	fn new() {
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		let l = logical_design::get_simple_logical_design();
+		let l = tests::logical_design_tests::get_simple_logical_design();
 		p.build_from(&l);
 		s.build_from(&p, &l);
 		let blueprint_json = serde_json::to_string(&s).unwrap();

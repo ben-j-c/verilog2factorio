@@ -2195,25 +2195,18 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 #[cfg(test)]
 mod test {
 
-	use std::{fs::File, io::Write};
-
-	use crate::{
-		logical_design::{get_large_logical_design, get_large_logical_design_2d},
-		serializable_design,
-	};
-
 	use super::*;
 	#[test]
 	fn new() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_simple_logical_design();
+		let l = crate::tests::logical_design_tests::get_simple_logical_design();
 		p.build_from(&l);
 	}
 
 	#[test]
 	fn n_combs() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(200);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(200);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg");
 	}
@@ -2221,7 +2214,7 @@ mod test {
 	#[test]
 	fn memory_n_mcmc() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_memory_test_design(40);
+		let l = crate::tests::logical_design_tests::get_large_memory_test_design(40);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/memory_n_mcmc.svg");
 	}
@@ -2229,7 +2222,7 @@ mod test {
 	#[test]
 	fn dense_memory_n_mcmc() {
 		let mut p = PhysicalDesign::new();
-		let l = ld::get_large_dense_memory_test_design(1_024);
+		let l = crate::tests::logical_design_tests::get_large_dense_memory_test_design(1_024);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/dense_memory_n_mcmc.svg");
 
@@ -2245,7 +2238,7 @@ mod test {
 		for x in (20..=200).step_by(20) {
 			println!("==============={x}===============");
 			let mut p = PhysicalDesign::new();
-			let l = get_large_logical_design(x);
+			let l = crate::tests::logical_design_tests::get_large_logical_design(x);
 			p.build_from(&l);
 		}
 	}
@@ -2253,7 +2246,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design(100);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(100);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
 	}
@@ -2261,7 +2254,7 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = get_large_logical_design_2d(50);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(50);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}

@@ -22,6 +22,9 @@ mod svg;
 
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 /// Verilog to Factorio combinator compiler (v2f)
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -49,7 +52,7 @@ fn main() {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
 	use super::*;
 	#[allow(unused)]
 	use logical_design::ArithmeticOperator as Aop;
@@ -72,7 +75,7 @@ mod tests {
 	fn make_simple_design() {
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		let l = logical_design::get_simple_logical_design();
+		let l = tests::logical_design_tests::get_simple_logical_design();
 		p.build_from(&l);
 		s.build_from(&p, &l);
 		let json = serde_json::to_string(&s).unwrap();
@@ -83,7 +86,7 @@ mod tests {
 	fn make_complex_40_design() {
 		let mut p = PhysicalDesign::new();
 		let mut s = SerializableDesign::new();
-		let l = logical_design::get_complex_40_logical_design();
+		let l = tests::logical_design_tests::get_complex_40_logical_design();
 		p.build_from(&l);
 		s.build_from(&p, &l);
 		let json = serde_json::to_string(&s).unwrap();
