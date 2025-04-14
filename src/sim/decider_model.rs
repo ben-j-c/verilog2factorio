@@ -28,6 +28,7 @@ impl SimState {
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
+		todo!()
 	}
 
 	pub(super) fn execute_decider_output_signal_model(
