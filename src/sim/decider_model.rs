@@ -23,12 +23,32 @@ impl SimState {
 	pub(super) fn execute_decider_output_everything_model(
 		&self,
 		node: &Node,
-		outp_state_red: &[i32],
-		outp_state_green: &[i32],
+		output_state: &mut [i32],
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
-		todo!()
+		let (expressions, expression_conj_disj, input_left_networks, input_right_networks, ..) =
+			node.function.unwrap_decider();
+		let sat = self.evaluate_decider_expressions(
+			node,
+			expressions,
+			expression_conj_disj,
+			input_left_networks,
+			input_right_networks,
+			1,
+			-1,
+		);
+		if !sat {
+			return;
+		}
+		for sig_id in 0..n_ids() {
+			let count = self.get_seen_signal_count(node.id, sig_id, network);
+			if let Some(constant) = constant {
+				output_state[sig_id as usize] += constant;
+			} else {
+				output_state[sig_id as usize] += count;
+			}
+		}
 	}
 
 	pub(super) fn execute_decider_output_signal_model(
@@ -48,39 +68,16 @@ impl SimState {
 		};
 		let mut sat_vec = vec![false; end as usize];
 		for each_id in 0..end {
-			let n_expr = expressions.len();
-			let mut sat_or = false;
-			let mut sat_and = true;
-			for idx in 0..n_expr {
-				let expr = &expressions[idx];
-				let each_left = if end == 1 || expr.0 != Signal::Each {
-					None
-				} else {
-					Some(each_id)
-				};
-				let each_right = if end == 1 || expr.2 != Signal::Each {
-					None
-				} else {
-					Some(each_id)
-				};
-				let sat = self.evaluate_decider_condition(
-					node,
-					expr,
-					&input_left_networks[idx],
-					&input_right_networks[idx],
-					each_left,
-					each_right,
-				);
-				sat_and &= sat;
-				if expression_conj_disj[idx] == DeciderRowConjDisj::Or {
-					sat_or |= sat_and;
-					sat_and = true;
-				}
-			}
-			if n_expr > 0 {
-				sat_or |= sat_and;
-			}
-			sat_vec[each_id as usize] = sat_or;
+			let sat = self.evaluate_decider_expressions(
+				node,
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				end,
+				each_id,
+			);
+			sat_vec[each_id as usize] = sat;
 		}
 		for sat in sat_vec {
 			if !sat {
@@ -93,6 +90,51 @@ impl SimState {
 					.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
 			}
 		}
+	}
+
+	fn evaluate_decider_expressions(
+		&self,
+		node: &Node,
+		expressions: &Vec<(Signal, DeciderOperator, Signal)>,
+		expression_conj_disj: &Vec<DeciderRowConjDisj>,
+		input_left_networks: &Vec<(bool, bool)>,
+		input_right_networks: &Vec<(bool, bool)>,
+		end: i32,
+		each_id: i32,
+	) -> bool {
+		let n_expr = expressions.len();
+		let mut sat_or = false;
+		let mut sat_and = true;
+		for idx in 0..n_expr {
+			let expr = &expressions[idx];
+			let each_left = if end == 1 || expr.0 != Signal::Each {
+				None
+			} else {
+				Some(each_id)
+			};
+			let each_right = if end == 1 || expr.2 != Signal::Each {
+				None
+			} else {
+				Some(each_id)
+			};
+			let sat = self.evaluate_decider_condition(
+				node,
+				expr,
+				&input_left_networks[idx],
+				&input_right_networks[idx],
+				each_left,
+				each_right,
+			);
+			sat_and &= sat;
+			if expression_conj_disj[idx] == DeciderRowConjDisj::Or {
+				sat_or |= sat_and;
+				sat_and = true;
+			}
+		}
+		if n_expr > 0 {
+			sat_or |= sat_and;
+		}
+		sat_or
 	}
 
 	pub(super) fn execute_decider_output_each_model(
@@ -277,7 +319,10 @@ impl SimState {
 					*id,
 				),
 				Signal::Everything => self.execute_decider_output_everything_model(
-					node, &state_out, &state_out, *network, constant,
+					node,
+					&mut state_out,
+					*network,
+					constant,
 				),
 				Signal::Anything => {
 					let has_each = expressions.iter().any(|e| e.0 == Signal::Each);
