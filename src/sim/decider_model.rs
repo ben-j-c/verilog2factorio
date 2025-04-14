@@ -249,43 +249,6 @@ impl SimState {
 		Self::execute_decider_op(left, expr.1, right)
 	}
 
-	pub(super) fn compute_decider_comb_helper(&self, node: &Node) {
-		let (
-			expressions,
-			expression_conj_disj,
-			input_left_networks,
-			input_right_networks,
-			output_network,
-			use_input_count,
-			constants,
-		) = node.function.unwrap_decider();
-		let n_expr = expressions.len();
-		let mut sat_or = false;
-		let mut and_sat = true;
-		for idx in 0..n_expr {
-			let sat = self.evaluate_decider_condition(
-				node,
-				&expressions[idx],
-				&input_left_networks[idx],
-				&input_right_networks[idx],
-				None,
-				None,
-			);
-			and_sat &= sat;
-		}
-		sat_or |= and_sat;
-		for out in &node.output {
-			match out {
-				Signal::Anything => todo!(),
-				Signal::Id(_) => todo!(),
-				Signal::Everything => todo!(),
-				Signal::Each => todo!(),
-				Signal::Constant(_) => todo!(),
-				Signal::None => todo!(),
-			}
-		}
-	}
-
 	pub(super) fn compute_decider_comb(
 		&self,
 		node: &Node,
