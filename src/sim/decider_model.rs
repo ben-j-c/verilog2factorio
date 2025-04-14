@@ -112,6 +112,7 @@ impl SimState {
 			use_input_count,
 			constants,
 		) = node.function.unwrap_decider();
+		todo!()
 	}
 
 	pub(super) fn execute_decider_output_anything_model(
@@ -120,9 +121,35 @@ impl SimState {
 		output_signals: &mut [i32],
 		network: (bool, bool),
 		constant: Option<i32>,
+		has_each: bool,
 	) {
-		let (_, sig_id) = self.get_seen_signal_count_any(node.id, network);
-		self.execute_decider_output_signal_model(node, output_signals, network, constant, sig_id);
+		if !has_each {
+			let (_, sig_id) = self.get_seen_signal_count_any(node.id, network);
+			self.execute_decider_output_signal_model(
+				node,
+				output_signals,
+				network,
+				constant,
+				sig_id,
+			);
+		} else {
+			for sig_id in 0..n_ids() {
+				let mut output_signals2 = vec![0; output_signals.len()];
+				self.execute_decider_output_signal_model(
+					node,
+					&mut output_signals2,
+					network,
+					constant,
+					sig_id,
+				);
+				for sig_id in 0..n_ids() as usize {
+					if output_signals2[sig_id] != 0 {
+						output_signals[sig_id] += 1;
+						return;
+					}
+				}
+			}
+		}
 	}
 
 	pub(super) fn evaluate_decider_condition(
@@ -252,12 +279,16 @@ impl SimState {
 				Signal::Everything => self.execute_decider_output_everything_model(
 					node, &state_out, &state_out, *network, constant,
 				),
-				Signal::Anything => self.execute_decider_output_anything_model(
-					node,
-					&mut state_out,
-					*network,
-					constant,
-				),
+				Signal::Anything => {
+					let has_each = expressions.iter().any(|e| e.0 == Signal::Each);
+					self.execute_decider_output_anything_model(
+						node,
+						&mut state_out,
+						*network,
+						constant,
+						has_each,
+					)
+				}
 				Signal::Each => self.execute_decider_output_each_model(
 					node, &state_out, &state_out, *network, constant,
 				),
