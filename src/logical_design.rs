@@ -548,10 +548,10 @@ impl LogicalDesign {
 				ic,
 				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
-				NET_RED_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
+				NET_GREEN,
 			);
-			self.add_decider_comb_output(ic, data, true, NET_RED_GREEN);
+			self.add_decider_comb_output(ic, data, true, NET_RED);
 			ic
 		};
 
@@ -561,10 +561,10 @@ impl LogicalDesign {
 				mc,
 				(clk, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
-				NET_RED_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
+				NET_GREEN,
 			);
-			self.add_decider_comb_output(mc, data, true, NET_RED_GREEN);
+			self.add_decider_comb_output(mc, data, true, NET_RED);
 			mc
 		};
 
@@ -602,6 +602,27 @@ impl LogicalDesign {
 		}
 	}
 
+	pub(crate) fn add_dff_isolated(
+		&mut self,
+		input: Signal,
+		clk: Signal,
+		output: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId) {
+		let clk_buf_1 = self.add_neg(clk, clk);
+		let clk_buf_2 = self.add_nop(clk, clk);
+		let (latch_in_wire_1, clk_wire_1, latch_out_1) = self.add_latch(input, clk);
+		let (latch_in_wire_2, clk_wire_2, latch_out_2) = self.add_latch(input, clk);
+
+		self.connect_red(latch_out_1, latch_in_wire_2);
+		self.connect_green(clk_buf_1, clk_wire_1);
+		self.connect_green(clk_buf_2, clk_wire_2);
+		let clk_wire = self.add_wire_red(vec![], vec![clk_buf_1, clk_buf_2]);
+
+		let final_out = self.add_nop(input, output);
+		self.add_wire_red(vec![latch_out_2], vec![final_out]);
+		(latch_in_wire_1, clk_wire, final_out, latch_out_2)
+	}
+
 	pub(crate) fn add_adffe(
 		&mut self,
 		_input: Signal,
@@ -620,30 +641,19 @@ impl LogicalDesign {
 		en: Signal,
 		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
-		// If the compiler was aware of either green or red wires, then clk_buf could be eliminated.
-		// A problem that this could have is if `en` is not stable when clk is high, this is actually an important concern.
-		//
-		// en---r-----------------+
-		//                        |
-		// clk--r--clk_buf--g--clk_en_buf--r--dff--r--output
-		//                                     |
-		// input--r----------------------------+
-		let (d_wire, clk_wire, q) = self.add_dff(input, clk, output);
-		let clk_en_buf = self.add_decider_comb();
-		self.add_decider_comb_input(
-			clk_en_buf,
-			(en, DeciderOperator::Equal, Signal::Constant(1)),
-			DeciderRowConjDisj::FirstRow,
-			NET_RED,
-			NET_RED_GREEN,
-		);
-		self.add_decider_comb_output(clk_en_buf, clk, true, NET_GREEN);
-		let clk_buf = self.add_nop(clk, clk);
-		self.add_wire_green(vec![clk_buf], vec![clk_en_buf]);
-		self.connect_red(clk_en_buf, clk_wire);
-		let clk_in_wire = self.add_wire_red(vec![], vec![clk_buf]);
-		let en_wire = self.add_wire_red(vec![], vec![clk_en_buf]);
-		(d_wire, clk_in_wire, en_wire, q)
+		let (d_wire_internal, clk_wire, q, loopback) = self.add_dff_isolated(input, clk, output);
+		let (mux_a, mux_b) = self.add_2mux_internal(input, en);
+		self.add_wire_green(vec![], vec![]);
+
+		let en_buf = self.add_nop(en, en);
+		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
+		self.add_wire_green_simple(en_buf, mux_a);
+
+		let d_wire = self.add_wire_red(vec![], vec![mux_b]);
+		self.connect_red(mux_a, d_wire_internal);
+		self.add_wire_red_simple(loopback, mux_a);
+
+		(d_wire, clk_wire, en_wire, q)
 	}
 
 	pub(crate) fn add_sdffe(
@@ -655,6 +665,33 @@ impl LogicalDesign {
 		_output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		todo!()
+	}
+
+	fn add_2mux_internal(&mut self, data: Signal, s: Signal) -> (NodeId, NodeId) {
+		let comb_a = self.add_decider_comb();
+		let comb_b = self.add_decider_comb();
+
+		self.add_decider_comb_input(
+			comb_a,
+			(s, DeciderOperator::Equal, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_comb_output(comb_a, data, true, NET_RED);
+
+		self.add_decider_comb_input(
+			comb_b,
+			(s, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_comb_output(comb_b, data, true, NET_RED);
+		self.add_wire_red(vec![comb_a, comb_b], vec![]);
+		self.add_wire_green(vec![], vec![comb_a, comb_b]);
+		// a_wire,
+		(comb_a, comb_b)
 	}
 
 	pub(crate) fn add_ram(
