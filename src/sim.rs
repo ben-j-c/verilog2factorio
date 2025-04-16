@@ -286,40 +286,6 @@ impl SimState {
 		ret
 	}
 
-	fn get_seen_signals(&self, node: NodeId) -> (HashS<i32>, HashS<i32>) {
-		let mut ret_red = hash_set();
-		let mut ret_green = hash_set();
-		let output_red_entry = self.netmap[node.0].output_red;
-		if output_red_entry.is_some() {
-			let first_wire = self.network[output_red_entry.unwrap().0]
-				.wires
-				.first()
-				.unwrap()
-				.0;
-			for id in 0..n_ids() {
-				let count = self.state_red[first_wire][id as usize];
-				if count != 0 {
-					ret_red.insert(id);
-				}
-			}
-		}
-		let output_green_entry = self.netmap[node.0].output_green;
-		if output_green_entry.is_some() {
-			let first_wire = self.network[output_green_entry.unwrap().0]
-				.wires
-				.first()
-				.unwrap()
-				.0;
-			for id in 0..n_ids() {
-				let count = self.state_green[first_wire][id as usize];
-				if count != 0 {
-					ret_green.insert(id);
-				}
-			}
-		}
-		(ret_red, ret_green)
-	}
-
 	fn get_seen_signal_count_any(&self, node: NodeId, colours: (bool, bool)) -> (i32, i32) {
 		let mut ret_red = 0;
 		let mut id_red = -1;
@@ -875,7 +841,8 @@ mod test {
 
 	use super::SimState;
 	use crate::logical_design::{
-		DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal, NET_RED_GREEN,
+		DeciderOperator, DeciderRowConjDisj, LogicalDesign, Signal, NET_GREEN, NET_RED,
+		NET_RED_GREEN,
 	};
 
 	#[test]
@@ -1119,5 +1086,89 @@ mod test {
 		assert_eq!(sim.probe_red_output(wire)[10], 1234);
 		assert_eq!(sim.probe_red_output(wire2)[10], 0);
 		assert_eq!(sim.probe_red_output(wire2)[20], 2);
+	}
+
+	#[test]
+	fn decider_each1() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, c2, d1, d2) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1]);
+			let c2 = logd.add_constant_comb(vec![Signal::Id(10)], vec![2]);
+			let d1 = logd.add_decider_comb();
+			let d2 = logd.add_decider_comb();
+			logd.add_wire_red(vec![c1], vec![d1]);
+			logd.add_wire_red(vec![c1], vec![d2]);
+			logd.add_wire_green(vec![c2], vec![d1]);
+			logd.add_wire_green(vec![c2], vec![d2]);
+			logd.add_decider_comb_input(
+				d1,
+				(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED, // Only accept on c1
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d1, Signal::Each, true, NET_RED_GREEN);
+			logd.add_decider_comb_input(
+				d2,
+				(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED, // Only accept on c1
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d2, Signal::Each, true, NET_GREEN);
+			(c1, c2, d1, d2)
+		};
+		let mut sim = SimState::new(logd.clone());
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(d2), vec![]);
+		sim.step(1);
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![(10, 1)]);
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![(10, 2)]);
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(d2), vec![]);
+		sim.step(1);
+		sim.print();
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![(10, 1)]);
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![(10, 2)]);
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![(10, 3)]); // Even though only c1 is seen, c2 is summed too.
+		assert_eq!(sim.probe_red_out_sparse(d2), vec![(10, 2)]); // d2 sees c1, but forwards c2
+	}
+
+	#[test]
+	fn decider_each2() {
+		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let (c1, c2, d1, _, _) = {
+			let mut logd = logd.borrow_mut();
+			let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1]);
+			let c2 = logd.add_constant_comb(vec![Signal::Id(11)], vec![2]);
+			let d1 = logd.add_decider_comb();
+			let wire1 = logd.add_wire_red(vec![c1], vec![d1]);
+			let wire2 = logd.add_wire_green(vec![c2], vec![d1]);
+			logd.add_decider_comb_input(
+				d1,
+				(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
+				DeciderRowConjDisj::FirstRow,
+				NET_RED,
+				NET_RED_GREEN,
+			);
+			logd.add_decider_comb_output(d1, Signal::Each, true, NET_RED_GREEN);
+			(c1, c2, d1, wire1, wire2)
+		};
+		let mut sim = SimState::new(logd.clone());
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![]);
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![]);
+		sim.step(1);
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![(10, 1)]);
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![(11, 2)]);
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![]);
+		sim.step(1);
+		sim.print();
+		assert_eq!(sim.probe_red_out_sparse(c1), vec![(10, 1)]); // This should be seen by the Each.
+		assert_eq!(sim.probe_red_out_sparse(c2), vec![(11, 2)]); // This one shouldn't be seen by the Each.
+		assert_eq!(sim.probe_red_out_sparse(d1), vec![(10, 1)]); // So we only get c1
 	}
 }

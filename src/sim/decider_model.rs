@@ -1,10 +1,10 @@
 use itertools::izip;
 
 use crate::{
-	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, Signal},
+	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, NodeId, Signal},
 	ndarr::Arr2,
 	signal_lookup_table::n_ids,
-	util::{hash_map, hash_set},
+	util::{hash_map, hash_set, HashS},
 };
 
 use super::SimState;
@@ -58,6 +58,8 @@ impl SimState {
 		network: (bool, bool),
 		constant: Option<i32>,
 		output_id: i32,
+		is_each: bool,
+		has_each_output: bool,
 	) {
 		let mut each_seen_colours = (false, false);
 		let mut has_each = false;
@@ -77,36 +79,41 @@ impl SimState {
 		}
 		if has_each {
 			let mut sat_vec = vec![false; n_ids() as usize];
-			let (mut seen_red, mut seen_green) = self.get_seen_signals(node.id);
-			if !each_seen_colours.0 {
-				seen_red.clear();
-			}
-			if each_seen_colours.1 {
-				seen_green.clear();
-			}
-			for each_id in seen_red.union(&seen_green) {
-				if !seen_red.contains(&each_id) && !seen_green.contains(&each_id) {
-					continue;
-				}
+			let seen = self.get_seen_each_on_conditions(node.id, each_seen_colours);
+			for each_id in seen {
 				let sat = self.evaluate_decider_expressions(
 					node,
 					expressions,
 					expression_conj_disj,
 					input_left_networks,
 					input_right_networks,
-					Some(*each_id),
+					Some(each_id),
 				);
-				sat_vec[*each_id as usize] = sat;
+				sat_vec[each_id as usize] = sat;
 			}
-			for sat in sat_vec {
-				if !sat {
-					continue;
+			if is_each {
+				for sig_id in 0..sat_vec.len() {
+					if !sat_vec[sig_id] {
+						continue;
+					}
+					if let Some(c) = constant {
+						output_signals[sig_id] += c;
+					} else {
+						output_signals[sig_id] +=
+							self.get_seen_signal_count(node.id, sig_id as i32, network);
+					}
 				}
-				if let Some(c) = constant {
-					output_signals[output_id as usize] += c;
-				} else {
-					output_signals[output_id as usize] += constant
-						.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+			} else {
+				for sat in sat_vec {
+					if !sat {
+						continue;
+					}
+					if let Some(c) = constant {
+						output_signals[output_id as usize] += c;
+					} else {
+						output_signals[output_id as usize] +=
+							self.get_seen_signal_count(node.id, output_id, network)
+					}
 				}
 			}
 		} else {
@@ -119,11 +126,15 @@ impl SimState {
 				None,
 			);
 			if sat {
-				if let Some(c) = constant {
-					output_signals[output_id as usize] += c;
+				if has_each_output {
+					// Todo handle if the fucker has an Each on some other output (:
 				} else {
-					output_signals[output_id as usize] += constant
-						.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+					if let Some(c) = constant {
+						output_signals[output_id as usize] += c;
+					} else {
+						output_signals[output_id as usize] +=
+							self.get_seen_signal_count(node.id, output_id, network)
+					}
 				}
 			}
 		}
@@ -143,8 +154,8 @@ impl SimState {
 		let mut sat_and = true;
 		for idx in 0..n_expr {
 			let expr = &expressions[idx];
-			let each_left = each;
-			let each_right = each;
+			let each_left = if expr.0 == Signal::Each { each } else { None };
+			let each_right = if expr.2 == Signal::Each { each } else { None };
 			let sat = self.evaluate_decider_condition(
 				node,
 				expr,
@@ -165,24 +176,59 @@ impl SimState {
 		sat_or
 	}
 
+	pub(super) fn get_seen_each_on_conditions(
+		&self,
+		node: NodeId,
+		each_seen_colours: (bool, bool),
+	) -> HashS<i32> {
+		let mut ret = hash_set();
+		let output_red_entry = self.netmap[node.0].output_red;
+		if each_seen_colours.0 && output_red_entry.is_some() {
+			let first_wire = self.network[output_red_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			for id in 0..n_ids() {
+				let count = self.state_red[first_wire][id as usize];
+				if count != 0 {
+					ret.insert(id);
+				}
+			}
+		}
+		let output_green_entry = self.netmap[node.0].output_green;
+		if each_seen_colours.1 && output_green_entry.is_some() {
+			let first_wire = self.network[output_green_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			for id in 0..n_ids() {
+				let count = self.state_green[first_wire][id as usize];
+				if count != 0 {
+					ret.insert(id);
+				}
+			}
+		}
+		ret
+	}
+
 	pub(super) fn execute_decider_output_each_model(
 		&self,
 		node: &Node,
-		outp_state_red: &[i32],
-		outp_state_green: &[i32],
+		output_signals: &mut [i32],
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
-		let (
-			expressions,
-			expression_conj_disj,
-			input_left_networks,
-			input_right_networks,
-			output_network,
-			use_input_count,
-			constants,
-		) = node.function.unwrap_decider();
-		todo!()
+		self.execute_decider_output_signal_model(
+			node,
+			output_signals,
+			network,
+			constant,
+			-1,
+			true,
+			true,
+		);
 	}
 
 	pub(super) fn execute_decider_output_anything_model(
@@ -192,6 +238,7 @@ impl SimState {
 		network: (bool, bool),
 		constant: Option<i32>,
 		has_each: bool,
+		has_each_output: bool,
 	) {
 		if !has_each {
 			let (_, sig_id) = self.get_seen_signal_count_any(node.id, network);
@@ -201,6 +248,8 @@ impl SimState {
 				network,
 				constant,
 				sig_id,
+				false,
+				has_each_output,
 			);
 		} else {
 			for sig_id in 0..n_ids() {
@@ -211,6 +260,8 @@ impl SimState {
 					network,
 					constant,
 					sig_id,
+					false,
+					has_each_output,
 				);
 				for sig_id in 0..n_ids() as usize {
 					if output_signals2[sig_id] != 0 {
@@ -263,7 +314,7 @@ impl SimState {
 		} else {
 			0
 		};
-		let right = if expr.0 == Signal::Anything {
+		let right = if expr.2 == Signal::Anything {
 			self.get_seen_signal_count_any(node.id, *right_network).0
 		} else if let Signal::Id(id) = expr.2 {
 			self.get_seen_signal_count(node.id, id, *right_network)
@@ -293,6 +344,7 @@ impl SimState {
 			constants,
 		) = node.function.unwrap_decider();
 		let mut state_out = vec![0; n_ids() as usize];
+		let has_each_output = node.output.iter().any(|sig| *sig == Signal::Each);
 
 		for (sig, network, use_input_count, constant) in izip!(
 			node.output.iter(),
@@ -308,6 +360,8 @@ impl SimState {
 					*network,
 					constant,
 					*id,
+					false,
+					has_each_output,
 				),
 				Signal::Everything => self.execute_decider_output_everything_model(
 					node,
@@ -323,11 +377,12 @@ impl SimState {
 						*network,
 						constant,
 						has_each,
+						has_each_output,
 					)
 				}
-				Signal::Each => self.execute_decider_output_each_model(
-					node, &state_out, &state_out, *network, constant,
-				),
+				Signal::Each => {
+					self.execute_decider_output_each_model(node, &mut state_out, *network, constant)
+				}
 				Signal::Constant(_) => {
 					panic!("Decider combinator has a constant as an output, which isn't valid.")
 				}
