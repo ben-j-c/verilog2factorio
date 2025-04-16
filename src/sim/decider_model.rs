@@ -4,6 +4,7 @@ use crate::{
 	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, Signal},
 	ndarr::Arr2,
 	signal_lookup_table::n_ids,
+	util::{hash_map, hash_set},
 };
 
 use super::SimState;
@@ -35,8 +36,7 @@ impl SimState {
 			expression_conj_disj,
 			input_left_networks,
 			input_right_networks,
-			1,
-			-1,
+			None,
 		);
 		if !sat {
 			return;
@@ -59,35 +59,72 @@ impl SimState {
 		constant: Option<i32>,
 		output_id: i32,
 	) {
+		let mut each_seen_colours = (false, false);
+		let mut has_each = false;
 		let (expressions, expression_conj_disj, input_left_networks, input_right_networks, ..) =
 			node.function.unwrap_decider();
-		let end = if expressions.iter().any(|e| e.0 == Signal::Each) {
-			n_ids()
+
+		for i in 0..expressions.len() {
+			if expressions[i].0 == Signal::Each {
+				has_each = true;
+				each_seen_colours.0 |= input_left_networks[i].0;
+				each_seen_colours.1 |= input_left_networks[i].1;
+			}
+			if expressions[i].2 == Signal::Each {
+				each_seen_colours.0 |= input_right_networks[i].0;
+				each_seen_colours.1 |= input_right_networks[i].1;
+			}
+		}
+		if has_each {
+			let mut sat_vec = vec![false; n_ids() as usize];
+			let (mut seen_red, mut seen_green) = self.get_seen_signals(node.id);
+			if !each_seen_colours.0 {
+				seen_red.clear();
+			}
+			if each_seen_colours.1 {
+				seen_green.clear();
+			}
+			for each_id in seen_red.union(&seen_green) {
+				if !seen_red.contains(&each_id) && !seen_green.contains(&each_id) {
+					continue;
+				}
+				let sat = self.evaluate_decider_expressions(
+					node,
+					expressions,
+					expression_conj_disj,
+					input_left_networks,
+					input_right_networks,
+					Some(*each_id),
+				);
+				sat_vec[*each_id as usize] = sat;
+			}
+			for sat in sat_vec {
+				if !sat {
+					continue;
+				}
+				if let Some(c) = constant {
+					output_signals[output_id as usize] += c;
+				} else {
+					output_signals[output_id as usize] += constant
+						.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+				}
+			}
 		} else {
-			1
-		};
-		let mut sat_vec = vec![false; end as usize];
-		for each_id in 0..end {
 			let sat = self.evaluate_decider_expressions(
 				node,
 				expressions,
 				expression_conj_disj,
 				input_left_networks,
 				input_right_networks,
-				end,
-				each_id,
+				None,
 			);
-			sat_vec[each_id as usize] = sat;
-		}
-		for sat in sat_vec {
-			if !sat {
-				continue;
-			}
-			if let Some(c) = constant {
-				output_signals[output_id as usize] += c;
-			} else {
-				output_signals[output_id as usize] += constant
-					.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+			if sat {
+				if let Some(c) = constant {
+					output_signals[output_id as usize] += c;
+				} else {
+					output_signals[output_id as usize] += constant
+						.unwrap_or_else(|| self.get_seen_signal_count(node.id, output_id, network));
+				}
 			}
 		}
 	}
@@ -99,24 +136,15 @@ impl SimState {
 		expression_conj_disj: &Vec<DeciderRowConjDisj>,
 		input_left_networks: &Vec<(bool, bool)>,
 		input_right_networks: &Vec<(bool, bool)>,
-		end: i32,
-		each_id: i32,
+		each: Option<i32>,
 	) -> bool {
 		let n_expr = expressions.len();
 		let mut sat_or = false;
 		let mut sat_and = true;
 		for idx in 0..n_expr {
 			let expr = &expressions[idx];
-			let each_left = if end == 1 || expr.0 != Signal::Each {
-				None
-			} else {
-				Some(each_id)
-			};
-			let each_right = if end == 1 || expr.2 != Signal::Each {
-				None
-			} else {
-				Some(each_id)
-			};
+			let each_left = each;
+			let each_right = each;
 			let sat = self.evaluate_decider_condition(
 				node,
 				expr,

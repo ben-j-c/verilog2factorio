@@ -12,7 +12,7 @@ use crate::{
 	ndarr::Arr2,
 	signal_lookup_table::{self, n_ids},
 	svg::SVG,
-	util::{hash_map, hash_set, HashM},
+	util::{hash_map, hash_set, HashM, HashS},
 };
 
 #[derive(Debug, Clone)]
@@ -284,6 +284,40 @@ impl SimState {
 			ret += self.state_green[first_wire][id as usize];
 		}
 		ret
+	}
+
+	fn get_seen_signals(&self, node: NodeId) -> (HashS<i32>, HashS<i32>) {
+		let mut ret_red = hash_set();
+		let mut ret_green = hash_set();
+		let output_red_entry = self.netmap[node.0].output_red;
+		if output_red_entry.is_some() {
+			let first_wire = self.network[output_red_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			for id in 0..n_ids() {
+				let count = self.state_red[first_wire][id as usize];
+				if count != 0 {
+					ret_red.insert(id);
+				}
+			}
+		}
+		let output_green_entry = self.netmap[node.0].output_green;
+		if output_green_entry.is_some() {
+			let first_wire = self.network[output_green_entry.unwrap().0]
+				.wires
+				.first()
+				.unwrap()
+				.0;
+			for id in 0..n_ids() {
+				let count = self.state_green[first_wire][id as usize];
+				if count != 0 {
+					ret_green.insert(id);
+				}
+			}
+		}
+		(ret_red, ret_green)
 	}
 
 	fn get_seen_signal_count_any(&self, node: NodeId, colours: (bool, bool)) -> (i32, i32) {
