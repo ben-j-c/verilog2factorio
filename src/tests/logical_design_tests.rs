@@ -584,50 +584,50 @@ mod test {
 		sim.add_trace(data_c);
 		sim.add_trace(clock_c);
 		sim.add_trace(comb_out);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![]);
+		assert_eq!(sim.probe_red_out(data_c), vec![]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 100);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 200)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 200)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		let traces = sim.render_traces();
 		traces.save("svg/sim_dff_traces.svg").unwrap();
 	}
@@ -663,52 +663,52 @@ mod test {
 		sim.add_trace(clock_c);
 		sim.add_trace(en_c);
 		sim.add_trace(comb_out);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(en_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![]);
+		assert_eq!(sim.probe_red_out(data_c), vec![]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(en_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 100);
 			logd.set_ith_output_count(en_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 200)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 200)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 100)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		// Now for disabled
 		{
 			let mut logd = logd.borrow_mut();
@@ -717,42 +717,42 @@ mod test {
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 100)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 100)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 200)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 200)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
 			let mut logd = logd.borrow_mut();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
-		assert_eq!(sim.probe_red_out_sparse(data_c), vec![(sig_data.id(), 300)]);
-		assert_eq!(sim.probe_red_out_sparse(clock_c), vec![(sig_clk.id(), 1)]);
-		assert_eq!(sim.probe_red_out_sparse(comb_out), vec![(sig_q.id(), 300)]);
+		assert_eq!(sim.probe_red_out(data_c), vec![(sig_data.id(), 300)]);
+		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
+		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		let traces = sim.render_traces();
 		traces.save("svg/sim_dffe_traces.svg").unwrap();
 	}

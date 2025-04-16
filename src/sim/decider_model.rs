@@ -1,13 +1,15 @@
+use std::{collections::HashMap, default};
+
 use itertools::izip;
 
 use crate::{
 	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, NodeId, Signal},
 	ndarr::Arr2,
 	signal_lookup_table::n_ids,
-	util::{hash_map, hash_set, HashS},
+	util::{hash_map, hash_set, HashM, HashS},
 };
 
-use super::SimState;
+use super::{OutputState, SimState};
 
 impl SimState {
 	pub(super) fn execute_decider_op(left: i32, op: DeciderOperator, right: i32) -> bool {
@@ -24,7 +26,7 @@ impl SimState {
 	pub(super) fn execute_decider_output_everything_model(
 		&self,
 		node: &Node,
-		output_state: &mut [i32],
+		output_state: &mut OutputState,
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
@@ -44,9 +46,9 @@ impl SimState {
 		for sig_id in 0..n_ids() {
 			let count = self.get_seen_signal_count(node.id, sig_id, network);
 			if let Some(constant) = constant {
-				output_state[sig_id as usize] += constant;
+				output_state[sig_id] += constant;
 			} else {
-				output_state[sig_id as usize] += count;
+				output_state[sig_id] += count;
 			}
 		}
 	}
@@ -54,7 +56,7 @@ impl SimState {
 	pub(super) fn execute_decider_output_signal_model(
 		&self,
 		node: &Node,
-		output_signals: &mut [i32],
+		output_signals: &mut OutputState,
 		network: (bool, bool),
 		constant: Option<i32>,
 		output_id: i32,
@@ -78,7 +80,7 @@ impl SimState {
 			}
 		}
 		if has_each {
-			let mut sat_vec = vec![false; n_ids() as usize];
+			let mut sat_vec: HashS<i32> = HashS::default();
 			let seen = self.get_seen_each_on_conditions(node.id, each_seen_colours);
 			for each_id in seen {
 				let sat = self.evaluate_decider_expressions(
@@ -89,13 +91,12 @@ impl SimState {
 					input_right_networks,
 					Some(each_id),
 				);
-				sat_vec[each_id as usize] = sat;
+				if sat {
+					sat_vec.insert(each_id);
+				}
 			}
 			if is_each {
-				for sig_id in 0..sat_vec.len() {
-					if !sat_vec[sig_id] {
-						continue;
-					}
+				for sig_id in sat_vec {
 					if let Some(c) = constant {
 						output_signals[sig_id] += c;
 					} else {
@@ -104,14 +105,11 @@ impl SimState {
 					}
 				}
 			} else {
-				for sat in sat_vec {
-					if !sat {
-						continue;
-					}
+				for _sig_id in sat_vec {
 					if let Some(c) = constant {
-						output_signals[output_id as usize] += c;
+						output_signals[output_id] += c;
 					} else {
-						output_signals[output_id as usize] +=
+						output_signals[output_id] +=
 							self.get_seen_signal_count(node.id, output_id, network)
 					}
 				}
@@ -130,9 +128,9 @@ impl SimState {
 					// Todo handle if the fucker has an Each on some other output (:
 				} else {
 					if let Some(c) = constant {
-						output_signals[output_id as usize] += c;
+						output_signals[output_id] += c;
 					} else {
-						output_signals[output_id as usize] +=
+						output_signals[output_id] +=
 							self.get_seen_signal_count(node.id, output_id, network)
 					}
 				}
@@ -182,31 +180,29 @@ impl SimState {
 		each_seen_colours: (bool, bool),
 	) -> HashS<i32> {
 		let mut ret = hash_set();
-		let output_red_entry = self.netmap[node.0].output_red;
+		let output_red_entry = self.state[node.0].netmap.output_red;
 		if each_seen_colours.0 && output_red_entry.is_some() {
 			let first_wire = self.network[output_red_entry.unwrap().0]
 				.wires
 				.first()
 				.unwrap()
 				.0;
-			for id in 0..n_ids() {
-				let count = self.state_red[first_wire][id as usize];
-				if count != 0 {
-					ret.insert(id);
+			for (id, count) in &self.state[first_wire].red.data {
+				if *count != 0 {
+					ret.insert(*id);
 				}
 			}
 		}
-		let output_green_entry = self.netmap[node.0].output_green;
+		let output_green_entry = self.state[node.0].netmap.output_green;
 		if each_seen_colours.1 && output_green_entry.is_some() {
 			let first_wire = self.network[output_green_entry.unwrap().0]
 				.wires
 				.first()
 				.unwrap()
 				.0;
-			for id in 0..n_ids() {
-				let count = self.state_green[first_wire][id as usize];
-				if count != 0 {
-					ret.insert(id);
+			for (id, count) in &self.state[first_wire].green.data {
+				if *count != 0 {
+					ret.insert(*id);
 				}
 			}
 		}
@@ -216,7 +212,7 @@ impl SimState {
 	pub(super) fn execute_decider_output_each_model(
 		&self,
 		node: &Node,
-		output_signals: &mut [i32],
+		output_signals: &mut OutputState,
 		network: (bool, bool),
 		constant: Option<i32>,
 	) {
@@ -234,7 +230,7 @@ impl SimState {
 	pub(super) fn execute_decider_output_anything_model(
 		&self,
 		node: &Node,
-		output_signals: &mut [i32],
+		output_signals: &mut OutputState,
 		network: (bool, bool),
 		constant: Option<i32>,
 		has_each: bool,
@@ -253,7 +249,7 @@ impl SimState {
 			);
 		} else {
 			for sig_id in 0..n_ids() {
-				let mut output_signals2 = vec![0; output_signals.len()];
+				let mut output_signals2 = OutputState::default();
 				self.execute_decider_output_signal_model(
 					node,
 					&mut output_signals2,
@@ -263,7 +259,7 @@ impl SimState {
 					false,
 					has_each_output,
 				);
-				for sig_id in 0..n_ids() as usize {
+				for sig_id in 0..n_ids() {
 					if output_signals2[sig_id] != 0 {
 						output_signals[sig_id] += 1;
 						return;
@@ -331,8 +327,8 @@ impl SimState {
 	pub(super) fn compute_decider_comb(
 		&self,
 		node: &Node,
-		new_state_red: &mut Arr2<i32>,
-		new_state_green: &mut Arr2<i32>,
+		new_state_red: &mut Vec<OutputState>,
+		new_state_green: &mut Vec<OutputState>,
 	) {
 		let (
 			expressions,
@@ -343,7 +339,7 @@ impl SimState {
 			use_input_count,
 			constants,
 		) = node.function.unwrap_decider();
-		let mut state_out = vec![0; n_ids() as usize];
+		let mut state_out = OutputState::default();
 		let has_each_output = node.output.iter().any(|sig| *sig == Signal::Each);
 
 		for (sig, network, use_input_count, constant) in izip!(
@@ -389,9 +385,7 @@ impl SimState {
 				Signal::None => continue,
 			}
 		}
-		for idx in 0..state_out.len() {
-			new_state_red[node.id.0][idx] = state_out[idx];
-			new_state_green[node.id.0][idx] = state_out[idx];
-		}
+		new_state_red[node.id.0] = state_out.clone();
+		new_state_green[node.id.0] = state_out;
 	}
 }
