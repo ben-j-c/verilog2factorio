@@ -642,56 +642,67 @@ impl LogicalDesign {
 		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
 		let (d_wire_internal, clk_wire, q, loopback) = self.add_dff_isolated(input, clk, output);
-		let (mux_a, mux_b) = self.add_2mux_internal(input, en);
+		let muxab = self.add_mux_internal::<2>(input, en);
 		self.add_wire_green(vec![], vec![]);
 
 		let en_buf = self.add_nop(en, en);
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
-		self.add_wire_green_simple(en_buf, mux_a);
+		self.add_wire_green_simple(en_buf, muxab[0]);
 
-		let d_wire = self.add_wire_red(vec![], vec![mux_b]);
-		self.connect_red(mux_a, d_wire_internal);
-		self.add_wire_red_simple(loopback, mux_a);
+		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
+		self.connect_red(muxab[0], d_wire_internal);
+		self.add_wire_red_simple(loopback, muxab[0]);
 
 		(d_wire, clk_wire, en_wire, q)
 	}
 
 	pub(crate) fn add_sdffe(
 		&mut self,
-		_input: Signal,
-		_clk: Signal,
-		_srst: Signal,
-		_en: Signal,
-		_output: Signal,
+		input: Signal,
+		clk: Signal,
+		srst: Signal,
+		en: Signal,
+		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
-		todo!()
+		let (d_wire_internal, clk_wire, q, loopback) = self.add_dff_isolated(input, clk, output);
+		let muxab = self.add_mux_internal::<2>(input, en);
+		self.add_wire_green(vec![], vec![]);
+
+		let en_buf = self.add_nop(en, en);
+		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
+		self.add_wire_green_simple(en_buf, muxab[0]);
+
+		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
+		self.connect_red(muxab[0], d_wire_internal);
+		self.add_wire_red_simple(loopback, muxab[0]);
+
+		let rst_gate =
+			self.add_arithmetic_comb((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
+		self.add_wire_green_simple(rst_gate, muxab[0]);
+		let rst_wire = self.add_wire_red(vec![], vec![rst_gate]);
+		(d_wire, clk_wire, rst_gate, en_wire, q)
 	}
 
-	fn add_2mux_internal(&mut self, data: Signal, s: Signal) -> (NodeId, NodeId) {
-		let comb_a = self.add_decider_comb();
-		let comb_b = self.add_decider_comb();
-
-		self.add_decider_comb_input(
-			comb_a,
-			(s, DeciderOperator::Equal, Signal::Constant(0)),
-			DeciderRowConjDisj::FirstRow,
-			NET_GREEN,
-			NET_RED_GREEN,
-		);
-		self.add_decider_comb_output(comb_a, data, true, NET_RED);
-
-		self.add_decider_comb_input(
-			comb_b,
-			(s, DeciderOperator::Equal, Signal::Constant(1)),
-			DeciderRowConjDisj::FirstRow,
-			NET_GREEN,
-			NET_RED_GREEN,
-		);
-		self.add_decider_comb_output(comb_b, data, true, NET_RED);
-		self.add_wire_red(vec![comb_a, comb_b], vec![]);
-		self.add_wire_green(vec![], vec![comb_a, comb_b]);
-		// a_wire,
-		(comb_a, comb_b)
+	fn add_mux_internal<const N: i32>(&mut self, data: Signal, s: Signal) -> Vec<NodeId> {
+		assert!(N > 1, "Invalid mux.");
+		let mut inputs = Vec::with_capacity(N as usize);
+		for i in 0..N {
+			let inp = self.add_decider_comb();
+			inputs.push(inp);
+			self.add_decider_comb_input(
+				inp,
+				(s, DeciderOperator::Equal, Signal::Constant(i)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_NONE,
+			);
+			self.add_decider_comb_output(inp, data, true, NET_RED);
+			if i > 0 {
+				self.add_wire_red(vec![inp, inputs[(i - 1) as usize]], vec![]);
+				self.add_wire_green(vec![], vec![inp, inputs[(i - 1) as usize]]);
+			}
+		}
+		inputs
 	}
 
 	pub(crate) fn add_ram(
