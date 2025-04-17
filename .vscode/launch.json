@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"sim::test::decider_each1",
+				"tests::logical_design_tests::sim_dffe",
 				"--",
 				"--exact",
 				"--show-output"

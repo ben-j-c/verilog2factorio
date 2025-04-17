@@ -1,4 +1,6 @@
-use crate::logical_design::*;
+use std::{cell::RefCell, rc::Rc};
+
+use crate::{logical_design::*, signal_lookup_table, sim::SimState};
 
 #[cfg(test)]
 pub(crate) fn get_simple_logical_design() -> LogicalDesign {
@@ -756,4 +758,173 @@ mod test {
 		let traces = sim.render_traces();
 		traces.save("svg/sim_dffe_traces.svg").unwrap();
 	}
+}
+
+#[test]
+fn sim_dffe() {
+	const NO_SIGNAL: Vec<(i32, i32)> = vec![];
+	const STEPS: usize = 10;
+	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+
+	let sig_data = signal_lookup_table::lookup_sig("signal-D");
+	let sig_clk = signal_lookup_table::lookup_sig("signal-C");
+	let sig_rst = signal_lookup_table::lookup_sig("signal-R");
+	let sig_en = signal_lookup_table::lookup_sig("signal-E");
+	let sig_q = signal_lookup_table::lookup_sig("signal-Q");
+
+	let (data_c, clock_c, rst_c, en_c, q_out) = {
+		let mut logd = logd.borrow_mut();
+		let (wire_data, wire_clk, wire_rst, wire_en, comb_out) =
+			logd.add_sdffe(sig_data, sig_clk, sig_rst, sig_en, sig_q);
+		let c1 = logd.add_constant_comb(vec![sig_data], vec![0]);
+		let c2 = logd.add_constant_comb(vec![sig_clk], vec![0]);
+		let c3 = logd.add_constant_comb(vec![sig_rst], vec![0]);
+		let c4 = logd.add_constant_comb(vec![sig_en], vec![0]);
+		logd.connect_red(c1, wire_data);
+		logd.connect_red(c2, wire_clk);
+		logd.connect_red(c3, wire_rst);
+		logd.connect_red(c4, wire_en);
+		logd.set_description_node(comb_out, "dff_q".to_owned());
+		logd.set_description_node(c1, "data".to_owned());
+		logd.set_description_node(c2, "clock".to_owned());
+		logd.set_description_node(c2, "sync_reset".to_owned());
+		logd.set_description_node(c4, "enable".to_owned());
+		(c1, c2, c3, c4, comb_out)
+	};
+	let mut sim = SimState::new(logd.clone());
+	sim.add_trace(data_c);
+	sim.add_trace(clock_c);
+	sim.add_trace(rst_c);
+	sim.add_trace(en_c);
+	sim.add_trace(q_out);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 100);
+		logd.set_ith_output_count(en_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 200);
+		logd.set_ith_output_count(clock_c, 0, 0);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 300);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+
+	// Now for disabled
+
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 100);
+		logd.set_ith_output_count(en_c, 0, 0);
+		logd.set_ith_output_count(clock_c, 0, 0);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 200);
+		logd.set_ith_output_count(clock_c, 0, 0);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(data_c, 0, 300);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+
+	// Now with reset
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 0);
+		logd.set_ith_output_count(rst_c, 0, 1); // Set reset
+		logd.set_ith_output_count(data_c, 0, 555);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 0);
+		logd.set_ith_output_count(en_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+
+	// Now turn off reset
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 0);
+		logd.set_ith_output_count(rst_c, 0, 0); // Clear reset
+		logd.set_ith_output_count(data_c, 0, 1234);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 1234)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 0);
+		logd.set_ith_output_count(rst_c, 0, 1); // Set reset
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 1234)]);
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_ith_output_count(clock_c, 0, 1);
+	}
+	sim.step(STEPS);
+	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
+
+	let traces = sim.render_traces();
+	traces.save("svg/sim_sdffe_traces.svg").unwrap();
 }

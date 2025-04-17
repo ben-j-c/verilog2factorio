@@ -456,6 +456,8 @@ impl SimState {
 				};
 				let right = if let Signal::Id(id) = input_2 {
 					self.get_seen_signal_count(node.id, id, input_right_network)
+				} else if let Signal::Constant(c) = input_2 {
+					c
 				} else {
 					0
 				};
@@ -534,11 +536,18 @@ impl SimState {
 
 	#[allow(dead_code)]
 	pub fn print(&self) {
+		let logd = self.logd.borrow();
 		println!("--------------");
 		println!("RED: (signal_id, count)");
 		for node_num in 0..self.state.len() {
-			println!("Node {}", node_num);
+			if let Some(descr) = &logd.get_node(NodeId(node_num)).description {
+				println!("  {descr} ({node_num})");
+			} else {
+				println!("  Node {}", node_num);
+			}
+
 			let mut no_print = true;
+			print!("    ");
 			for (id, v) in &self.state[node_num].red.data {
 				print!("({}, {}) ", id, v);
 				no_print = false;
@@ -550,8 +559,13 @@ impl SimState {
 		}
 		println!("GREEN: (signal_id, count)");
 		for node_num in 0..self.state.len() {
-			println!("Node {}", node_num);
+			if let Some(descr) = &logd.get_node(NodeId(node_num)).description {
+				println!("  {descr} ({node_num})");
+			} else {
+				println!("  Node {}", node_num);
+			}
 			let mut no_print = true;
+			print!("    ");
 			for (id, v) in &self.state[node_num].green.data {
 				print!("({}, {}) ", id, v);
 				no_print = false;

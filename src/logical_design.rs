@@ -670,7 +670,7 @@ impl LogicalDesign {
 
 		let en_buf = self.add_nop(en, en);
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
-		self.add_wire_green_simple(en_buf, muxab[0]);
+		let select = self.add_wire_green_simple(en_buf, muxab[0]);
 
 		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
 		self.connect_red(muxab[0], d_wire_internal);
@@ -678,8 +678,24 @@ impl LogicalDesign {
 
 		let rst_gate =
 			self.add_arithmetic_comb((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
-		self.add_wire_green_simple(rst_gate, muxab[0]);
+		let rst_wire_internal = self.add_wire_green_simple(rst_gate, muxab[0]);
 		let rst_wire = self.add_wire_red(vec![], vec![rst_gate]);
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(d_wire_internal, "d_wire_internal".to_owned());
+			self.set_description_node(select, "d_select".to_owned());
+			self.set_description_node(rst_wire_internal, "rst_wire_internal".to_owned());
+			self.set_description_node(rst_wire, "rst_wire".to_owned());
+			self.set_description_node(rst_gate, "rst_gate".to_owned());
+			self.set_description_node(loopback, "loopback".to_owned());
+			self.set_description_node(q, "q".to_owned());
+			self.set_description_node(en_wire, "en_wire".to_owned());
+			self.set_description_node(clk_wire, "clk_wire".to_owned());
+			self.set_description_node(d_wire, "d_wire".to_owned());
+			self.set_description_node(en_buf, "en_buf".to_owned());
+			self.set_description_node(muxab[0], "mux_a".to_owned());
+			self.set_description_node(muxab[1], "mux_b".to_owned());
+		}
 		(d_wire, clk_wire, rst_wire, en_wire, q)
 	}
 
