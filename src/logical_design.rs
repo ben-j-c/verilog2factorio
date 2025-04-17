@@ -680,7 +680,7 @@ impl LogicalDesign {
 			self.add_arithmetic_comb((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
 		self.add_wire_green_simple(rst_gate, muxab[0]);
 		let rst_wire = self.add_wire_red(vec![], vec![rst_gate]);
-		(d_wire, clk_wire, rst_gate, en_wire, q)
+		(d_wire, clk_wire, rst_wire, en_wire, q)
 	}
 
 	fn add_mux_internal<const N: i32>(&mut self, data: Signal, s: Signal) -> Vec<NodeId> {
