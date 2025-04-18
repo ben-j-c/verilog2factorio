@@ -13,7 +13,9 @@
 			],
 			"settings": {
 				"editor.formatOnSave": true
-			},
+			}
+		},
+		"codespaces": {
 			"openFiles": [
 				"src/main.rs"
 			]
