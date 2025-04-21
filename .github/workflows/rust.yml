@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
-      run: sudo apt install metis
+      run: sudo apt install metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config
     - name: Build
       run: cargo build --release --verbose 
     - name: Run tests

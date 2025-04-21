@@ -1,7 +1,7 @@
 {
 	"name": "v2f dev container",
 	"image": "mcr.microsoft.com/vscode/devcontainers/rust",
-	"postCreateCommand": "sudo apt update && sudo apt install -y metis",
+	"postCreateCommand": "sudo apt update && sudo apt install -y metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config",
 	"postStartCommand": "cargo build",
 	"customizations": {
 		"vscode": {
