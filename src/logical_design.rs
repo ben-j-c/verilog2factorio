@@ -27,6 +27,7 @@ use std::{
 	collections::{BTreeSet, HashMap, HashSet},
 	fmt::Display,
 	hash::Hash,
+	panic::UnwindSafe,
 	slice::Iter,
 	usize, vec,
 };
@@ -113,6 +114,34 @@ impl Signal {
 		match self {
 			Signal::Id(id) => *id,
 			_ => panic!("Unwrapped non-id signal as an id"),
+		}
+	}
+
+	pub fn is_constant(&self) -> bool {
+		match self {
+			Signal::Constant(_) => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_each(&self) -> bool {
+		match self {
+			Signal::Each => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_any(&self) -> bool {
+		match self {
+			Signal::Anything => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_everything(&self) -> bool {
+		match self {
+			Signal::Everything => true,
+			_ => false,
 		}
 	}
 }
@@ -393,6 +422,8 @@ pub struct LogicalDesign {
 	cache: RefCell<LogicalDesignCache>,
 	pub(crate) description: String,
 }
+
+impl UnwindSafe for LogicalDesign {}
 
 impl std::fmt::Debug for LogicalDesign {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

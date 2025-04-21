@@ -3,6 +3,8 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
+use crate::logical_design::Signal;
+
 pub static SIGNAL_MAP: Lazy<(
 	HashMap<i32, (&'static str, Option<&'static str>)>,
 	HashMap<&'static str, (i32, Option<&'static str>)>,
@@ -385,6 +387,19 @@ pub fn lookup_sig(mapped_name: &str) -> crate::logical_design::Signal {
 		return crate::logical_design::Signal::Id(id);
 	}
 	panic!("Name doesn't match signal");
+}
+
+pub fn lookup_sig_opt(mapped_name: &str) -> Option<crate::logical_design::Signal> {
+	if let Some(id) = lookup_id(mapped_name) {
+		return Some(crate::logical_design::Signal::Id(id));
+	}
+	match mapped_name {
+		"Each" => Some(Signal::Each),
+		"Everything" => Some(Signal::Everything),
+		"Enything" => Some(Signal::Anything),
+		"None" => Some(Signal::None),
+		_ => None,
+	}
 }
 
 pub fn n_ids() -> i32 {

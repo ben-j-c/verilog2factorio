@@ -15,6 +15,7 @@ mod phy;
 mod serializable_design;
 pub mod signal_lookup_table;
 
+pub mod lua;
 pub mod sim;
 
 mod ndarr;
