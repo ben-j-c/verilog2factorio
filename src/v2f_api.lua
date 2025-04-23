@@ -36,6 +36,7 @@
 ---@field output TerminalSide
 
 ---@class Terminal
+---@field connect fun(self: Terminal, other: TerminalSide)
 
 ---@param self Terminal
 ---@param other TerminalSide
