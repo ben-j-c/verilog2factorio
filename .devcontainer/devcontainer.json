@@ -9,7 +9,8 @@
 				"xaver.clang-format",
 				"vadimcn.vscode-lldb",
 				"rust-lang.rust-analyzer",
-				"eamodio.gitlens"
+				"eamodio.gitlens",
+				"sumneko.lua"
 			],
 			"settings": {
 				"editor.formatOnSave": true
@@ -17,7 +18,8 @@
 		},
 		"codespaces": {
 			"openFiles": [
-				"src/main.rs"
+				"README.md",
+				"examples/lua/basics.lua"
 			]
 		}
 	}

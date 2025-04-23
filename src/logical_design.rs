@@ -513,7 +513,7 @@ impl LogicalDesign {
 	/// Add a arithmetic combinator to this design. The expression matches what you see in game.
 	///
 	/// Returns the id for that new combinator.
-	pub fn add_arithmetic_comb(
+	pub fn add_arithmetic(
 		&mut self,
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
@@ -525,6 +525,25 @@ impl LogicalDesign {
 				input_2: expr.2,
 				input_left_network: NET_RED_GREEN,
 				input_right_network: NET_RED_GREEN,
+			},
+			vec![output],
+		)
+	}
+
+	pub fn add_arithmetic_with_net(
+		&mut self,
+		expr: (Signal, ArithmeticOperator, Signal),
+		output: Signal,
+		left_network: (bool, bool),
+		right_network: (bool, bool),
+	) -> NodeId {
+		self.add_node(
+			NodeFunction::Arithmetic {
+				op: expr.1,
+				input_1: expr.0,
+				input_2: expr.2,
+				input_left_network: left_network,
+				input_right_network: right_network,
 			},
 			vec![output],
 		)
@@ -565,7 +584,7 @@ impl LogicalDesign {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		self.add_decider_comb_output(ret, output, false, NET_RED_GREEN);
+		self.add_decider_out_constant(ret, output, 1, NET_RED_GREEN);
 		ret
 	}
 
@@ -582,7 +601,7 @@ impl LogicalDesign {
 				NET_GREEN,
 				NET_GREEN,
 			);
-			self.add_decider_comb_output(ic, data, true, NET_RED);
+			self.add_decider_out_input_count(ic, data, NET_RED);
 			ic
 		};
 
@@ -595,7 +614,7 @@ impl LogicalDesign {
 				NET_GREEN,
 				NET_GREEN,
 			);
-			self.add_decider_comb_output(mc, data, true, NET_RED);
+			self.add_decider_out_input_count(mc, data, NET_RED);
 			mc
 		};
 
@@ -708,7 +727,7 @@ impl LogicalDesign {
 		self.add_wire_red_simple(loopback, muxab[0]);
 
 		let rst_gate =
-			self.add_arithmetic_comb((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
+			self.add_arithmetic((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
 		let rst_wire_internal = self.add_wire_green_simple(rst_gate, muxab[0]);
 		let rst_wire = self.add_wire_red(vec![], vec![rst_gate]);
 		#[cfg(debug_assertions)]
@@ -743,7 +762,7 @@ impl LogicalDesign {
 				NET_GREEN,
 				NET_NONE,
 			);
-			self.add_decider_comb_output(inp, data, true, NET_RED);
+			self.add_decider_out_input_count(inp, data, NET_RED);
 			if i > 0 {
 				self.add_wire_red(vec![inp, inputs[(i - 1) as usize]], vec![]);
 				self.add_wire_green(vec![], vec![inp, inputs[(i - 1) as usize]]);
@@ -818,7 +837,7 @@ impl LogicalDesign {
 						NET_RED_GREEN,
 					);
 				}
-				self.add_decider_comb_output(one_hot, wport.data, true, NET_RED_GREEN);
+				self.add_decider_out_input_count(one_hot, wport.data, NET_RED_GREEN);
 				wr_data_select_decode[i].push(one_hot);
 			}
 		}
@@ -853,7 +872,7 @@ impl LogicalDesign {
 					);
 				}
 			}
-			self.add_decider_comb_output(one_hot, Signal::Id(1), false, NET_RED_GREEN);
+			self.add_decider_out_constant(one_hot, Signal::Id(1), 1, NET_RED_GREEN);
 			wr_enable_decode.push(one_hot);
 		}
 
@@ -957,7 +976,7 @@ impl LogicalDesign {
 					NET_RED,
 					NET_RED_GREEN,
 				);
-				self.add_decider_comb_output(mux, Signal::Everything, true, NET_GREEN);
+				self.add_decider_out_input_count(mux, Signal::Everything, NET_GREEN);
 			}
 		}
 
@@ -1149,7 +1168,7 @@ impl LogicalDesign {
 						NET_RED_GREEN,
 					);
 				}
-				self.add_decider_comb_output(mux, Signal::Everything, true, NET_GREEN);
+				self.add_decider_out_input_count(mux, Signal::Everything, NET_GREEN);
 				self.add_wire_green(vec![*constant], vec![mux]);
 				self.connect_red(last_wire_input, mux);
 				last_wire_input = self.add_wire_red(vec![], vec![mux]);
@@ -1162,7 +1181,7 @@ impl LogicalDesign {
 					}
 					self.add_wire_green(vec![*mux1, mux1s[idx - 1]], vec![]);
 				}
-				let addr_lower = self.add_arithmetic_comb(
+				let addr_lower = self.add_arithmetic(
 					(p.addr, ArithmeticOperator::Mod, Signal::Constant(*packing)),
 					p.addr,
 				);
@@ -1176,7 +1195,7 @@ impl LogicalDesign {
 						NET_RED,
 						NET_RED_GREEN,
 					);
-					self.add_decider_comb_output(mux2s[i], Signal::Id(i as i32), true, NET_GREEN);
+					self.add_decider_out_input_count(mux2s[i], Signal::Id(i as i32), NET_GREEN);
 					if i == 0 {
 						self.add_wire_red(vec![addr_lower], vec![mux2s[0]]);
 						self.add_wire_green(vec![mux1s[0]], vec![mux2s[0]]);
@@ -1287,7 +1306,7 @@ impl LogicalDesign {
 				continue;
 			}
 			let (mask, shift) = expr_opt.as_ref().unwrap().unwrap_mask_shift();
-			let mask_comb = self.add_arithmetic_comb(
+			let mask_comb = self.add_arithmetic(
 				(input[idx], ArithmeticOperator::And, Signal::Constant(mask)),
 				output,
 			);
@@ -1298,7 +1317,7 @@ impl LogicalDesign {
 				}
 				last_comb = Some(mask_comb);
 			} else {
-				let shift_comb = self.add_arithmetic_comb(
+				let shift_comb = self.add_arithmetic(
 					(
 						output,
 						if shift > 0 {
@@ -1369,14 +1388,12 @@ impl LogicalDesign {
 		}
 	}
 
-	/// Add an output signal to the specified decider combinator. The decider will output the given signal if all configured
-	/// input rows, combined under their [DeciderRowConjDisj] logic, evaluate to true.
-	/// If `use_input_count_for_output` is true, the combinator outputs the count of matched inputs; otherwise, it outputs 1.
-	pub fn add_decider_comb_output(
+	/// Add an output signal to the specified decider combinator.
+	pub fn add_decider_out_constant(
 		&mut self,
 		id: NodeId,
 		output: Signal,
-		use_input_count_for_output: bool,
+		constant: i32,
 		network: (bool, bool),
 	) {
 		match &mut self.nodes[id.0].function {
@@ -1386,7 +1403,33 @@ impl LogicalDesign {
 				constants,
 				..
 			} => {
-				use_input_count.push(use_input_count_for_output);
+				use_input_count.push(false);
+				output_network.push(network);
+				constants.push(Some(constant));
+				self.nodes[id.0].output.push(output);
+			}
+			_ => assert!(
+				false,
+				"Tried to add DeciderCombinator output to non-DeciderCombinator node"
+			),
+		}
+	}
+
+	/// Add an output signal to the specified decider combinator.
+	pub fn add_decider_out_input_count(
+		&mut self,
+		id: NodeId,
+		output: Signal,
+		network: (bool, bool),
+	) {
+		match &mut self.nodes[id.0].function {
+			NodeFunction::Decider {
+				use_input_count,
+				output_network,
+				constants,
+				..
+			} => {
+				use_input_count.push(true);
 				output_network.push(network);
 				constants.push(None);
 				self.nodes[id.0].output.push(output);
@@ -1573,7 +1616,7 @@ impl LogicalDesign {
 		let mut counter = vec![false; width];
 
 		let lut_comb = self.add_decider_comb();
-		self.add_decider_comb_output(lut_comb, sig_out, false, NET_RED_GREEN);
+		self.add_decider_out_constant(lut_comb, sig_out, 1, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![lut_comb]);
 
 		let mut first = true;

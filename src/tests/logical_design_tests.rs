@@ -10,7 +10,7 @@ pub(crate) fn get_simple_logical_design() -> LogicalDesign {
 	let mut d = LogicalDesign::new();
 	let constant1 = d.add_constant_comb(vec![Sig::Id(0)], vec![100]);
 	let constant2 = d.add_constant_comb(vec![Sig::Id(1)], vec![4]);
-	let mult = d.add_arithmetic_comb((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10));
+	let mult = d.add_arithmetic((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10));
 	let lamp = d.add_lamp((Sig::Id(10), Dop::Equal, Sig::Constant(400)));
 	let _wire_pre_mult = d.add_wire_red(vec![constant1, constant2], vec![mult]);
 	let _wire_post_mult = d.add_wire_red(vec![mult], vec![lamp]);
@@ -29,7 +29,7 @@ pub(crate) fn get_complex_40_logical_design() -> LogicalDesign {
 	}
 	let mut mults = vec![];
 	for i in 0..10 {
-		mults.push(d.add_arithmetic_comb(
+		mults.push(d.add_arithmetic(
 			(Sig::Id(i * 2), Aop::Mult, Sig::Id(i * 2 + 1)),
 			Sig::Id(20 + i),
 		));
@@ -225,11 +225,9 @@ mod test {
 	#[test]
 	fn loopback() {
 		let mut d = LogicalDesign::new();
-		let counter = d.add_arithmetic_comb((Sig::Id(0), Aop::Add, Sig::Constant(0)), Sig::Id(0));
-		let filter_pre =
-			d.add_arithmetic_comb((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
-		let filter_post =
-			d.add_arithmetic_comb((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
+		let counter = d.add_arithmetic((Sig::Id(0), Aop::Add, Sig::Constant(0)), Sig::Id(0));
+		let filter_pre = d.add_arithmetic((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
+		let filter_post = d.add_arithmetic((Sig::Id(0), Aop::Mult, Sig::Constant(1)), Sig::Id(0));
 		d.add_wire_red(vec![counter, filter_pre], vec![counter, filter_post]);
 		d.for_all(|_, x| println!("{:?}", x));
 		let mut p = PhysicalDesign::new();
@@ -241,9 +239,9 @@ mod test {
 	#[test]
 	fn two_wire_sum() {
 		let mut d = LogicalDesign::new();
-		let a = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
-		let b = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
-		let c = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let a = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let b = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let c = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
 		d.add_wire_red(vec![a], vec![c]);
 		d.add_wire_red(vec![b], vec![c]);
 
@@ -256,9 +254,9 @@ mod test {
 	#[test]
 	fn red_green_wires() {
 		let mut d = LogicalDesign::new();
-		let a = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
-		let b = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
-		let c = d.add_arithmetic_comb((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let a = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let b = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
+		let c = d.add_arithmetic((Sig::Id(10), Aop::Add, Sig::Constant(0)), Sig::Id(10));
 		d.add_wire_red(vec![a], vec![c]);
 		d.add_wire_green(vec![b], vec![c]);
 

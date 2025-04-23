@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"tests::logical_design_tests::sim_dffe",
+				"tests::lua::single_decider",
 				"--",
 				"--exact",
 				"--show-output"

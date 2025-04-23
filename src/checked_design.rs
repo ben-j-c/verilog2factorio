@@ -1326,15 +1326,15 @@ impl CheckedDesign {
 	) -> (logical_design::NodeId, logical_design::NodeId) {
 		match op {
 			ImplementableOp::V2FRollingAccumulate => {
-				let acc = logical_design.add_arithmetic_comb(
+				let acc = logical_design.add_arithmetic(
 					(sig_in, ArithmeticOperator::Add, Signal::Constant(0)),
 					sig_in,
 				);
-				let pre_filter = logical_design.add_arithmetic_comb(
+				let pre_filter = logical_design.add_arithmetic(
 					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
 					sig_in,
 				);
-				let post_filter = logical_design.add_arithmetic_comb(
+				let post_filter = logical_design.add_arithmetic(
 					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
 					sig_out,
 				);
@@ -1356,7 +1356,7 @@ impl CheckedDesign {
 		sig_out: Signal,
 	) -> (logical_design::NodeId, logical_design::NodeId) {
 		if let Some(op) = op.get_arithmetic_op() {
-			let ld_node = logical_design.add_arithmetic_comb((sig_left, op, sig_right), sig_out);
+			let ld_node = logical_design.add_arithmetic((sig_left, op, sig_right), sig_out);
 			return (ld_node, ld_node);
 		}
 		if let Some(op) = op.get_decider_op() {

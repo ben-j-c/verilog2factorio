@@ -389,11 +389,14 @@ pub fn lookup_sig(mapped_name: &str) -> crate::logical_design::Signal {
 	panic!("Name doesn't match signal");
 }
 
-pub fn lookup_sig_opt(mapped_name: &str) -> Option<crate::logical_design::Signal> {
-	if let Some(id) = lookup_id(mapped_name) {
+pub fn lookup_sig_opt<S>(mapped_name: &S) -> Option<crate::logical_design::Signal>
+where
+	S: AsRef<str>,
+{
+	if let Some(id) = lookup_id(mapped_name.as_ref()) {
 		return Some(crate::logical_design::Signal::Id(id));
 	}
-	match mapped_name {
+	match mapped_name.as_ref() {
 		"Each" => Some(Signal::Each),
 		"Everything" => Some(Signal::Everything),
 		"Enything" => Some(Signal::Anything),

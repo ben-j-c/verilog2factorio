@@ -156,7 +156,7 @@ fn decider_simple() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
 		println!("{}", logd);
 		(c1, d1, wire)
 	};
@@ -189,8 +189,8 @@ fn decider_simple2() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
 		println!("{}", logd);
 		(c1, d1, wire)
 	};
@@ -234,8 +234,8 @@ fn decider_simple3() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
 		println!("{}", logd);
 		(c1, d1, wire)
 	};
@@ -281,8 +281,8 @@ fn decider_simple4() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Id(20), false, NET_RED_GREEN);
-		logd.add_decider_comb_output(d2, Signal::Id(20), false, NET_RED_GREEN);
+		logd.add_decider_out_constant(d1, Signal::Id(20), 1, NET_RED_GREEN);
+		logd.add_decider_out_constant(d2, Signal::Id(20), 1, NET_RED_GREEN);
 		println!("{}", logd);
 		(c1, d1, d2, wire, wire2)
 	};
@@ -316,7 +316,7 @@ fn decider_each1() {
 			NET_RED, // Only accept on c1
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Each, true, NET_RED_GREEN);
+		logd.add_decider_out_input_count(d1, Signal::Each, NET_RED_GREEN);
 		logd.add_decider_comb_input(
 			d2,
 			(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
@@ -324,7 +324,7 @@ fn decider_each1() {
 			NET_RED, // Only accept on c1
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d2, Signal::Each, true, NET_GREEN);
+		logd.add_decider_out_input_count(d2, Signal::Each, NET_GREEN);
 		(c1, c2, d1, d2)
 	};
 	let mut sim = SimState::new(logd.clone());
@@ -362,7 +362,7 @@ fn decider_each2() {
 			NET_RED,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_output(d1, Signal::Each, true, NET_RED_GREEN);
+		logd.add_decider_out_input_count(d1, Signal::Each, NET_RED_GREEN);
 		(c1, c2, d1, wire1, wire2)
 	};
 	let mut sim = SimState::new(logd.clone());

@@ -4,18 +4,22 @@ use std::{
 	rc::Rc,
 };
 
-use mlua::{AnyUserData, Error, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods};
+use mlua::{
+	AnyUserData, Error, FromLua, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, Value,
+};
 
 use crate::{
 	logical_design::{
 		ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, NodeId, Signal,
 		WireColour,
 	},
+	phy::PhysicalDesign,
+	serializable_design::SerializableDesign,
 	signal_lookup_table,
 };
 
-struct LuaLogicalDesign {
-	logd: Rc<RefCell<LogicalDesign>>,
+pub(crate) struct LogicalDesignAPI {
+	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
 }
 
 #[derive(Clone, Debug)]
@@ -23,6 +27,23 @@ enum TerminalSide {
 	Input(NodeId, Rc<RefCell<LogicalDesign>>),
 	Output(NodeId, Rc<RefCell<LogicalDesign>>),
 }
+
+impl PartialEq for TerminalSide {
+	fn eq(&self, other: &Self) -> bool {
+		match self {
+			TerminalSide::Input(..) => match other {
+				TerminalSide::Input(..) => true,
+				TerminalSide::Output(..) => false,
+			},
+			TerminalSide::Output(..) => match other {
+				TerminalSide::Input(..) => false,
+				TerminalSide::Output(..) => true,
+			},
+		}
+	}
+}
+
+impl UserData for DeciderRowConjDisj {}
 
 struct DeciderExpression(Signal, DeciderOperator, Signal);
 
@@ -54,34 +75,6 @@ impl UserData for WireColour {}
 
 impl UserData for Signal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_meta_method(MetaMethod::Eq, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(DeciderExpression(*lhs, DeciderOperator::Equal, *rhs))
-		});
-		methods.add_meta_method(MetaMethod::Le, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			if lhs.is_constant() {
-				Ok(DeciderExpression(
-					*rhs,
-					DeciderOperator::GreaterThanEqual,
-					*lhs,
-				))
-			} else {
-				Ok(DeciderExpression(
-					*lhs,
-					DeciderOperator::LessThanEqual,
-					*rhs,
-				))
-			}
-		});
-		methods.add_meta_method(MetaMethod::Lt, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			if lhs.is_constant() {
-				Ok(DeciderExpression(*rhs, DeciderOperator::GreaterThan, *lhs))
-			} else {
-				Ok(DeciderExpression(*lhs, DeciderOperator::LessThan, *rhs))
-			}
-		});
 		methods.add_method(MetaMethod::Add, |_, lhs, rhs: AnyUserData| {
 			let rhs = rhs.borrow()?;
 			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Add, *rhs))
@@ -129,6 +122,34 @@ impl UserData for Signal {
 	}
 }
 
+impl FromLua for Signal {
+	fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
+		match &value {
+			mlua::Value::Nil => Ok(Signal::None),
+			mlua::Value::Integer(c) => Ok(Signal::Constant(*c as i32)),
+			mlua::Value::String(s) => {
+				let found_signal = signal_lookup_table::lookup_sig_opt(&s.to_str()?);
+				match found_signal {
+					Some(sig) => Ok(sig),
+					None => Err(mlua::Error::FromLuaConversionError {
+						from: value.type_name(),
+						to: "Signal".to_owned(),
+						message: Some(
+							"This string doesn't match what I expect a signal to look like.".into(),
+						),
+					}),
+				}
+			}
+			mlua::Value::UserData(signal) if signal.is::<Signal>() => Ok(*signal.borrow().unwrap()),
+			_ => Err(mlua::Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "Signal".to_owned(),
+				message: Some("Expected a Signal or numeric literal.".into()),
+			}),
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 struct Terminal(TerminalSide, WireColour);
 
@@ -142,17 +163,17 @@ impl Terminal {
 impl UserData for Terminal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("connect", |_, this, other: AnyUserData| {
-			let other = other.borrow::<Terminal>()?;
+			let other = other.borrow::<TerminalSide>()?;
 			let (this_id, this_logd, this_colour) = this.get();
-			let (other_id, other_logd, other_colour) = other.get();
+			let (other_id, other_logd) = other.get();
 			if this_logd.as_ptr() != other_logd.as_ptr() {
 				return Err(Error::RuntimeError(
 					"Can't connect two logical designs together".to_owned(),
 				));
 			}
-			if this_colour != other_colour {
+			if this_id == other_id && this.0 == *other {
 				return Err(Error::RuntimeError(
-					"Differently coloured terminals together.".to_owned(),
+					"Can't connect a terminal to itself.".to_owned(),
 				));
 			}
 			let res = catch_unwind(AssertUnwindSafe(|| {
@@ -162,7 +183,7 @@ impl UserData for Terminal {
 					TerminalSide::Input(..) => fanout.push(this_id),
 					TerminalSide::Output(..) => fanin.push(this_id),
 				}
-				match other.0 {
+				match *other {
 					TerminalSide::Input(..) => fanout.push(other_id),
 					TerminalSide::Output(..) => fanin.push(other_id),
 				}
@@ -228,22 +249,39 @@ impl UserData for Decider {
 					);
 				}));
 				if let Err(_) = res {
-					Err(Error::RuntimeError("Condition.".to_owned()))
+					Err(Error::RuntimeError("Condition invalid.".to_owned()))
 				} else {
 					Ok(())
 				}
 			},
 		);
-		methods.add_method("add_output", |_, this, args: (AnyUserData, bool, i32)| {
-			let sig = args.0.borrow::<Signal>()?;
+		methods.add_method("add_output", |_, this, args: (Signal, Value, i32)| {
+			let sig = args.0;
 			let net_out = (args.2 & 1 > 0, args.2 & 2 > 0);
+			let constant = match args.1 {
+				Value::Nil => None,
+				Value::Integer(c) if c <= i32::MAX as i64 && c >= i32::MIN as i64 => Some(c as i32),
+				_ => {
+					return Err(mlua::Error::FromLuaConversionError {
+						from: args.1.type_name(),
+						to: "integer|nil".to_owned(),
+						message: Some("This value isn't an i32 or nil.".into()),
+					})
+				}
+			};
 			let res = catch_unwind(AssertUnwindSafe(|| {
-				this.logd
-					.borrow_mut()
-					.add_decider_comb_output(this.id, *sig, args.1, net_out);
+				if let Some(constant) = constant {
+					this.logd
+						.borrow_mut()
+						.add_decider_out_constant(this.id, sig, constant, net_out);
+				} else {
+					this.logd
+						.borrow_mut()
+						.add_decider_out_input_count(this.id, sig, net_out);
+				}
 			}));
 			if let Err(_) = res {
-				Err(Error::RuntimeError("Condition.".to_owned()))
+				Err(Error::RuntimeError("Output invalid.".to_owned()))
 			} else {
 				Ok(())
 			}
@@ -278,7 +316,7 @@ impl UserData for Lamp {
 	}
 }
 
-impl UserData for LuaLogicalDesign {
+impl UserData for LogicalDesignAPI {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("description", |_, this| {
 			Ok(this.logd.borrow().description.clone())
@@ -305,7 +343,7 @@ impl UserData for LuaLogicalDesign {
 				let id = this
 					.logd
 					.borrow_mut()
-					.add_arithmetic_comb((expr.0, expr.1, expr.2), *out);
+					.add_arithmetic((expr.0, expr.1, expr.2), *out);
 				Ok(Arithmetic {
 					id,
 					logd: this.logd.clone(),
@@ -322,15 +360,11 @@ impl UserData for LuaLogicalDesign {
 		});
 		methods.add_method(
 			"add_constant",
-			|_, this, args: (Vec<AnyUserData>, Vec<i32>)| {
-				let mut sigs = vec![];
-				for x in args.0 {
-					sigs.push(*x.borrow::<Signal>()?);
-				}
-				if sigs.len() != args.1.len() {
+			|_, this, (sigs, counts): (Vec<Signal>, Vec<i32>)| {
+				if sigs.len() != counts.len() {
 					return Err(Error::RuntimeError("Mismatched length.".to_owned()));
 				}
-				let id = this.logd.borrow_mut().add_constant_comb(sigs, args.1);
+				let id = this.logd.borrow_mut().add_constant_comb(sigs, counts);
 				Ok(Constant {
 					id,
 					logd: this.logd.clone(),
@@ -341,18 +375,39 @@ impl UserData for LuaLogicalDesign {
 			println!("{}", this.logd.borrow());
 			Ok(())
 		});
+		methods.add_method("to_json", |_, this, _: ()| {
+			let logd = this.logd.borrow();
+			let mut phyd = PhysicalDesign::new();
+			phyd.build_from(&logd);
+			let mut serd = SerializableDesign::new();
+			serd.build_from(&phyd, &logd);
+			let blueprint_json = serde_json::to_string(&serd);
+			if blueprint_json.is_err() {
+				return Err(Error::RuntimeError("Couldn't compile design.".to_owned()));
+			}
+			Ok(blueprint_json.unwrap())
+		});
+		methods.add_method("to_svg", |_lua, this, name: String| {
+			let logd = this.logd.borrow();
+			let mut phyd = PhysicalDesign::new();
+			phyd.build_from(&logd);
+			phyd.save_svg(&logd, &name);
+			Ok(())
+		});
 	}
 }
 
 pub fn get_lua() -> Result<Lua, Error> {
 	let lua = Lua::new();
-	let get_named_signal = lua.create_function(|_, name: String| {
-		match signal_lookup_table::lookup_sig_opt(name.as_str()) {
-			Some(signal) => Ok(signal),
-			None => Err(Error::RuntimeError("Not a real signal.".to_owned())),
-		}
-	})?;
-	lua.globals().set("get_named_signal", get_named_signal)?;
+	lua.globals().set(
+		"Signal",
+		lua.create_function(
+			|_, name: String| match signal_lookup_table::lookup_sig_opt(&name) {
+				Some(signal) => Ok(signal),
+				None => Err(Error::RuntimeError("Not a real signal.".to_owned())),
+			},
+		)?,
+	)?;
 	lua.globals().set("Each", Signal::Each)?;
 	lua.globals().set("Anything", Signal::Anything)?;
 	lua.globals().set("Everything", Signal::Everything)?;
@@ -366,12 +421,37 @@ pub fn get_lua() -> Result<Lua, Error> {
 	lua.globals().set("NET_GREEN", 2)?;
 	lua.globals().set("NET_REDGREEN", 3)?;
 
+	lua.globals()
+		.set("FirstRow", DeciderRowConjDisj::FirstRow)?;
+	lua.globals().set("AND", DeciderRowConjDisj::And)?;
+	lua.globals().set("OR", DeciderRowConjDisj::Or)?;
+
 	lua.globals().set(
 		"get_empty_design",
 		lua.create_function(|_, _: ()| {
-			Ok(LuaLogicalDesign {
+			Ok(LogicalDesignAPI {
 				logd: Rc::new(RefCell::new(LogicalDesign::new())),
 			})
+		})?,
+	)?;
+
+	lua.globals().set(
+		"Expr",
+		lua.create_function(|_, (lhs, op, rhs): (Signal, String, Signal)| {
+			let op = match op.as_str() {
+				"==" | "=" => DeciderOperator::Equal,
+				">" => DeciderOperator::GreaterThan,
+				">=" => DeciderOperator::GreaterThanEqual,
+				"<" => DeciderOperator::LessThan,
+				"<=" => DeciderOperator::LessThanEqual,
+				"!=" => DeciderOperator::NotEqual,
+				_ => {
+					return Err(mlua::Error::RuntimeError(
+						"Not a real decider operator.".into(),
+					))
+				}
+			};
+			Ok(DeciderExpression(lhs, op, rhs))
 		})?,
 	)?;
 

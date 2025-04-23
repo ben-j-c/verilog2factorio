@@ -2,5 +2,9 @@
 	"editor.formatOnSave": true,
 	"rust-analyzer.runnables.extraTestBinaryArgs": [
 		"--nocapture"
-	]
+	],
+	"Lua.workspace.library": [
+		"src/v2f_api.lua"
+	],
+	"Lua.runtime.version": "Lua 5.4"
 }
