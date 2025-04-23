@@ -1349,7 +1349,10 @@ impl PhysicalDesign {
 		});
 	}
 
-	pub(crate) fn save_svg(&self, ld: &LogicalDesign, filename: &str) {
+	pub(crate) fn save_svg<P>(&self, ld: &LogicalDesign, filename: P)
+	where
+		P: Into<std::path::PathBuf>,
+	{
 		const SCALE: f64 = 20.0;
 		const GREY: (u8, u8, u8) = (230, 230, 230);
 		let mut svg = SVG::new();

@@ -14,12 +14,23 @@ use crate::{
 		WireColour,
 	},
 	phy::PhysicalDesign,
-	serializable_design::SerializableDesign,
 	signal_lookup_table,
+	sim::SimState,
 };
 
 pub(crate) struct LogicalDesignAPI {
 	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
+	pub(crate) make_svg: bool,
+}
+
+pub(crate) struct PhysicalDesignAPI {
+	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
+	pub(crate) phyd: Rc<RefCell<PhysicalDesign>>,
+}
+
+pub(crate) struct SimStateAPI {
+	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
+	pub(crate) sim: Rc<RefCell<SimState>>,
 }
 
 #[derive(Clone, Debug)]
@@ -75,49 +86,38 @@ impl UserData for WireColour {}
 
 impl UserData for Signal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method(MetaMethod::Add, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Add, *rhs))
+		methods.add_meta_method(MetaMethod::Add, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Add, rhs))
 		});
-		methods.add_method(MetaMethod::Sub, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sub, *rhs))
+		methods.add_meta_method(MetaMethod::Sub, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sub, rhs))
 		});
-		methods.add_method(MetaMethod::Mul, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Mult, *rhs))
+		methods.add_meta_method(MetaMethod::Mul, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Mult, rhs))
 		});
-		methods.add_method(MetaMethod::Div, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Div, *rhs))
+		methods.add_meta_method(MetaMethod::Div, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Div, rhs))
 		});
-		methods.add_method(MetaMethod::Mod, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Mod, *rhs))
+		methods.add_meta_method(MetaMethod::Mod, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Mod, rhs))
 		});
-		methods.add_method(MetaMethod::Pow, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Exp, *rhs))
+		methods.add_meta_method(MetaMethod::Pow, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Exp, rhs))
 		});
-		methods.add_method(MetaMethod::Shr, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Srl, *rhs))
+		methods.add_meta_method(MetaMethod::Shr, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Srl, rhs))
 		});
-		methods.add_method(MetaMethod::Shl, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sll, *rhs))
+		methods.add_meta_method(MetaMethod::Shl, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sll, rhs))
 		});
-		methods.add_method(MetaMethod::BAnd, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::And, *rhs))
+		methods.add_meta_method(MetaMethod::BAnd, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::And, rhs))
 		});
-		methods.add_method(MetaMethod::BOr, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Or, *rhs))
+		methods.add_meta_method(MetaMethod::BOr, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Or, rhs))
 		});
-		methods.add_method(MetaMethod::BXor, |_, lhs, rhs: AnyUserData| {
-			let rhs = rhs.borrow()?;
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Xor, *rhs))
+		methods.add_meta_method(MetaMethod::BXor, |_, lhs, rhs: Signal| {
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Xor, rhs))
 		});
 	}
 }
@@ -160,43 +160,47 @@ impl Terminal {
 	}
 }
 
+fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error> {
+	let other = other.borrow::<TerminalSide>()?;
+	let (this_id, this_logd, this_colour) = this.get();
+	let (other_id, other_logd) = other.get();
+	if this_logd.as_ptr() != other_logd.as_ptr() {
+		return Err(Error::RuntimeError(
+			"Can't connect two logical designs together".to_owned(),
+		));
+	}
+	if this_id == other_id && this.0 == *other {
+		return Err(Error::RuntimeError(
+			"Can't connect a terminal to itself.".to_owned(),
+		));
+	}
+	let res = catch_unwind(AssertUnwindSafe(|| {
+		let mut fanin = vec![];
+		let mut fanout = vec![];
+		match this.0 {
+			TerminalSide::Input(..) => fanout.push(this_id),
+			TerminalSide::Output(..) => fanin.push(this_id),
+		}
+		match *other {
+			TerminalSide::Input(..) => fanout.push(other_id),
+			TerminalSide::Output(..) => fanin.push(other_id),
+		}
+		match this_colour {
+			WireColour::Red => this_logd.borrow_mut().add_wire_red(fanin, fanout),
+			WireColour::Green => this_logd.borrow_mut().add_wire_green(fanin, fanout),
+		};
+	}));
+	if let Err(_) = res {
+		Err(Error::RuntimeError("Invalid connection.".to_owned()))
+	} else {
+		Ok(res.unwrap())
+	}
+}
+
 impl UserData for Terminal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("connect", |_, this, other: AnyUserData| {
-			let other = other.borrow::<TerminalSide>()?;
-			let (this_id, this_logd, this_colour) = this.get();
-			let (other_id, other_logd) = other.get();
-			if this_logd.as_ptr() != other_logd.as_ptr() {
-				return Err(Error::RuntimeError(
-					"Can't connect two logical designs together".to_owned(),
-				));
-			}
-			if this_id == other_id && this.0 == *other {
-				return Err(Error::RuntimeError(
-					"Can't connect a terminal to itself.".to_owned(),
-				));
-			}
-			let res = catch_unwind(AssertUnwindSafe(|| {
-				let mut fanin = vec![];
-				let mut fanout = vec![];
-				match this.0 {
-					TerminalSide::Input(..) => fanout.push(this_id),
-					TerminalSide::Output(..) => fanin.push(this_id),
-				}
-				match *other {
-					TerminalSide::Input(..) => fanout.push(other_id),
-					TerminalSide::Output(..) => fanin.push(other_id),
-				}
-				match this_colour {
-					WireColour::Red => this_logd.borrow_mut().add_wire_red(fanin, fanout),
-					WireColour::Green => this_logd.borrow_mut().add_wire_green(fanin, fanout),
-				};
-			}));
-			if let Err(_) = res {
-				Err(Error::RuntimeError("Invalid connection.".to_owned()))
-			} else {
-				Ok(res.unwrap())
-			}
+			method_connect(this, other)
 		});
 	}
 }
@@ -337,13 +341,17 @@ impl UserData for LogicalDesignAPI {
 		});
 		methods.add_method(
 			"add_arithmetic",
-			|_, this, args: (AnyUserData, AnyUserData)| {
+			|_, this, args: (AnyUserData, Signal, i32, i32)| {
 				let expr = args.0.borrow::<ArithmeticExpression>()?;
-				let out = args.1.borrow::<Signal>()?;
-				let id = this
-					.logd
-					.borrow_mut()
-					.add_arithmetic((expr.0, expr.1, expr.2), *out);
+				let net_left = (args.2 & 1 > 0, args.2 & 2 > 0);
+				let net_right = (args.3 & 1 > 0, args.3 & 2 > 0);
+				let out = args.1;
+				let id = this.logd.borrow_mut().add_arithmetic_with_net(
+					(expr.0, expr.1, expr.2),
+					out,
+					net_left,
+					net_right,
+				);
 				Ok(Arithmetic {
 					id,
 					logd: this.logd.clone(),
@@ -375,27 +383,15 @@ impl UserData for LogicalDesignAPI {
 			println!("{}", this.logd.borrow());
 			Ok(())
 		});
-		methods.add_method("to_json", |_, this, _: ()| {
-			let logd = this.logd.borrow();
-			let mut phyd = PhysicalDesign::new();
-			phyd.build_from(&logd);
-			let mut serd = SerializableDesign::new();
-			serd.build_from(&phyd, &logd);
-			let blueprint_json = serde_json::to_string(&serd);
-			if blueprint_json.is_err() {
-				return Err(Error::RuntimeError("Couldn't compile design.".to_owned()));
-			}
-			Ok(blueprint_json.unwrap())
-		});
-		methods.add_method("to_svg", |_lua, this, name: String| {
-			let logd = this.logd.borrow();
-			let mut phyd = PhysicalDesign::new();
-			phyd.build_from(&logd);
-			phyd.save_svg(&logd, &name);
+		methods.add_method_mut("make_svg", |_, this, _: ()| {
+			this.make_svg = true;
 			Ok(())
 		});
 	}
 }
+
+impl UserData for PhysicalDesignAPI {}
+impl UserData for SimState {}
 
 pub fn get_lua() -> Result<Lua, Error> {
 	let lua = Lua::new();
@@ -431,7 +427,16 @@ pub fn get_lua() -> Result<Lua, Error> {
 		lua.create_function(|_, _: ()| {
 			Ok(LogicalDesignAPI {
 				logd: Rc::new(RefCell::new(LogicalDesign::new())),
+				make_svg: false,
 			})
+		})?,
+	)?;
+
+	lua.globals().set(
+		"connect",
+		lua.create_function(|_, args: (AnyUserData, AnyUserData)| {
+			let this = args.0.borrow::<Terminal>()?;
+			method_connect(&this, args.1)
 		})?,
 	)?;
 

@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 pub type ShapeId = usize;
 
@@ -309,7 +310,10 @@ impl SVG {
 		});
 	}
 
-	pub fn save(&self, filename: &str) -> io::Result<()> {
+	pub fn save<P>(&self, filename: P) -> io::Result<()>
+	where
+		P: Into<PathBuf>,
+	{
 		// Determine overall canvas dimensions from all shapes.
 		let mut max_w = 0;
 		let mut max_h = 0;
@@ -479,7 +483,7 @@ impl SVG {
 
 		svg_data.push_str("</svg>");
 
-		let mut file = File::create(filename)?;
+		let mut file = File::create(filename.into())?;
 		file.write_all(svg_data.as_bytes())?;
 		Ok(())
 	}

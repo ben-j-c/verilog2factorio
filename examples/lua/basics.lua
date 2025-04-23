@@ -15,11 +15,12 @@ d1.input.red:connect(c1.output)
 d1.output.green:connect(l1.input)
 
 local sig_0 = Signal("signal-0")
-local a1 = logd:add_arithmetic(sig_0 - 1, NET_REDGREEN, NET_NONE)
+local a1 = logd:add_arithmetic(sig_0 - 1, sig_0, NET_REDGREEN, NET_NONE)
 local c2 = logd:add_constant({ sig_0 }, { -99 })
-Terminal.connect(c2.output.red, a1.input)
-Terminal.connect(a1.output.green, l1.input)
+connect(c2.output.red, a1.input)
+connect(a1.output.green, l1.input)
 
+logd:make_svg()
+logd:print()
 
-print(logd:to_json())
-logd:to_svg("svg/basics.lua.svg")
+return logd

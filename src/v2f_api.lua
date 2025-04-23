@@ -2,10 +2,10 @@
 ---@field description string
 ---@field add_decider fun(self: LogicalDesignAPI): Decider
 ---@field add_constant fun(self: LogicalDesignAPI, sigs: (Signal|string)[], counts: integer[]): Constant
----@field add_arithmetic fun(self: LogicalDesignAPI, expr: ArithmeticExpr, network_left: Network, network_right: Network): Arithmetic
+---@field add_arithmetic fun(self: LogicalDesignAPI, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
 ---@field add_lamp fun(self: LogicalDesignAPI, expr: DeciderExpr): Lamp
----@field to_json fun(self: LogicalDesignAPI): string
----@field to_svg fun(self: LogicalDesignAPI, name: string)
+---@field print fun(self: LogicalDesignAPI)
+---@field make_svg fun(self: LogicalDesignAPI)
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
@@ -36,7 +36,10 @@
 ---@field output TerminalSide
 
 ---@class Terminal
----@field connect fun(self:Terminal, other:TerminalSide)
+
+---@param self Terminal
+---@param other TerminalSide
+function connect(self, other) end
 
 ---@class TerminalSide
 ---@field red Terminal
