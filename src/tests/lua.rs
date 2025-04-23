@@ -46,8 +46,8 @@ fn single_decider() {
 		c1 = logd:add_constant({ "iron-plate", "signal-red", "crude-oil" }, {10, -10, 50000})
 		l1 = logd:add_lamp(Expr("iron-plate", "==", 10))
 
-		d1.input.red:connect(c1.output.red)
-		d1.output.green:connect(l1.input.green)
+		d1.input.red:connect(c1.output)
+		d1.output.green:connect(l1.input)
 
 		return logd
 	"#,
