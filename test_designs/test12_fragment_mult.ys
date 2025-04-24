@@ -1,0 +1,51 @@
+read_verilog test12_fragment_mult.v
+hierarchy -libdir ../v2flib -check -top top
+
+#coarse
+proc
+flatten
+opt_expr
+opt_clean
+check
+opt -nodffe -nosdff
+fsm
+opt
+wreduce
+peepopt
+opt_clean
+share
+opt
+
+opt_mem_priority
+opt_mem_feedback
+memory_bmux2rom
+memory_dff
+opt_clean
+memory_share
+opt_mem_widen
+memory_memx
+opt_clean
+memory_collect
+
+#fine
+opt -fast -full
+
+techmap -map ../techmap/mult_fragment_test.v
+techmap \
+	-dont_map $shl -dont_map $shr \
+	-dont_map $mul -dont_map $div \
+	-dont_map $mod -dont_map $pow \
+	-dont_map $add -dont_map $sub \
+	-dont_map $sdff
+techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
+clean;
+flowmap -maxlut 8
+opt -fast
+abc -fast -lut 8
+opt -fast
+opt_lut
+opt -fast
+
+#final
+write_json ./output/test12.json
+show top
