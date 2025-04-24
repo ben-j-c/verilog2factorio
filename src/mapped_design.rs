@@ -507,7 +507,18 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		tmp1.into_iter().map(|c| c.collect_vec()),
 		tmp2.into_iter().map(|c| c.collect_vec()),
 		cell.connections["WR_CLK"].iter(),
-		cell.connections["WR_EN"].iter(),
+		cell.connections["WR_EN"]
+			.iter()
+			.chunks(width)
+			.into_iter()
+			.map(|c| {
+				let tmp3 = c.collect_vec();
+				assert!(
+					tmp3.iter().all(|v| *v == tmp3[0]),
+					"We currently don't support bit masks."
+				);
+				tmp3[0]
+			}),
 	)
 	.collect_vec();
 	assert_eq!(
@@ -664,6 +675,71 @@ mod test {
 		assert_eq!(
 			top.cells["memory"].port_directions["RD_ADDR_1"],
 			Direction::Input
+		);
+	}
+
+	#[test]
+	fn multiport_ram() {
+		let file = File::open("./test_designs/output/test11.json").unwrap();
+		let reader = BufReader::new(file);
+		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+		let top = mapped_design.modules.get("top");
+		assert!(top.is_some());
+		let top = top.unwrap();
+		assert!(top.ports.contains_key("signal_1_1"));
+		assert!(top.ports.contains_key("signal_1_2"));
+		assert!(top.ports.contains_key("signal_2_1"));
+		assert!(top.ports.contains_key("signal_2_2"));
+		assert!(top.ports.contains_key("signal_A"));
+		assert!(top.ports.contains_key("signal_C"));
+		assert!(top.ports.contains_key("signal_D"));
+		assert!(top.ports.contains_key("signal_E"));
+		assert_eq!(top.attributes["top"].from_bin_str(), Some(1));
+		assert!(top.cells["memory"].connections.contains_key("RD_DATA_0"));
+		assert!(top.cells["memory"].connections.contains_key("RD_DATA_1"));
+		assert!(top.cells["memory"].connections.contains_key("RD_ADDR_0"));
+		assert!(top.cells["memory"].connections.contains_key("RD_ADDR_1"));
+		assert_eq!(top.cells["memory"].connections["RD_DATA_0"].len(), 32);
+		assert_eq!(top.cells["memory"].connections["RD_DATA_1"].len(), 32);
+		assert_eq!(top.cells["memory"].connections["RD_ADDR_0"].len(), 8);
+		assert_eq!(top.cells["memory"].connections["RD_ADDR_1"].len(), 8);
+		assert_eq!(
+			top.cells["memory"].port_directions["RD_DATA_0"],
+			Direction::Output
+		);
+		assert_eq!(
+			top.cells["memory"].port_directions["RD_DATA_1"],
+			Direction::Output
+		);
+		assert_eq!(
+			top.cells["memory"].port_directions["RD_ADDR_0"],
+			Direction::Input
+		);
+		assert_eq!(
+			top.cells["memory"].port_directions["RD_ADDR_1"],
+			Direction::Input
+		);
+		assert_eq!(
+			top.cells["memory"].port_directions["WR_ADDR_0"],
+			Direction::Input
+		);
+		assert_eq!(top.cells["memory"].connections["WR_ADDR_0"].len(), 8);
+		assert_eq!(top.cells["memory"].connections["WR_EN_0"].len(), 1);
+		assert_eq!(
+			top.cells["memory"].connections["WR_EN_0"],
+			top.ports["signal_E"].bits
+		);
+		assert_eq!(
+			top.cells["memory"].connections["WR_ADDR_0"],
+			top.ports["signal_A"].bits[0..8]
+		);
+		assert_eq!(
+			top.cells["memory"].connections["WR_DATA_0"],
+			top.ports["signal_D"].bits
+		);
+		assert_eq!(
+			top.cells["memory"].connections["WR_CLK_0"],
+			top.ports["signal_C"].bits
 		);
 	}
 }
