@@ -1,11 +1,14 @@
-use std::{
-	cell::RefCell,
-	panic::{catch_unwind, AssertUnwindSafe},
-	rc::Rc,
-};
-
 use mlua::{
 	AnyUserData, Error, FromLua, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, Value,
+};
+
+use std::{
+	cell::RefCell,
+	os::unix::process::CommandExt,
+	panic::{catch_unwind, AssertUnwindSafe},
+	path::PathBuf,
+	process::ExitStatus,
+	rc::Rc,
 };
 
 use crate::{
@@ -457,6 +460,26 @@ pub fn get_lua() -> Result<Lua, Error> {
 				}
 			};
 			Ok(DeciderExpression(lhs, op, rhs))
+		})?,
+	)?;
+
+	lua.globals().set(
+		"compile_load_verilog_design",
+		lua.create_function(|_, filename: String| {
+			let file = PathBuf::from(filename.clone());
+			if !file.is_file() {
+				return Err(Error::RuntimeError(format!("{filename} is not a file.")));
+			}
+			let mut proc = std::process::Command::new("yosys")
+				.arg("--version")
+				.spawn()?;
+			let exit_code = proc.wait()?;
+			if !exit_code.success() {
+				return Err(Error::RuntimeError(format!(
+					"yosys got exit code {exit_code}."
+				)));
+			}
+			Ok(())
 		})?,
 	)?;
 

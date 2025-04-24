@@ -1,4 +1,4 @@
--- A simple example showing all the features.
+-- A simple example showing all the common features.
 
 local logd = get_empty_design()
 
