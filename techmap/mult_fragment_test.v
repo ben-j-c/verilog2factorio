@@ -2,9 +2,9 @@
 module _mul_fragment (A, B, Y);
 	parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
-	parameter A_WIDTH = 1;
-	parameter B_WIDTH = 1;
-	parameter Y_WIDTH = 1;
+	parameter A_WIDTH = 32;
+	parameter B_WIDTH = 32;
+	parameter Y_WIDTH = 64;
 
 	input [A_WIDTH-1:0] A;
 	input [B_WIDTH-1:0] B;
@@ -15,16 +15,22 @@ module _mul_fragment (A, B, Y);
 	integer i;
 	integer j;
 	
-	wire [31:0] tmp0;
-	wire [31:0] tmp1;
-	wire [31:0] tmp2;
-	wire [31:0] tmp3;
-	assign tmp0 = A[15:0] * B[15:0];
-	assign tmp1 = A[31:16] * B[15:0];
-	assign tmp2 = A[15:0] * B[31:16];
-	assign tmp3 = A[31:16] * B[31:16];
+	wire [31:0] LL;
+	wire [31:0] HL;
+	wire [31:0] LH;
+	wire [31:0] HH;
+	assign LL = A[15:0] * B[15:0];
+	assign HL = A[31:16] * B[15:0];
+	assign LH = A[15:0] * B[31:16];
+	assign HH = A[31:16] * B[31:16];
 
-	wire c;
-	assign Y[31:0] = tmp0 + {tmp1[15:0], 16'b0} + {tmp2[15:0], 16'b0};
+	assign Y[15:0] = LL[15:0];
+	wire [15:0] c1;
+	assign {c1, Y[31:16]} = {16'b0, LL[31:16]} + {16'b0, HL[15:0]} + {16'b0, LH[15:0]};
+	wire [15:0] c2;
+	assign {c2, Y[47:32]} = {16'b0, HH[15:0]} + {16'b0, HL[31:16]} + {16'b0, LH[31:16]} + {16'b0, c1};
+	assign Y[63:48] = HH[31:16] + c2;
+
+
 
 endmodule
