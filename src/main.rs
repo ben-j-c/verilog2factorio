@@ -1,11 +1,7 @@
-use std::{
-	fs::File,
-	io::BufReader,
-	path::{Path, PathBuf},
-};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
 use checked_design::CheckedDesign;
-use clap::{builder::Str, Parser};
+use clap::Parser;
 use logical_design::LogicalDesign;
 use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
 use mapped_design::MappedDesign;

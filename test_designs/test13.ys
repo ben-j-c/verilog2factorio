@@ -1,4 +1,4 @@
-read_verilog test12_fragment_mult.v
+read_verilog test13_primitives.v
 hierarchy -libdir ../v2flib -check -top top
 
 #coarse
@@ -30,8 +30,8 @@ memory_collect
 #fine
 opt -fast -full
 
-techmap -map ../techmap/mult_fragment_test.v
-techmap -dont_map $shl -dont_map $shr -dont_map $mul -dont_map $div -dont_map $mod -dont_map $pow -dont_map $add -dont_map $sub -dont_map $sdff
+techmap -map ../techmap/v2f_techmap.v
+techmap
 techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
 clean;
 flowmap -maxlut 8
@@ -42,5 +42,5 @@ opt_lut
 opt -fast
 
 #final
-write_json ./output/test12.json
+write_json ./output/test13.json
 show top

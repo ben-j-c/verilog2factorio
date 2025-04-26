@@ -10,7 +10,7 @@ module _mul_fragment (A, B, Y);
 	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
-	wire _TECHMAP_FAIL_ = A_WIDTH != 32 && B_WIDTH != 32 && Y_WIDTH != 64;
+	wire _TECHMAP_FAIL_ = A_WIDTH != 32 || B_WIDTH != 32 || Y_WIDTH != 64;
 
 	integer i;
 	integer j;
@@ -30,7 +30,5 @@ module _mul_fragment (A, B, Y);
 	wire [15:0] c2;
 	assign {c2, Y[47:32]} = {16'b0, HH[15:0]} + {16'b0, HL[31:16]} + {16'b0, LH[31:16]} + {16'b0, c1};
 	assign Y[63:48] = HH[31:16] + c2;
-
-
 
 endmodule
