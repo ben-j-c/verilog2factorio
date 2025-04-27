@@ -1,0 +1,17 @@
+
+library(v2f) {
+	type (data32) {
+		base_type : array ;
+		data_type : bit ;
+		bit_width : 32 ;
+		bit_from  : 31 ;
+		bit_to    : 0 ;
+		downto    : true ;
+	}
+	cell(v2f_mul) {
+		area: 1 ;
+		bus (A) { bus_type: data32; direction: input ; }
+		bus (B) { bus_type: data32; direction: input ; }
+		bus (Y) { bus_type: data32; direction: output ; function : "A*B" ; }
+	}
+}
