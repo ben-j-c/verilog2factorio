@@ -1,10 +1,10 @@
 
 read_verilog test2.v
-hierarchy -check -top test2
+read_verilog -lib ../v2flib/v2f_primitives.v
+hierarchy -check -libdir ../v2flib -top top
 flatten
 proc
 opt
-techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH=8
-opt
-write_json ./output/test2.json
+script ../v2flib/techmap.ys
+write_json -selected ./output/test2.json
 show

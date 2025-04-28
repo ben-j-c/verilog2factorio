@@ -1,9 +1,10 @@
 
 read_verilog single_dff.v
-hierarchy -libdir ../v2flib -check -top top
+read_verilog -lib ../v2flib/v2f_primitives.v
+hierarchy -check -libdir ../v2flib -top top
 proc
 flatten
 opt
-techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH=8
-write_json ./output/test5.json
+script ../v2flib/techmap.ys
+write_json -selected ./output/test5.json
 show top

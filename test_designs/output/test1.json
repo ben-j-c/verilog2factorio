@@ -1,7 +1,7 @@
 {
-  "creator": "Yosys 0.44 (git sha1 80ba43d26, g++ 11.4.0-1ubuntu1~22.04 -fPIC -O3)",
+  "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
-    "test1": {
+    "top": {
       "attributes": {
         "top": "00000000000000000000000000000001",
         "src": "test1.v:1.1-9.10"
@@ -25,7 +25,7 @@
       "cells": {
         "$mul$test1.v:7$2": {
           "hide_name": 1,
-          "type": "$mul",
+          "type": "v2f_mul",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000001",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -34,7 +34,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "test1.v:7.14-7.31"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "test1.v:7.14-7.31|../techmap/v2f_techmap.v:87.3-87.41"
           },
           "port_directions": {
             "A": "input",

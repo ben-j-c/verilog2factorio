@@ -11,8 +11,8 @@ module top(
 
 	reg [31:0] memory [255:0];
 	always @(*) begin
-		signal_2_1 = memory[signal_1_1[7:0]];
-		signal_2_2 = memory[signal_1_2[7:0]];
+		signal_2_1 <= memory[signal_1_1[7:0]];
+		signal_2_2 <= memory[signal_1_2[7:0]];
 	end
 
 	always @(posedge signal_C) begin

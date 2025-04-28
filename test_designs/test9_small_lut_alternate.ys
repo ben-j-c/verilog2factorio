@@ -1,5 +1,6 @@
 read_verilog lut_small_alternate.v
-hierarchy -libdir ../v2flib -check -top top
+read_verilog -lib ../v2flib/v2f_primitives.v
+hierarchy -check -libdir ../v2flib -top top
 
 #coarse
 proc
@@ -13,31 +14,13 @@ opt
 wreduce
 peepopt
 opt_clean
-#techmap -map ../yosys/techlibs/common/cmp2lut.v -map ../yosys/techlibs/common/cmp2lcu.v -D LUT_WIDTH 8
-booth
 share
 opt
 memory -nomap
 opt_clean
 
-#fine
-opt -fast -full
-memory_map
-opt -full
-techmap \
-	-dont_map $shl -dont_map $shr \
-	-dont_map $mul -dont_map $div \
-	-dont_map $mod -dont_map $pow \
-	-dont_map $add -dont_map $sub \
-	-dont_map $sdff
-techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
-clean; opt_lut
-flowmap -maxlut 8
-opt -fast
-abc -fast
-abc -fast -lut 8
-opt -fast
+script ../v2flib/techmap.ys
 
 #final
-write_json ./output/test9.json
+write_json -selected ./output/test9.json
 show top

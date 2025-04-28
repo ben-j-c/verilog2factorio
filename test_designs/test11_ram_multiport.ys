@@ -1,4 +1,5 @@
 read_verilog test11_ram_multiport.v
+read_verilog -lib ../v2flib/v2f_primitives.v
 hierarchy -libdir ../v2flib -check -top top
 
 #coarse
@@ -13,7 +14,6 @@ opt
 wreduce
 peepopt
 opt_clean
-booth
 share
 opt
 
@@ -28,24 +28,10 @@ memory_memx
 opt_clean
 memory_collect
 
+opt -full
 #fine
-opt -fast -full
-
-techmap \
-	-dont_map $shl -dont_map $shr \
-	-dont_map $mul -dont_map $div \
-	-dont_map $mod -dont_map $pow \
-	-dont_map $add -dont_map $sub \
-	-dont_map $sdff
-techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
-clean;
-flowmap -maxlut 8
-opt -fast
-abc -fast -lut 8
-opt -fast
-opt_lut
-opt -fast
+script ../v2flib/techmap.ys
 
 #final
-write_json ./output/test11.json
+write_json -selected ./output/test11.json
 show top

@@ -405,23 +405,23 @@ impl<'de> Deserialize<'de> for Cell {
 		let helper = MappedCell::deserialize(deserializer)?;
 
 		let op = match helper.cell_type.as_str() {
-			"$and" => ImplementableOp::AndBitwise,
-			"$or" => ImplementableOp::OrBitwise,
-			"$xor" => ImplementableOp::XorBitwise,
-			"$shl" => ImplementableOp::Shl,
-			"$shr" => ImplementableOp::Shr,
-			"$mul" => ImplementableOp::Mul,
-			"$div" => ImplementableOp::Div,
-			"$mod" => ImplementableOp::Mod,
-			"$pow" => ImplementableOp::Pow,
-			"$add" => ImplementableOp::Add,
-			"$sub" => ImplementableOp::Sub,
-			"$gt" => ImplementableOp::GreaterThan,
-			"$lt" => ImplementableOp::LessThan,
-			"$eq" => ImplementableOp::Equal,
-			"$neq" => ImplementableOp::NotEqual,
-			"$geq" => ImplementableOp::GreaterThanEqual,
-			"$leq" => ImplementableOp::LessThanEqual,
+			"v2f_and" => ImplementableOp::AndBitwise,
+			"v2f_or" => ImplementableOp::OrBitwise,
+			"v2f_xor" => ImplementableOp::XorBitwise,
+			"v2f_shl" => ImplementableOp::Shl,
+			"v2f_shr" => ImplementableOp::Shr,
+			"v2f_mul" => ImplementableOp::Mul,
+			"v2f_div" => ImplementableOp::Div,
+			"v2f_mod" => ImplementableOp::Mod,
+			"v2f_pow" => ImplementableOp::Pow,
+			"v2f_add" => ImplementableOp::Add,
+			"v2f_sub" => ImplementableOp::Sub,
+			"v2f_gt" => ImplementableOp::GreaterThan,
+			"v2f_lt" => ImplementableOp::LessThan,
+			"v2f_eq" => ImplementableOp::Equal,
+			"v2f_ne" => ImplementableOp::NotEqual,
+			"v2f_ge" => ImplementableOp::GreaterThanEqual,
+			"v2f_le" => ImplementableOp::LessThanEqual,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
 			"$dff" => ImplementableOp::DFF,
 			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
@@ -624,7 +624,7 @@ mod test {
 		let file = File::open("./test_designs/output/test1.json").unwrap();
 		let reader = BufReader::new(file);
 		let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
-		let test1 = mapped_design.modules.get("test1");
+		let test1 = mapped_design.modules.get("top");
 		assert!(test1.is_some());
 		let test1 = test1.unwrap();
 		println!("{:?}", test1);

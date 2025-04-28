@@ -1,4 +1,4 @@
-module test2(
+module top(
 	output reg [31:0] signal_2
 );
 	always @(*) begin

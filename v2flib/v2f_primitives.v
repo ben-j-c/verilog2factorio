@@ -16,7 +16,7 @@ module v2f_reduce_and(A, Y);
 	// Blackbox
 endmodule
 
-(* blackbox *)
+(*whitebox*)
 module v2f_mul #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
 	input [A_WIDTH-1:0] A,
 	input [B_WIDTH-1:0] B,
@@ -24,7 +24,7 @@ module v2f_mul #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDT
 );
 	parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
-	//assign Y = A*B;
+	assign Y = A*B;
 endmodule
 
 module v2f_add (A, B, Y);
@@ -129,6 +129,28 @@ module v2f_pow (A, B, Y);
 	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 	// Blackbox
+endmodule
+
+(*whitebox*)
+module v2f_shl #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
+	input [A_WIDTH-1:0] A,
+	input [B_WIDTH-1:0] B,
+	output [Y_WIDTH-1:0] Y,
+);
+	parameter A_SIGNED = 0;
+	parameter B_SIGNED = 0;
+	assign Y = A << B;
+endmodule
+
+(*whitebox*)
+module v2f_shr #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
+	input [A_WIDTH-1:0] A,
+	input [B_WIDTH-1:0] B,
+	output [Y_WIDTH-1:0] Y,
+);
+	parameter A_SIGNED = 0;
+	parameter B_SIGNED = 0;
+	assign Y = A >> B;
 endmodule
 
 module v2f_gt (A, B, Y);

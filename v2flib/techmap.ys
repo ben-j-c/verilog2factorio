@@ -1,0 +1,11 @@
+techmap -map ../techmap/v2f_techmap.v;;
+techmap -dont_map $sdff -dont_map $dff -dont_map $dffa
+techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
+clean; opt_lut
+flowmap -maxlut 8
+opt -fast
+abc -fast
+abc -fast -lut 8
+opt -fast
+opt_lut
+opt_clean

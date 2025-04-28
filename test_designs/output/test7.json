@@ -1,5 +1,5 @@
 {
-  "creator": "Yosys 0.48 (git sha1 aaa534749, g++ 11.4.0-1ubuntu1~22.04 -fPIC -O3)",
+  "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
     "top": {
       "attributes": {
@@ -21,7 +21,7 @@
         }
       },
       "cells": {
-        "$auto$flowmap.cc:1412:pack_cells$124": {
+        "$auto$flowmap.cc:1414:pack_cells$127": {
           "hide_name": 1,
           "type": "$lut",
           "parameters": {
@@ -29,7 +29,7 @@
             "WIDTH": "00000000000000000000000000000011"
           },
           "attributes": {
-            "src": "lut_small.v:9.3-19.6|lut_small.v:11.16-11.34|lut_small.v:13.16-13.33|lut_small.v:15.16-15.33|lut_small.v:15.16-15.44|lut_small.v:13.16-13.44|lut_small.v:13.12-19.6|lut_small.v:11.16-11.44|lut_small.v:11.12-19.6|lut_small.v:9.7-9.33|lut_small.v:13.37-13.44|lut_small.v:11.16-11.23|lut_small.v:11.27-11.34|lut_small.v:9.7-9.23"
+            "src": "lut_small.v:9.3-19.6|lut_small.v:11.16-11.34|lut_small.v:13.16-13.33|lut_small.v:15.16-15.33|lut_small.v:9.7-9.33|lut_small.v:11.12-19.6|lut_small.v:11.16-11.44|lut_small.v:13.12-19.6|lut_small.v:13.16-13.44|lut_small.v:15.12-19.6|lut_small.v:15.16-15.44|lut_small.v:13.37-13.44|lut_small.v:11.16-11.23|lut_small.v:11.27-11.34|lut_small.v:9.7-9.23"
           },
           "port_directions": {
             "A": "input",
@@ -42,7 +42,7 @@
         },
         "$mul$lut_small.v:7$1": {
           "hide_name": 1,
-          "type": "$mul",
+          "type": "v2f_mul",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -51,7 +51,8 @@
             "Y_WIDTH": "00000000000000000000000000000011"
           },
           "attributes": {
-            "src": "lut_small.v:7.15-7.32"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "lut_small.v:7.15-7.32|../techmap/v2f_techmap.v:87.3-87.41"
           },
           "port_directions": {
             "A": "input",

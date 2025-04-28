@@ -1,10 +1,10 @@
 {
-  "creator": "Yosys 0.48 (git sha1 aaa534749, g++ 11.4.0-1ubuntu1~22.04 -fPIC -O3)",
+  "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
     "top": {
       "attributes": {
         "top": "00000000000000000000000000000001",
-        "src": "single_register.v:1.1-9.10"
+        "src": "single_dff.v:1.1-9.10"
       },
       "ports": {
         "signal_0_in": {
@@ -21,7 +21,7 @@
         }
       },
       "cells": {
-        "$procdff$2": {
+        "$procdff$3": {
           "hide_name": 1,
           "type": "$dff",
           "parameters": {
@@ -29,7 +29,7 @@
             "WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "single_register.v:6.2-8.5"
+            "src": "single_dff.v:6.2-8.5"
           },
           "port_directions": {
             "CLK": "input",
@@ -48,21 +48,21 @@
           "hide_name": 0,
           "bits": [ 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33 ],
           "attributes": {
-            "src": "single_register.v:2.15-2.26"
+            "src": "single_dff.v:2.15-2.26"
           }
         },
         "signal_0_out": {
           "hide_name": 0,
           "bits": [ 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97 ],
           "attributes": {
-            "src": "single_register.v:4.20-4.32"
+            "src": "single_dff.v:4.20-4.32"
           }
         },
         "signal_red": {
           "hide_name": 0,
           "bits": [ 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65 ],
           "attributes": {
-            "src": "single_register.v:3.15-3.25"
+            "src": "single_dff.v:3.15-3.25"
           }
         }
       }

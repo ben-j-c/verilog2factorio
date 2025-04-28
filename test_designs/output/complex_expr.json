@@ -1,5 +1,5 @@
 {
-  "creator": "Yosys 0.44 (git sha1 80ba43d26, g++ 11.4.0-1ubuntu1~22.04 -fPIC -O3)",
+  "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
     "top": {
       "attributes": {
@@ -43,7 +43,7 @@
       "cells": {
         "$add$complex_expr.v:12$3": {
           "hide_name": 1,
-          "type": "$add",
+          "type": "v2f_add",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000001",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -52,7 +52,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:12.9-12.42"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:12.9-12.42|../techmap/v2f_techmap.v:53.3-53.41"
           },
           "port_directions": {
             "A": "input",
@@ -67,7 +68,7 @@
         },
         "$add$complex_expr.v:14$5": {
           "hide_name": 1,
-          "type": "$add",
+          "type": "v2f_add",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000001",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -76,7 +77,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:14.14-14.42"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:14.14-14.42|../techmap/v2f_techmap.v:53.3-53.41"
           },
           "port_directions": {
             "A": "input",
@@ -91,7 +93,7 @@
         },
         "$add$complex_expr.v:15$10": {
           "hide_name": 1,
-          "type": "$add",
+          "type": "v2f_add",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -100,7 +102,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:15.14-15.79"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:15.14-15.79|../techmap/v2f_techmap.v:53.3-53.41"
           },
           "port_directions": {
             "A": "input",
@@ -115,7 +118,7 @@
         },
         "$add$complex_expr.v:15$6": {
           "hide_name": 1,
-          "type": "$add",
+          "type": "v2f_add",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -124,7 +127,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:15.15-15.34"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:15.15-15.34|../techmap/v2f_techmap.v:53.3-53.41"
           },
           "port_directions": {
             "A": "input",
@@ -139,7 +143,7 @@
         },
         "$add$complex_expr.v:15$8": {
           "hide_name": 1,
-          "type": "$add",
+          "type": "v2f_add",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -148,7 +152,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:15.15-15.58"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:15.15-15.58|../techmap/v2f_techmap.v:53.3-53.41"
           },
           "port_directions": {
             "A": "input",
@@ -163,7 +168,7 @@
         },
         "$div$complex_expr.v:14$4": {
           "hide_name": 1,
-          "type": "$div",
+          "type": "v2f_div",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000001",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -172,7 +177,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:14.14-14.31"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:14.14-14.31|../techmap/v2f_techmap.v:104.3-104.41"
           },
           "port_directions": {
             "A": "input",
@@ -187,7 +193,7 @@
         },
         "$div$complex_expr.v:15$9": {
           "hide_name": 1,
-          "type": "$div",
+          "type": "v2f_div",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -196,7 +202,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:15.14-15.68"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:15.14-15.68|../techmap/v2f_techmap.v:104.3-104.41"
           },
           "port_directions": {
             "A": "input",
@@ -211,7 +218,7 @@
         },
         "$mul$complex_expr.v:15$7": {
           "hide_name": 1,
-          "type": "$mul",
+          "type": "v2f_mul",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000000",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -220,7 +227,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:15.38-15.57"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:15.38-15.57|../techmap/v2f_techmap.v:87.3-87.41"
           },
           "port_directions": {
             "A": "input",
@@ -235,7 +243,7 @@
         },
         "$shl$complex_expr.v:12$2": {
           "hide_name": 1,
-          "type": "$shl",
+          "type": "v2f_shl",
           "parameters": {
             "A_SIGNED": "00000000000000000000000000000001",
             "A_WIDTH": "00000000000000000000000000100000",
@@ -244,7 +252,8 @@
             "Y_WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "complex_expr.v:12.10-12.30"
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "complex_expr.v:12.10-12.30|../techmap/v2f_techmap.v:206.3-206.41"
           },
           "port_directions": {
             "A": "input",

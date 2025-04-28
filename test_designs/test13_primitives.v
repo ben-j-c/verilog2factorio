@@ -1,7 +1,7 @@
 module top(
 	input [31:0] signal_A_0,
 	input [31:0] signal_B_0,
-	output [32:0] signal_Y_0,
+	output [31:0] signal_Y_0,
 
 	input [31:0] signal_A_1,
 	input [31:0] signal_B_1,

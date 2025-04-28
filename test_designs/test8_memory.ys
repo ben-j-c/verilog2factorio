@@ -1,4 +1,5 @@
 read_verilog test8_memory.v
+read_verilog -lib ../v2flib/v2f_primitives.v
 hierarchy -libdir ../v2flib -check -top top
 
 #coarse
@@ -32,20 +33,8 @@ memory_collect
 opt -fast -full
 #memory_libmap -lib ../v2flib/v2f_memory.lib
 
-techmap \
-	-dont_map $shl -dont_map $shr \
-	-dont_map $mul -dont_map $div \
-	-dont_map $mod -dont_map $pow \
-	-dont_map $add -dont_map $sub \
-	-dont_map $sdff
-techmap -map ../yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
-clean; opt_lut
-flowmap -maxlut 8
-opt -fast
-abc -fast
-abc -fast -lut 8
-opt -fast
+script ../v2flib/techmap.ys
 
 #final
-write_json ./output/test8.json
+write_json -selected ./output/test8.json
 show top
