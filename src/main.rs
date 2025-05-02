@@ -33,6 +33,7 @@ pub enum Error {
 	SerializationError(serde_json::Error),
 	LuaError(mlua::Error),
 	IOError(std::io::Error),
+	ReadlineError(rustyline::error::ReadlineError),
 	LuaErrorNoReturnedDesign,
 	ResultantFileNameIsBad,
 }

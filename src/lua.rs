@@ -1,9 +1,13 @@
 use mlua::{
-	AnyUserData, Error, FromLua, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, Value,
+	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, UserData, UserDataFields,
+	UserDataMethods, Value,
 };
+use rustyline::{completion::Completer, config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
+	fs::File,
+	io::Write,
 	os::unix::process::CommandExt,
 	panic::{catch_unwind, AssertUnwindSafe},
 	path::PathBuf,
@@ -478,6 +482,68 @@ pub fn get_lua() -> Result<Lua, Error> {
 				return Err(Error::RuntimeError(format!(
 					"yosys got exit code {exit_code}."
 				)));
+			}
+			Ok(())
+		})?,
+	)?;
+
+	lua.globals().set(
+		"enter_repl",
+		lua.create_function(|lua, filename: Option<String>| {
+			let mut editor = DefaultEditor::new().expect("Failed to create editor");
+			editor.set_tab_stop(4);
+			let mut line = String::new();
+			let mut prompt = "> ";
+			loop {
+				match editor.readline(prompt) {
+					Ok(v) => line.push_str(&v),
+					Err(e) => match e {
+						rustyline::error::ReadlineError::Io(_) => {
+							return Err(Error::runtime("readline: IO error"))
+						}
+						rustyline::error::ReadlineError::Eof => break,
+						rustyline::error::ReadlineError::Interrupted => continue,
+						rustyline::error::ReadlineError::Errno(errno) => {
+							return Err(Error::RuntimeError(
+								"readline: ".to_owned() + &errno.to_string(),
+							))
+						}
+						rustyline::error::ReadlineError::WindowResized => continue,
+						_ => continue,
+					},
+				}
+
+				match lua.load(&line).eval::<MultiValue>() {
+					Ok(values) => {
+						editor.add_history_entry(&line).unwrap();
+						println!(
+							"{}",
+							values
+								.iter()
+								.map(|value| format!("{:#?}", value))
+								.collect::<Vec<_>>()
+								.join("\t")
+						);
+					}
+					Err(Error::SyntaxError {
+						incomplete_input: true,
+						..
+					}) => {
+						line.push_str("\n");
+						prompt = ">> ";
+						continue;
+					}
+					Err(e) => return Err(e),
+				}
+				line.clear();
+			}
+			if let Some(filename) = filename {
+				let mut file = File::create(filename)?;
+				for line in editor.history() {
+					file.write(line.as_bytes())?;
+					file.write("\n".as_bytes())?;
+				}
+				todo!()
 			}
 			Ok(())
 		})?,
