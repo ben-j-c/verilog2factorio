@@ -2,24 +2,26 @@ use mlua::{
 	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, UserData, UserDataFields,
 	UserDataMethods, Value,
 };
-use rustyline::{completion::Completer, config::Configurer, DefaultEditor};
+use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
+	ffi::OsString,
+	fmt::Display,
 	fs::File,
-	io::Write,
-	os::unix::process::CommandExt,
+	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
 	path::PathBuf,
-	process::ExitStatus,
 	rc::Rc,
 };
 
 use crate::{
+	checked_design::CheckedDesign,
 	logical_design::{
 		ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, NodeId, Signal,
 		WireColour,
 	},
+	mapped_design::MappedDesign,
 	phy::PhysicalDesign,
 	signal_lookup_table,
 	sim::SimState,
@@ -38,6 +40,10 @@ pub(crate) struct PhysicalDesignAPI {
 pub(crate) struct SimStateAPI {
 	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
 	pub(crate) sim: Rc<RefCell<SimState>>,
+}
+
+pub(crate) struct RTL {
+	filename: String,
 }
 
 #[derive(Clone, Debug)]
@@ -202,6 +208,147 @@ fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error
 	} else {
 		Ok(res.unwrap())
 	}
+}
+
+fn method_check_yosys() -> Result<(), mlua::Error> {
+	let mut yosys_exe = PathBuf::from(std::env::current_exe()?.parent().unwrap());
+	yosys_exe.push("/yosys/yosys");
+	let output = std::process::Command::new(yosys_exe)
+		.arg("--version")
+		.output()?;
+	if !output.status.success() {
+		return Err(Error::runtime(format!(
+			"Yosys got error code {}",
+			output.status
+		)));
+	}
+	let result = String::from_utf8(output.stdout)
+		.or_else(|_| Err(Error::runtime("Can't get the version.")))?;
+	if !result.starts_with("Yosys 0.52 (git sha1 fee39a328") {
+		Err(Error::runtime(
+			"Wrong yosys version, expected \"Yosys 0.52 (git sha1 fee39a328\"",
+		))
+	} else {
+		Ok(())
+	}
+}
+
+fn method_load_rtl<P>(filename: P) -> Result<RTL, mlua::Error>
+where
+	P: Into<PathBuf>,
+{
+	let filename = filename.into();
+	method_check_yosys()?;
+	let exe_dir = PathBuf::from(std::env::current_exe()?.parent().unwrap());
+	if !exe_dir.is_dir() {
+		return Err(Error::RuntimeError(format!(
+			"Can't locate executable directory."
+		)));
+	}
+	let file = PathBuf::from(filename.clone());
+	if !file.is_file() {
+		return Err(Error::RuntimeError(format!("{:?} is not a file.", file)));
+	}
+	let mut json_filename = {
+		let mut tmp = PathBuf::from(filename.parent().unwrap());
+		tmp.push(filename.file_stem().unwrap().to_owned());
+		tmp
+	};
+
+	{
+		let mut rtl_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
+		let mut buf = Vec::new();
+		rtl_script.read_to_end(&mut buf)?;
+		let rtl_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
+		let rtl_script_text = rtl_script_text
+			.replace("{filename}", json_filename.to_str().unwrap())
+			.replace("{exe_dir}", exe_dir.to_str().unwrap());
+		let mut rtl_script_final = File::create("rtl.ys")?;
+		rtl_script_final.write_all(rtl_script_text.as_bytes())?;
+		rtl_script_final.flush()?;
+	}
+
+	let rtl_output = std::process::Command::new(exe_dir.join("/yosys/yosys"))
+		.arg("--quiet")
+		.arg("--quiet")
+		.arg("--scriptfile")
+		.arg("rtl.ys")
+		.output()?;
+	if !rtl_output.status.success() {
+		return Err(Error::runtime("Failed to compile to RTL."));
+	}
+	let filename = {
+		let tmp = json_filename.as_mut_os_string();
+		tmp.push("_rtl.json");
+		tmp.clone().into_string().unwrap()
+	};
+	return Ok(RTL { filename });
+}
+
+fn method_map_rtl<P>(filename: P) -> Result<LogicalDesignAPI, mlua::Error>
+where
+	P: Into<PathBuf> + Display + Clone,
+{
+	let filename: PathBuf = filename.into();
+	if !filename.is_file() {
+		return Err(Error::RuntimeError(format!(
+			"{:?} is not a file.",
+			filename
+		)));
+	}
+	if !filename.ends_with(".rtl.json") {
+		return Err(Error::RuntimeError(format!(
+			"{:?} is not an RTL json.",
+			filename
+		)));
+	}
+	let exe_dir = PathBuf::from(std::env::current_exe()?.parent().unwrap());
+	if !exe_dir.is_dir() {
+		return Err(Error::RuntimeError(format!(
+			"Can't locate executable directory."
+		)));
+	}
+
+	let json_filename = {
+		let mut tmp = PathBuf::from(filename.parent().unwrap());
+		tmp.push(filename.file_stem().unwrap().to_owned());
+		tmp
+	};
+	{
+		let mut buf = Vec::new();
+		let mut mapping_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
+		mapping_script.read_to_end(&mut buf)?;
+		let mapping_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
+		let mapping_script_text = mapping_script_text
+			.replace("{filename}", json_filename.to_str().unwrap())
+			.replace("{exe_dir}", exe_dir.to_str().unwrap());
+		let mut mappingscript_final = File::create("mapping.ys")?;
+		mappingscript_final.write_all(mapping_script_text.as_bytes())?;
+		mappingscript_final.flush()?;
+	}
+
+	let mapping_output = std::process::Command::new(exe_dir.join("/yosys/yosys"))
+		.arg("--quiet")
+		.arg("--quiet")
+		.arg("--scriptfile")
+		.arg("mapping.ys")
+		.output()?;
+	if !mapping_output.status.success() {
+		return Err(Error::runtime("Failed to techmap."));
+	}
+
+	let file = File::open("")?;
+	let reader = BufReader::new(file);
+	let mapped_design: MappedDesign =
+		serde_json::from_reader(reader).map_err(|_| Error::runtime("failed to map design."))?;
+	let mut checked_design = CheckedDesign::new();
+	checked_design.build_from(&mapped_design);
+	let mut logd = LogicalDesign::new();
+	logd.build_from(&checked_design, &mapped_design);
+	Ok(LogicalDesignAPI {
+		logd: Rc::new(RefCell::new(logd)),
+		make_svg: false,
+	})
 }
 
 impl UserData for Terminal {
@@ -400,6 +547,32 @@ impl UserData for LogicalDesignAPI {
 impl UserData for PhysicalDesignAPI {}
 impl UserData for SimState {}
 
+impl UserData for RTL {
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("to_design", |_, this: &RTL, _: ()| {
+			method_map_rtl(&this.filename)
+		});
+	}
+}
+
+impl FromLua for RTL {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
+		match &value {
+			Value::String(filename) => method_load_rtl(filename.to_string_lossy()),
+			Value::UserData(data) if data.is::<RTL>() => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "RTL".to_owned(),
+				message: None,
+			}),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "RTL".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
 pub fn get_lua() -> Result<Lua, Error> {
 	let lua = Lua::new();
 	lua.globals().set(
@@ -468,23 +641,13 @@ pub fn get_lua() -> Result<Lua, Error> {
 	)?;
 
 	lua.globals().set(
-		"compile_load_verilog_design",
-		lua.create_function(|_, filename: String| {
-			let file = PathBuf::from(filename.clone());
-			if !file.is_file() {
-				return Err(Error::RuntimeError(format!("{filename} is not a file.")));
-			}
-			let mut proc = std::process::Command::new("yosys")
-				.arg("--version")
-				.spawn()?;
-			let exit_code = proc.wait()?;
-			if !exit_code.success() {
-				return Err(Error::RuntimeError(format!(
-					"yosys got exit code {exit_code}."
-				)));
-			}
-			Ok(())
-		})?,
+		"yosys_check",
+		lua.create_function(|_, _: ()| method_check_yosys())?,
+	)?;
+
+	lua.globals().set(
+		"yosys_load_rtl",
+		lua.create_function(|_, filename: String| method_load_rtl(filename))?,
 	)?;
 
 	lua.globals().set(
