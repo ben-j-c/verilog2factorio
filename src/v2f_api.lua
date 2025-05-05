@@ -6,6 +6,10 @@
 ---@field add_lamp fun(self: LogicalDesignAPI, expr: DeciderExpr): Lamp
 ---@field print fun(self: LogicalDesignAPI)
 ---@field make_svg fun(self: LogicalDesignAPI)
+---@field new_simulation fun(self: LogicalDesignAPI): SimStateAPI
+
+---@class SimStateAPI
+---@field step fun(self: SimStateAPI, integer)
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr

@@ -6,8 +6,6 @@ use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
-	ffi::OsString,
-	fmt::Display,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
@@ -535,11 +533,25 @@ impl UserData for LogicalDesignAPI {
 			this.make_svg = true;
 			Ok(())
 		});
+		methods.add_method("new_simulation", |_, this, _: ()| {
+			Ok(SimStateAPI {
+				logd: this.logd.clone(),
+				sim: Rc::new(RefCell::new(SimState::new(this.logd.clone()))),
+			})
+		});
 	}
 }
 
 impl UserData for PhysicalDesignAPI {}
-impl UserData for SimState {}
+
+impl UserData for SimStateAPI {
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("step", |_, this, steps: usize| {
+			this.sim.borrow_mut().step(steps);
+			Ok(())
+		});
+	}
+}
 
 impl UserData for RTL {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
