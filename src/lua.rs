@@ -43,7 +43,7 @@ pub(crate) struct SimStateAPI {
 }
 
 pub(crate) struct RTL {
-	filename: String,
+	filename: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -249,11 +249,8 @@ where
 	if !file.is_file() {
 		return Err(Error::RuntimeError(format!("{:?} is not a file.", file)));
 	}
-	let mut json_filename = {
-		let mut tmp = PathBuf::from(filename.parent().unwrap());
-		tmp.push(filename.file_stem().unwrap().to_owned());
-		tmp
-	};
+	let json_filename =
+		PathBuf::from(filename.parent().unwrap()).join(filename.file_stem().unwrap().to_owned());
 
 	{
 		let mut rtl_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
@@ -278,16 +275,16 @@ where
 		return Err(Error::runtime("Failed to compile to RTL."));
 	}
 	let filename = {
-		let tmp = json_filename.as_mut_os_string();
+		let mut tmp = json_filename.as_os_str().to_owned();
 		tmp.push("_rtl.json");
-		tmp.clone().into_string().unwrap()
+		PathBuf::from(tmp)
 	};
 	return Ok(RTL { filename });
 }
 
 fn method_map_rtl<P>(filename: P) -> Result<LogicalDesignAPI, mlua::Error>
 where
-	P: Into<PathBuf> + Display + Clone,
+	P: Into<PathBuf> + Clone,
 {
 	let filename: PathBuf = filename.into();
 	if !filename.is_file() {
@@ -309,11 +306,8 @@ where
 		)));
 	}
 
-	let json_filename = {
-		let mut tmp = PathBuf::from(filename.parent().unwrap());
-		tmp.push(filename.file_stem().unwrap().to_owned());
-		tmp
-	};
+	let json_filename =
+		PathBuf::from(filename.parent().unwrap()).join(filename.file_stem().unwrap().to_owned());
 	{
 		let mut buf = Vec::new();
 		let mut mapping_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
