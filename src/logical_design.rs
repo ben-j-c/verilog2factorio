@@ -1008,7 +1008,7 @@ impl LogicalDesign {
 							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
 							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
 						}
-					}
+					},
 				};
 				if p.en.is_some() {
 					rd_en_ret.push(Some(en_wire));
@@ -1251,7 +1251,7 @@ impl LogicalDesign {
 							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
 							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
 						}
-					}
+					},
 				};
 				if p.en.is_some() {
 					en_ret.push(Some(en_wire));
@@ -1380,7 +1380,7 @@ impl LogicalDesign {
 				expression_conj_disj.push(conj_disj);
 				input_left_networks.push(left_network);
 				input_right_networks.push(right_network);
-			}
+			},
 			_ => assert!(
 				false,
 				"Tried to add DeciderCombinator output to non DeciderCombinator node"
@@ -1407,7 +1407,7 @@ impl LogicalDesign {
 				output_network.push(network);
 				constants.push(Some(constant));
 				self.nodes[id.0].output.push(output);
-			}
+			},
 			_ => assert!(
 				false,
 				"Tried to add DeciderCombinator output to non-DeciderCombinator node"
@@ -1433,7 +1433,7 @@ impl LogicalDesign {
 				output_network.push(network);
 				constants.push(None);
 				self.nodes[id.0].output.push(output);
-			}
+			},
 			_ => assert!(
 				false,
 				"Tried to add DeciderCombinator output to non-DeciderCombinator node"
@@ -1463,7 +1463,7 @@ impl LogicalDesign {
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Constant { constants, .. } => {
 				constants[i] = count;
-			}
+			},
 			_ => assert!(false, "Tried to set count for non-constant combinator node"),
 		}
 	}
@@ -1574,7 +1574,7 @@ impl LogicalDesign {
 	#[allow(dead_code)]
 	pub(crate) fn assert_is_wire_sum(&self, id: NodeId) {
 		match self.get_node(id).function {
-			NodeFunction::WireSum(_c) => {}
+			NodeFunction::WireSum(_c) => {},
 			_ => assert!(false, "Expected wire sum node, but got something else."),
 		}
 	}
@@ -1852,18 +1852,18 @@ impl LogicalDesign {
 							queue.insert((*fiid, true));
 						}
 					}
-				}
+				},
 				_ => match direction {
 					true => {
 						for foid in node.iter_fanout(colour) {
 							queue.insert((*foid, false));
 						}
-					}
+					},
 					false => {
 						for fiid in node.iter_fanin(colour) {
 							queue.insert((*fiid, true));
 						}
-					}
+					},
 				},
 			}
 		}

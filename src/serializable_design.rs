@@ -420,7 +420,7 @@ impl PhyNode {
 					}),
 					use_color: None,
 				})
-			}
+			},
 			logical_design::NodeFunction::Lamp { expression } => Some(ControlBehavior {
 				circuit_enabled: Some(true),
 				is_on: None,

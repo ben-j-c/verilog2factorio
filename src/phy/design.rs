@@ -233,8 +233,8 @@ impl PhysicalDesign {
 				});
 				self.idx_combs.insert(ld_node.id, id);
 				self.connected_wires.push(vec![]);
-			}
-			ld::NodeFunction::WireSum(_c) => { /* Do nothing for now */ }
+			},
+			ld::NodeFunction::WireSum(_c) => { /* Do nothing for now */ },
 		});
 	}
 
@@ -363,7 +363,7 @@ impl PhysicalDesign {
 						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
 					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
 					panic!("failed to place");
-				}
+				},
 			};
 			if let Err(_) = self.place_combs_physical_dense(
 				&comb_positions,
@@ -408,10 +408,10 @@ impl PhysicalDesign {
 				Some(partition),
 			);
 			match res2.clone() {
-				Ok(_) => {}
+				Ok(_) => {},
 				Err(e) => {
 					println!("Failed to place cell {idx} at position {:?}. {}", p, e);
-				}
+				},
 			}
 			if failure.is_ok() {
 				failure = res2;
@@ -1165,8 +1165,8 @@ impl PhysicalDesign {
 						}
 					}
 					global_edges.push((ld_node.id, remove_non_unique(edges)));
-				}
-				_ => { /* Do nothing for non-wires */ }
+				},
+				_ => { /* Do nothing for non-wires */ },
 			}
 		});
 
@@ -1257,10 +1257,10 @@ impl PhysicalDesign {
 				} else {
 					TerminalId::output_combinator(colour)
 				}
-			}
+			},
 			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
 				TerminalId::output_constant(colour)
-			}
+			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
@@ -1319,10 +1319,10 @@ impl PhysicalDesign {
 				} else {
 					TerminalId::output_combinator(color)
 				}
-			}
+			},
 			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
 				TerminalId::output_constant(color)
-			}
+			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		let term_b = match &ld_comb_b.function {
@@ -1332,10 +1332,10 @@ impl PhysicalDesign {
 				} else {
 					TerminalId::output_combinator(color)
 				}
-			}
+			},
 			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
 				TerminalId::input(color)
-			}
+			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
@@ -1391,7 +1391,7 @@ impl PhysicalDesign {
 						Some(op.resolve_string()),
 						node.description.clone(),
 					)
-				}
+				},
 				ld::NodeFunction::Decider { expressions, .. } => {
 					x -= SCALE as i32 / 2;
 					if let Some(e) = expressions.first() {
@@ -1404,16 +1404,16 @@ impl PhysicalDesign {
 					} else {
 						(SCALE * 2.0, SCALE, Some("D"), node.description.clone())
 					}
-				}
+				},
 				ld::NodeFunction::Constant { .. } => {
 					(SCALE, SCALE, Some("C"), node.description.clone())
-				}
+				},
 				ld::NodeFunction::Lamp { .. } => {
 					(SCALE, SCALE, Some("L"), node.description.clone())
-				}
+				},
 				_ => {
 					unreachable!()
-				}
+				},
 			};
 			rects.push(svg.add_rect(
 				x,
@@ -1744,7 +1744,7 @@ impl PhysicalDesign {
 			Ok(pos) => self.partition_assignments = pos,
 			Err((err, _)) => {
 				println!("Failed to do global placement, defaulting to dumb initialization. {err}")
-			}
+			},
 		}
 	}
 
@@ -1770,10 +1770,10 @@ impl PhysicalDesign {
 				let global_id = local_to_global[part][idx];
 				let res2 = self.place_comb_physical(pos, PhyId(global_id), logical, None);
 				match res2.clone() {
-					Ok(_) => {}
+					Ok(_) => {},
 					Err(e) => {
 						println!("Failed to place cell {idx} at position {:?}. {}", pos, e);
-					}
+					},
 				}
 				if failure.is_ok() {
 					failure = res2;
@@ -1851,12 +1851,12 @@ impl PhysicalDesign {
 								edge.0, edge.1, path
 							);
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), true);
-						}
+						},
 						Err(s) => {
 							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
 							continue;
-						}
+						},
 					}
 				}
 				if output_sided {
@@ -1867,12 +1867,12 @@ impl PhysicalDesign {
 								edge.0, edge.1, path
 							);
 							self.commit_route(path, PhyId(edge.0), PhyId(edge.1), false);
-						}
+						},
 						Err(s) => {
 							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
 							continue;
-						}
+						},
 					}
 				}
 			}

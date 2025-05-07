@@ -76,7 +76,7 @@ impl CoarseExpr {
 				let upper = (1_i64 << bit_end) - 1;
 				let lower = (1_i64 << bit_start) - 1;
 				((upper ^ lower) as i32, *shift)
-			}
+			},
 			_ => panic!("Unwrapped a constant as a driver."),
 		}
 	}
@@ -91,7 +91,7 @@ impl ImplementableOp {
 				ImplementableOp::DFF => vec!["D".to_owned(), "CLK".to_owned(), "Q".to_owned()],
 				ImplementableOp::Swizzle => {
 					unreachable!("Imaginary cell encountered before it should be created.")
-				}
+				},
 				ImplementableOp::LUT(n) => (0..*n)
 					.map(|i| format!("A{}", i))
 					.chain(vec!["Y".to_owned()])
@@ -220,7 +220,7 @@ impl ConnectedDesign {
 						cell.port_directions[terminal_name] != Direction::Output,
 						terminal_number,
 					)
-				}
+				},
 			};
 			if is_sink {
 				let mut required_shift = vec![0; bits.len()];
@@ -293,7 +293,7 @@ impl ConnectedDesign {
 			match nodeio_mapping.entry((mapped_id.clone(), *terminal_number)) {
 				std::collections::hash_map::Entry::Vacant(e) => {
 					e.insert(nodeid);
-				}
+				},
 				_ => assert!(false),
 			}
 		}
@@ -473,7 +473,7 @@ mod tests {
 				assert_eq!(shift, 5);
 				assert_eq!(bit_start, 0);
 				assert_eq!(bit_end, 1);
-			}
+			},
 			CoarseExpr::ConstantChunk { .. } => assert!(false),
 		}
 	}
@@ -520,7 +520,7 @@ mod tests {
 				assert_eq!(shift, 0);
 				assert_eq!(bit_start, 0);
 				assert_eq!(bit_end, 8);
-			}
+			},
 			CoarseExpr::ConstantChunk { .. } => assert!(false),
 		}
 	}
@@ -567,7 +567,7 @@ mod tests {
 				assert_eq!(shift, 0);
 				assert_eq!(bit_start, 0);
 				assert_eq!(bit_end, 3);
-			}
+			},
 			CoarseExpr::ConstantChunk { .. } => assert!(false),
 		}
 
@@ -576,7 +576,7 @@ mod tests {
 			CoarseExpr::ConstantChunk { shift, value } => {
 				assert_eq!(*shift, 3);
 				assert_eq!(*value, vec![true, false]);
-			}
+			},
 		}
 
 		match expr[2] {
@@ -590,7 +590,7 @@ mod tests {
 				assert_eq!(shift, 1);
 				assert_eq!(bit_start, 5);
 				assert_eq!(bit_end, 7);
-			}
+			},
 			CoarseExpr::ConstantChunk { .. } => assert!(false),
 		}
 
@@ -605,7 +605,7 @@ mod tests {
 				assert_eq!(shift, 2);
 				assert_eq!(bit_start, 7);
 				assert_eq!(bit_end, 8);
-			}
+			},
 			CoarseExpr::ConstantChunk { .. } => assert!(false),
 		}
 	}
@@ -706,8 +706,8 @@ mod tests {
 					assert_eq!(*bit_start, 0);
 					assert_eq!(*bit_end, 32);
 					assert!(*driver_ioid < 6);
-				}
-				None => {}
+				},
+				None => {},
 				_ => assert!(false),
 			}
 		}

@@ -181,14 +181,14 @@ mod test {
 			input_file: PathBuf::from("examples/lua/basics.lua"),
 		};
 		match lua_flow(args) {
-			Ok(_) => {}
+			Ok(_) => {},
 			Err(e) => {
 				match e {
 					Error::LuaError(error) => println!("{:?}", error),
 					_ => println!("{:?}", e),
 				};
 				assert!(false);
-			}
+			},
 		}
 		assert!(PathBuf::from("examples/lua/basics.svg").is_file());
 	}

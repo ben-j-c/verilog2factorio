@@ -460,7 +460,7 @@ impl SimState {
 						new_state_green[node.id.0][output] += res;
 					}
 				}
-			}
+			},
 			(true, false) => {
 				let left = self.get_seen_output_state(node.id, input_left_network);
 				let right = if let Signal::Id(id) = input_2 {
@@ -478,7 +478,7 @@ impl SimState {
 						new_state_green[node.id.0][output] += res;
 					}
 				}
-			}
+			},
 			(false, true) => {
 				let left = if let Signal::Id(id) = input_1 {
 					self.get_seen_signal_count(node.id, id, input_left_network)
@@ -496,7 +496,7 @@ impl SimState {
 						new_state_green[node.id.0][output] += res;
 					}
 				}
-			}
+			},
 			(false, false) => {
 				assert!(!output_each, "Invalid output");
 				let left = if let Signal::Id(id) = input_1 {
@@ -516,7 +516,7 @@ impl SimState {
 					new_state_red[node.id.0][output] += res;
 					new_state_green[node.id.0][output] += res;
 				}
-			}
+			},
 		}
 	}
 
@@ -530,10 +530,10 @@ impl SimState {
 			match &node.function {
 				NodeFunction::Arithmetic { .. } => {
 					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
-				}
+				},
 				NodeFunction::Decider { .. } => {
 					self.compute_decider_comb(node, new_state_red, new_state_green);
-				}
+				},
 				NodeFunction::Constant { enabled, constants } => {
 					if !*enabled {
 						continue;
@@ -549,7 +549,7 @@ impl SimState {
 							assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
 						}
 					}
-				}
+				},
 				NodeFunction::Lamp { .. } => continue,
 				NodeFunction::WireSum(_wire_colour) => continue,
 			}

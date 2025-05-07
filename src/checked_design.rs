@@ -301,7 +301,7 @@ impl CheckedDesign {
 						);
 						self.connect(nodeid, id);
 					}
-				}
+				},
 				NodeType::CellBody { .. } => {
 					let cell = mapped_design.get_cell(&mapped_id);
 					for (connected_id, direction, terminal_name) in cell
@@ -326,7 +326,7 @@ impl CheckedDesign {
 									},
 								);
 								self.connect(id, nodeid);
-							}
+							},
 							Direction::Output => {
 								let id = self.new_node(
 									&mapped_id,
@@ -336,14 +336,14 @@ impl CheckedDesign {
 									},
 								);
 								self.connect(nodeid, id);
-							}
+							},
 							Direction::Inout => panic!("Not supported"),
 						};
 					}
-				}
+				},
 				_ => {
 					unreachable!()
-				}
+				},
 			}
 		}
 	}
@@ -360,8 +360,8 @@ impl CheckedDesign {
 					{
 						self.connect(nodeid, fanout);
 					}
-				}
-				_ => {}
+				},
+				_ => {},
 			}
 		}
 	}
@@ -371,10 +371,10 @@ impl CheckedDesign {
 			let connected_id = *match self.node_type(nodeid) {
 				NodeType::CellInput { connected_id, .. } | NodeType::PortInput { connected_id } => {
 					connected_id
-				}
+				},
 				_ => {
 					continue;
-				}
+				},
 			};
 			let node = &self.nodes[nodeid];
 			let fanin = node.fanin.clone();
@@ -402,7 +402,7 @@ impl CheckedDesign {
 					let fiid = match expr {
 						CoarseExpr::DriverChunk { driver_ioid, .. } => {
 							self.connected_id_map[*driver_ioid]
-						}
+						},
 						_ => continue,
 					};
 					assert!(
@@ -425,10 +425,10 @@ impl CheckedDesign {
 				let mut constant_val: i32 = 0;
 				for expr in exprs {
 					match expr {
-						CoarseExpr::DriverChunk { .. } => {}
+						CoarseExpr::DriverChunk { .. } => {},
 						CoarseExpr::ConstantChunk { shift, value } => {
 							constant_val = (constant_val + value.get_constant::<i32>()) << *shift;
-						}
+						},
 					}
 				}
 				if constant_val != 0 {
@@ -644,7 +644,7 @@ impl CheckedDesign {
 						signal_choices[nodeid] = signal_choices[node.fanin[0]];
 						continue;
 					}
-				}
+				},
 				NodeType::CellOutput { .. } => {
 					if node
 						.fanout
@@ -654,13 +654,13 @@ impl CheckedDesign {
 						signal_choices[nodeid] = signal_choices[node.fanin[0]];
 						continue;
 					}
-				}
+				},
 				NodeType::PortInput { .. }
 				| NodeType::PortOutput { .. }
 				| NodeType::PortBody
 				| NodeType::CellBody { .. } => {
 					continue;
-				}
+				},
 			}
 			let local_io = self.get_local_cell_io_network(nodeid);
 			let set_io = local_io
@@ -693,13 +693,13 @@ impl CheckedDesign {
 					for fiid in &node.fanin {
 						assert_eq!(signal_choices[node.id], signal_choices[*fiid]);
 					}
-				}
+				},
 				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 					assert!(signal_choices[node.id].is_some());
 					for foid in &node.fanout {
 						assert_eq!(signal_choices[node.id], signal_choices[*foid]);
 					}
-				}
+				},
 				NodeType::PortBody => {
 					assert!(signal_choices[node.id].is_some());
 					for foid in &node.fanout {
@@ -708,7 +708,7 @@ impl CheckedDesign {
 					for fiid in &node.fanin {
 						assert_eq!(signal_choices[node.id], signal_choices[*fiid]);
 					}
-				}
+				},
 				NodeType::CellBody { .. } => assert!(signal_choices[node.id].is_none()),
 			}
 		}
@@ -744,15 +744,15 @@ impl CheckedDesign {
 				if signals[driver].is_none() {
 					self.set_signal(signals, driver, signal);
 				}
-			}
+			},
 			NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 				signals[nodeid] = Some(signal);
 				for foid in &node.fanout {
 					signals[*foid] = Some(signal);
 				}
-			}
-			NodeType::PortBody => {}
-			NodeType::CellBody { .. } => {}
+			},
+			NodeType::PortBody => {},
+			NodeType::CellBody { .. } => {},
 		}
 	}
 
@@ -773,8 +773,8 @@ impl CheckedDesign {
 		match self.node_type(nodeid) {
 			NodeType::CellBody { .. } | NodeType::PortBody => {
 				return vec![];
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 		let mut retval = vec![];
 		let mut queue = BTreeSet::new();
@@ -788,20 +788,20 @@ impl CheckedDesign {
 			match &self.node_type(curid) {
 				NodeType::PortInput { .. } => {
 					retval.push(curid);
-				}
+				},
 				NodeType::CellInput { .. } => {
 					retval.push(curid);
 					queue.extend(self.get_other_input_nodes(curid));
-				}
+				},
 				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 					retval.push(curid);
 					for foid in &self.nodes[curid].fanout {
 						queue.insert(*foid);
 					}
-				}
+				},
 				NodeType::PortBody | NodeType::CellBody { .. } => {
 					panic!("Implementer is a fucking moron.")
-				}
+				},
 			}
 		}
 		retval
@@ -811,8 +811,8 @@ impl CheckedDesign {
 		match self.node_type(nodeid) {
 			NodeType::CellBody { .. } | NodeType::PortBody => {
 				return vec![];
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 		let mut queue = BTreeSet::new();
 		let mut seen = HashSet::new();
@@ -827,21 +827,21 @@ impl CheckedDesign {
 			match self.node_type(curid) {
 				NodeType::CellInput { .. } => {
 					queue.extend(self.nodes[curid].fanin.iter());
-				}
+				},
 				NodeType::CellOutput { .. } => {
 					queue.extend(self.nodes[curid].fanout.iter());
-				}
+				},
 				NodeType::PortInput { .. } => {
 					queue.extend(self.nodes[curid].fanin.iter());
 					queue.extend(self.nodes[self.nodes[curid].fanout[0]].fanout.iter());
-				}
+				},
 				NodeType::PortOutput { .. } => {
 					queue.extend(self.nodes[curid].fanout.iter());
 					queue.extend(self.nodes[self.nodes[curid].fanin[0]].fanin.iter());
-				}
+				},
 				NodeType::CellBody { .. } | NodeType::PortBody => {
 					panic!("Implementer is a fucking moron")
-				}
+				},
 			}
 		}
 		retval
@@ -975,7 +975,7 @@ impl CheckedDesign {
 					if logic_map[nodeid].is_none() {
 						logic_map[nodeid] = logic_map[node.fanin[0]];
 					}
-				}
+				},
 				NodeType::PortInput { .. } | NodeType::CellInput { .. } => {
 					if logic_map[nodeid].is_none() {
 						logic_map[nodeid] = Some(logical_design.add_wire_floating_red());
@@ -984,7 +984,7 @@ impl CheckedDesign {
 							logic_map[node.fanout[0]].unwrap(),
 						);
 					}
-				}
+				},
 				NodeType::PortBody => {
 					if !node.fanout.is_empty() {
 						logic_map[nodeid] = Some(logical_design.add_constant_comb(
@@ -998,7 +998,7 @@ impl CheckedDesign {
 							Signal::Constant(0),
 						)));
 					}
-				}
+				},
 				NodeType::CellBody { cell_type } => match cell_type {
 					BodyType::ABY => {
 						let sig_left = self.signals[node.fanin[0]].unwrap();
@@ -1013,19 +1013,19 @@ impl CheckedDesign {
 						);
 						logic_map[nodeid] = Some(input);
 						logic_map[node.fanout[0]] = Some(output)
-					}
+					},
 					BodyType::Constant { value } => {
 						logic_map[nodeid] = Some(logical_design.add_constant_comb(
 							vec![Signal::Id(self.signals[node.fanout[0]].unwrap())],
 							vec![*value],
 						));
-					}
+					},
 					BodyType::Nop => {
 						let sig_in = self.signals[node.fanin[0]].unwrap();
 						let sig_out = self.signals[node.fanout[0]].unwrap();
 						logic_map[nodeid] =
 							Some(logical_design.add_nop(Signal::Id(sig_in), Signal::Id(sig_out)))
-					}
+					},
 					BodyType::AY => {
 						let sig_in = self.signals[node.fanin[0]].unwrap();
 						let sig_out = self.signals[node.fanout[0]].unwrap();
@@ -1037,7 +1037,7 @@ impl CheckedDesign {
 						);
 						logic_map[nodeid] = Some(input);
 						logic_map[node.fanout[0]] = Some(output)
-					}
+					},
 					BodyType::MultiPart => {
 						let sig_in = node
 							.fanin
@@ -1078,7 +1078,7 @@ impl CheckedDesign {
 						for (idx_common, foid) in node.fanout.iter().enumerate() {
 							logic_map[*foid] = Some(ids_out[idx_common]);
 						}
-					}
+					},
 				},
 			}
 		}
@@ -1089,8 +1089,8 @@ impl CheckedDesign {
 						logic_map[node.fanin[0]].unwrap(),
 						logic_map[nodeid].unwrap(),
 					);
-				}
-				_ => {}
+				},
+				_ => {},
 			}
 		}
 		for (nodeid, node) in self.nodes.iter().enumerate() {
@@ -1104,7 +1104,7 @@ impl CheckedDesign {
 						.unwrap();
 					logical_design
 						.append_description(combid, format!("{}:{}", node.mapped_id, port).as_str())
-				}
+				},
 				NodeType::PortInput { .. } => {
 					let combid = **logical_design
 						.get_node(logic_map[nodeid].unwrap())
@@ -1113,15 +1113,15 @@ impl CheckedDesign {
 						.first()
 						.unwrap();
 					logical_design.append_description(combid, node.mapped_id.as_str())
-				}
+				},
 				NodeType::CellOutput { port, .. } => logical_design.append_description(
 					logic_map[nodeid].unwrap(),
 					format!("{}:{}", node.mapped_id, port).as_str(),
 				),
 				NodeType::PortOutput { .. } => logical_design
 					.append_description(logic_map[nodeid].unwrap(), node.mapped_id.as_str()),
-				NodeType::PortBody => {}
-				NodeType::CellBody { .. } => {}
+				NodeType::PortBody => {},
+				NodeType::CellBody { .. } => {},
 			}
 		}
 	}
@@ -1142,7 +1142,7 @@ impl CheckedDesign {
 				let (input_wire, clk_wire, output_comb) =
 					logical_design.add_dff(sig_in[0], sig_in[1], sig_out[0]);
 				(vec![input_wire, clk_wire], vec![output_comb])
-			}
+			},
 			ImplementableOp::Swizzle => {
 				let fi_exprs = self.nodes[nodeid]
 					.fanin
@@ -1152,7 +1152,7 @@ impl CheckedDesign {
 				let (input_wires, output_comb) =
 					logical_design.add_swizzle(sig_in, fi_exprs, sig_out[0]);
 				(input_wires, vec![output_comb])
-			}
+			},
 			ImplementableOp::LUT(_) => {
 				let (input_wires, output_comb) = logical_design.add_lut(
 					sig_in,
@@ -1168,7 +1168,7 @@ impl CheckedDesign {
 						.unwrap(),
 				);
 				(input_wires, vec![output_comb])
-			}
+			},
 			ImplementableOp::Memory => {
 				let cell = mapped_cell.unwrap();
 				let n_rd_ports = cell.attributes["RD_PORTS"].from_bin_str().unwrap();
@@ -1311,7 +1311,7 @@ impl CheckedDesign {
 					}
 					(ret_in, ret_out)
 				}
-			}
+			},
 			_ => unreachable!(),
 		};
 		(input_wires, outputs)
@@ -1340,10 +1340,10 @@ impl CheckedDesign {
 				);
 				logical_design.add_wire_red(vec![acc, pre_filter], vec![acc, post_filter]);
 				(pre_filter, post_filter)
-			}
+			},
 			_ => {
 				unreachable!()
-			}
+			},
 		}
 	}
 

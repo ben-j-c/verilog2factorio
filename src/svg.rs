@@ -328,16 +328,16 @@ impl SVG {
 					if bottom > max_h {
 						max_h = bottom;
 					}
-				}
+				},
 				Shape::Line { x1, y1, x2, y2, .. } => {
 					max_w = max_w.max(*x1).max(*x2);
 					max_h = max_h.max(*y1).max(*y2);
-				}
+				},
 				Shape::Text { x, y, .. } => {
 					max_w = max_w.max(*x);
 					max_h = max_h.max(*y);
-				}
-				_ => {}
+				},
+				_ => {},
 			}
 		}
 		// Add a small margin.
@@ -378,7 +378,7 @@ impl SVG {
 							cx, cy, txt
 						));
 					}
-				}
+				},
 				Shape::Wire(l) => {
 					let wire_colour = match l.attachment_a {
 						0 | 2 => "red",
@@ -389,7 +389,7 @@ impl SVG {
 						Some(Shape::Rect(ra)) => rect_attachment(ra, l.attachment_a),
 						Some(Shape::Circle { cx, cy, r, .. }) => {
 							circ_attachment(*cx, *cy, *r, l.attachment_a)
-						}
+						},
 						_ => panic!("Wire {:?} references invalid shape!", shape),
 					};
 
@@ -397,7 +397,7 @@ impl SVG {
 						Some(Shape::Rect(rb)) => rect_attachment(rb, l.attachment_b),
 						Some(Shape::Circle { cx, cy, r, .. }) => {
 							circ_attachment(*cx, *cy, *r, l.attachment_b)
-						}
+						},
 						_ => panic!("Wire {:?} references invalid shape!", shape),
 					};
 
@@ -405,7 +405,7 @@ impl SVG {
 						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="1" />"#,
 						x1, y1, x2, y2, wire_colour
 					));
-				}
+				},
 				Shape::Line {
 					x1,
 					y1,
@@ -418,7 +418,7 @@ impl SVG {
 						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" />"#,
 						x1, y1, x2, y2, colour, stroke_width
 					));
-				}
+				},
 				Shape::Text {
 					x,
 					y,
@@ -452,7 +452,7 @@ impl SVG {
 							text
 						));
 					}
-				}
+				},
 				Shape::Circle {
 					cx,
 					cy,
@@ -477,7 +477,7 @@ impl SVG {
 							cx, cy, txt
 						));
 					}
-				}
+				},
 			}
 		}
 

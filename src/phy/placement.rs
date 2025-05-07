@@ -202,7 +202,7 @@ pub(crate) fn crack_in_two_method(
 			.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
 		_ => {
 			unreachable!()
-		}
+		},
 	};
 
 	for cell in ripup_cells {
@@ -276,7 +276,7 @@ pub(crate) fn slide_puzzle_method(
 			.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
 		_ => {
 			unreachable!()
-		}
+		},
 	};
 
 	for cell in ripup_cells {
@@ -857,7 +857,7 @@ impl Placement {
 				.sort_by(|a: &usize, b: &usize| self.assignment(*b).1.cmp(&self.assignment(*a).1)),
 			_ => {
 				unreachable!()
-			}
+			},
 		};
 
 		for cell in ripup_cells {
@@ -1188,7 +1188,7 @@ pub mod global {
 				}),
 				_ => {
 					unreachable!()
-				}
+				},
 			};
 
 			for cell in ripup_cells {
@@ -1557,7 +1557,7 @@ pub mod global {
 				.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
 			_ => {
 				unreachable!()
-			}
+			},
 		};
 
 		for cell in ripup_cells {
@@ -1632,7 +1632,7 @@ pub mod global {
 				.sort_by(|a: &usize, b: &usize| new.assignment(*b).1.cmp(&new.assignment(*a).1)),
 			_ => {
 				unreachable!()
-			}
+			},
 		};
 
 		for cell in ripup_cells {

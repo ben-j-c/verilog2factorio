@@ -375,13 +375,13 @@ impl SimState {
 						has_each,
 						has_each_output,
 					)
-				}
+				},
 				Signal::Each => {
 					self.execute_decider_output_each_model(node, &mut state_out, *network, constant)
-				}
+				},
 				Signal::Constant(_) => {
 					panic!("Decider combinator has a constant as an output, which isn't valid.")
-				}
+				},
 				Signal::None => continue,
 			}
 		}
