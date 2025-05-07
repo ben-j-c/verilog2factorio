@@ -17,7 +17,7 @@ use crate::{
 	checked_design::CheckedDesign,
 	logical_design::{
 		ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, NodeId, Signal,
-		WireColour,
+		WireColour, NET_GREEN, NET_RED, NET_RED_GREEN,
 	},
 	mapped_design::MappedDesign,
 	phy::PhysicalDesign,
@@ -95,6 +95,30 @@ impl UserData for TerminalSide {
 
 impl UserData for WireColour {}
 
+impl FromLua for WireColour {
+	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+		match &value {
+			Value::String(s) => match s.to_str()?.as_ref() {
+				"red" => Ok(WireColour::Red),
+				"green" => Ok(WireColour::Green),
+				_ => Err(mlua::Error::FromLuaConversionError {
+					from: value.type_name(),
+					to: "WireColour".to_owned(),
+					message: Some("This can't be converted into a wire colour.".into()),
+				}),
+			},
+			Value::UserData(data) if data.is::<WireColour>() => {
+				Ok(data.borrow::<WireColour>().unwrap().clone())
+			},
+			_ => Err(mlua::Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "WireColour".to_owned(),
+				message: Some("This can't be converted into a wire colour.".into()),
+			}),
+		}
+	}
+}
+
 impl UserData for Signal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_meta_method(MetaMethod::Add, |_, lhs, rhs: Signal| {
@@ -150,7 +174,7 @@ impl FromLua for Signal {
 						),
 					}),
 				}
-			}
+			},
 			mlua::Value::UserData(signal) if signal.is::<Signal>() => Ok(*signal.borrow().unwrap()),
 			_ => Err(mlua::Error::FromLuaConversionError {
 				from: value.type_name(),
@@ -417,7 +441,7 @@ impl UserData for Decider {
 						to: "integer|nil".to_owned(),
 						message: Some("This value isn't an i32 or nil.".into()),
 					})
-				}
+				},
 			};
 			let res = catch_unwind(AssertUnwindSafe(|| {
 				if let Some(constant) = constant {
@@ -544,10 +568,90 @@ impl UserData for LogicalDesignAPI {
 
 impl UserData for PhysicalDesignAPI {}
 
+fn verify_is_combinator(this: &SimStateAPI, data: &AnyUserData) -> Result<NodeId, mlua::Error> {
+	let (nodeid, logd) = if let Ok(x) = data.borrow::<Decider>() {
+		(x.id, x.logd.clone())
+	} else if let Ok(x) = data.borrow::<Arithmetic>() {
+		(x.id, x.logd.clone())
+	} else if let Ok(x) = data.borrow::<Lamp>() {
+		(x.id, x.logd.clone())
+	} else if let Ok(x) = data.borrow::<Constant>() {
+		(x.id, x.logd.clone())
+	} else {
+		return Err(Error::runtime("Got non-combinator as an input."));
+	};
+	if logd.as_ptr() != this.logd.as_ptr() {
+		return Err(Error::runtime(
+			"Supplied a combinator that doesn't belong to this design.",
+		));
+	}
+	Ok(nodeid)
+}
+
 impl UserData for SimStateAPI {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("step", |_, this, steps: usize| {
 			this.sim.borrow_mut().step(steps);
+			Ok(())
+		});
+		methods.add_method("probe", |lua, this, data: AnyUserData| {
+			let mut signals: Vec<(i32, i32)> = vec![];
+			if let Ok(term) = data.borrow::<Terminal>() {
+				let (nodeid, logd, colour) = term.get();
+				if logd.as_ptr() != this.logd.as_ptr() {
+					return Err(Error::runtime(
+						"Supplied a combinator that doesn't belong to this design.",
+					));
+				}
+				let net = match colour {
+					WireColour::Red => NET_RED,
+					WireColour::Green => NET_GREEN,
+				};
+				signals = match term.0 {
+					TerminalSide::Input(_, _) => this.sim.borrow().probe_input(nodeid, net),
+					TerminalSide::Output(_, _) => this.sim.borrow().probe_red_out(nodeid),
+				}
+			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
+				let (nodeid, logd) = term_side.clone().get();
+				if logd.as_ptr() != this.logd.as_ptr() {
+					return Err(Error::runtime(
+						"Supplied a combinator that doesn't belong to this design.",
+					));
+				}
+				signals = match *term_side {
+					TerminalSide::Input(_, _) => {
+						this.sim.borrow().probe_input(nodeid, NET_RED_GREEN)
+					},
+					TerminalSide::Output(_, _) => this.sim.borrow().probe_red_out(nodeid),
+				}
+			} else {
+				return Err(Error::runtime("Passed an invalid type into probe."));
+			}
+			let ret = lua.create_table()?;
+			for s in signals {
+				ret.set(Signal::Id(s.0), s.1)?;
+			}
+			Ok(ret)
+		});
+		methods.add_method("add_trace", |_, this, data: AnyUserData| {
+			let nodeid = verify_is_combinator(this, &data)?;
+			this.sim.borrow_mut().add_trace(nodeid);
+			Ok(())
+		});
+		methods.add_method("probe_lamp_state", |_, this, data: AnyUserData| {
+			let nodeid = verify_is_combinator(this, &data)?;
+			if !data.is::<Lamp>() {
+				return Err(Error::runtime("Tried to probe a non-lamp as a lamp."));
+			}
+			Ok(this.sim.borrow().probe_lamp_state(nodeid))
+		});
+		methods.add_method("save_svg", |_, this, filename: String| {
+			let svg = this.sim.borrow().render_traces();
+			svg.save(filename)?;
+			Ok(())
+		});
+		methods.add_method("print", |_, this, _: ()| {
+			this.sim.borrow().print();
 			Ok(())
 		});
 	}
@@ -640,7 +744,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 					return Err(mlua::Error::RuntimeError(
 						"Not a real decider operator.".into(),
 					))
-				}
+				},
 			};
 			Ok(DeciderExpression(lhs, op, rhs))
 		})?,
@@ -669,14 +773,14 @@ pub fn get_lua() -> Result<Lua, Error> {
 					Err(e) => match e {
 						rustyline::error::ReadlineError::Io(_) => {
 							return Err(Error::runtime("readline: IO error"))
-						}
+						},
 						rustyline::error::ReadlineError::Eof => break,
 						rustyline::error::ReadlineError::Interrupted => continue,
 						rustyline::error::ReadlineError::Errno(errno) => {
 							return Err(Error::RuntimeError(
 								"readline: ".to_owned() + &errno.to_string(),
 							))
-						}
+						},
 						rustyline::error::ReadlineError::WindowResized => continue,
 						_ => continue,
 					},
@@ -693,7 +797,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 								.collect::<Vec<_>>()
 								.join("\t")
 						);
-					}
+					},
 					Err(Error::SyntaxError {
 						incomplete_input: true,
 						..
@@ -701,7 +805,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 						line.push_str("\n");
 						prompt = ">> ";
 						continue;
-					}
+					},
 					Err(e) => return Err(e),
 				}
 				line.clear();

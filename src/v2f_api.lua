@@ -10,6 +10,11 @@
 
 ---@class SimStateAPI
 ---@field step fun(self: SimStateAPI, integer)
+---@field print fun(self: SimStateAPI)
+---@field save_svg fun(self: SimStateAPI, filename: string)
+---@field probe fun(self: SimStateAPI, loc: TerminalSide|Terminal): table[Signal, i32]
+---@field probe_lamp_state fun(self: SimStateAPI, lamp: Lamp): boolean
+---@field add_trace fun(self: SimStateAPI, )
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr

@@ -203,6 +203,56 @@ impl SimState {
 		green
 	}
 
+	pub fn probe_input(&self, id: NodeId, net: (bool, bool)) -> Vec<(i32, i32)> {
+		let red = if let Some(input_red) = self.state[id.0].netmap.input_red {
+			let wire_id = self.network[input_red.0].wires.first().unwrap();
+			if net.0 {
+				self.probe_red_out(*wire_id)
+			} else {
+				vec![]
+			}
+		} else {
+			vec![]
+		};
+		let green = if let Some(input_green) = self.state[id.0].netmap.input_green {
+			let wire_id = self.network[input_green.0].wires.first().unwrap();
+			if net.1 {
+				self.probe_green_out(*wire_id)
+			} else {
+				vec![]
+			}
+		} else {
+			vec![]
+		};
+		let mut ret = vec![];
+		let mut i = 0;
+		let mut j = 0;
+		while i < red.len() && j < green.len() {
+			let r = red[i];
+			let g = green[i];
+			if r.0 < g.0 {
+				ret.push(r);
+				i += 1;
+			} else if g.0 < r.0 {
+				ret.push(g);
+				j += 1;
+			} else {
+				if r.1 + g.1 != 0 {
+					ret.push((r.0, r.1 + g.1));
+				}
+				i += 1;
+				j += 1;
+			}
+		}
+		while i < red.len() {
+			ret.push(red[i])
+		}
+		while j < green.len() {
+			ret.push(green[j])
+		}
+		ret
+	}
+
 	pub fn probe_lamp_state(&self, id: NodeId) -> Option<bool> {
 		let logd = self.logd.borrow();
 		let expr = match &logd.get_node(id).function {
