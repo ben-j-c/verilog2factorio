@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Rem;
 use std::{collections::BTreeSet, hash::BuildHasherDefault, isize, mem::swap, usize};
 
 use hashers::fnv::FNV1aHasher64;
@@ -991,6 +992,14 @@ impl Placement {
 				cost += count as f64 * 10.0;
 				sat_count += count - max_density;
 			}
+			// Oh god I need a better way to deliver power
+			/*if (self.assignment(cell).0 + 10).rem(18) == 0
+				&& ((self.assignment(cell).1 + 10).rem(18) == 0
+					|| (self.assignment(cell).1 + 10).rem(18) == 1)
+			{
+				sat = false;
+				cost += 10.0;
+			}*/
 		}
 		(cost, sat, sat_count.max(0))
 	}

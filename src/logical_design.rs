@@ -37,7 +37,7 @@ use itertools::{izip, Itertools};
 use crate::{
 	checked_design::CheckedDesign,
 	connected_design::CoarseExpr,
-	mapped_design::{BitSliceOps, MappedDesign},
+	mapped_design::{BitSliceOps, Direction, MappedDesign},
 	util::{hash_set, HashS},
 };
 
@@ -416,9 +416,16 @@ struct LogicalDesignCache {
 	valid: bool,
 }
 
+struct LogicalPort {
+	id: NodeId,
+	direction: Direction,
+	name: String,
+}
+
 /// A design you want to build up and save.
 pub struct LogicalDesign {
 	pub(crate) nodes: Vec<Node>,
+	pub(crate) ports: Vec<LogicalPort>,
 	cache: RefCell<LogicalDesignCache>,
 	pub(crate) description: String,
 }
@@ -445,6 +452,7 @@ impl LogicalDesign {
 	pub fn new() -> Self {
 		LogicalDesign {
 			nodes: vec![],
+			ports: vec![],
 			cache: RefCell::new(LogicalDesignCache {
 				topological_order: vec![],
 				root_nodes: vec![],
@@ -1891,6 +1899,14 @@ impl LogicalDesign {
 	#[allow(dead_code)]
 	fn get_fanin_green(&self, id: NodeId) -> &[NodeId] {
 		self.nodes[id.0].fanin_green.as_slice()
+	}
+
+	pub fn mark_as_port(&mut self, id: NodeId, direction: Direction, name: String) {
+		self.ports.push(LogicalPort {
+			id,
+			direction,
+			name,
+		});
 	}
 }
 

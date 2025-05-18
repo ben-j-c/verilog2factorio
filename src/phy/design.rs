@@ -1247,6 +1247,10 @@ impl PhysicalDesign {
 		logical: &LogicalDesign,
 		colour: WireColour,
 	) {
+		assert!(
+			self.nodes[id_pole.0].is_pole,
+			"Tried to connect wire to pole, but pole_id is not a pole!"
+		);
 		let id_wire = self.wires.len();
 		let comb_a = &self.nodes[id_comb_a.0];
 		let ld_comb_a = logical.get_node(comb_a.logic);
@@ -1270,7 +1274,7 @@ impl PhysicalDesign {
 			node1_id: id_comb_a,
 			node2_id: id_pole,
 			terminal1_id: term_a,
-			terminal2_id: TerminalId::input(colour), // TODO: Check in game what poles actually do!
+			terminal2_id: TerminalId::input(colour),
 		});
 	}
 
@@ -2258,6 +2262,7 @@ mod test {
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(50);
+		p.user_partition_size = Some(1000);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}

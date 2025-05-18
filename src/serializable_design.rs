@@ -255,21 +255,34 @@ impl SerializableDesign {
 		let mut idx_entities: HashMap<PhyId, usize> = HashMap::new();
 		physical.for_all_phy(|node| {
 			if node.is_pole {
-				todo!()
+				entities.push(Entity {
+					entity_number: entities.len() + 1,
+					name: "medium-electric-pole",
+					position: node.position.into(),
+					direction: None,
+					connections: None,
+					neighbours: None,
+					control_behavior: None,
+					variation: None,
+					switch_state: None,
+					tags: None,
+					player_description: node.resolve_description(logical),
+				});
+			} else {
+				entities.push(Entity {
+					entity_number: entities.len() + 1,
+					name: node.resolve_name(logical),
+					position: node.position.into(),
+					direction: Some(node.orientation),
+					connections: None,
+					neighbours: None,
+					control_behavior: node.resolve_control_behaviour(logical),
+					variation: None,
+					switch_state: None,
+					tags: None,
+					player_description: node.resolve_description(logical),
+				});
 			}
-			entities.push(Entity {
-				entity_number: entities.len() + 1,
-				name: node.resolve_name(logical),
-				position: node.position.into(),
-				direction: Some(node.orientation),
-				connections: None,
-				neighbours: None,
-				control_behavior: node.resolve_control_behaviour(logical),
-				variation: None,
-				switch_state: None,
-				tags: None,
-				player_description: node.resolve_description(logical),
-			});
 			idx_entities.insert(node.id, entities.len());
 		});
 		let mut wires = vec![];

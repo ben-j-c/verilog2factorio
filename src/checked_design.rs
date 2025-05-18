@@ -987,16 +987,28 @@ impl CheckedDesign {
 				},
 				NodeType::PortBody => {
 					if !node.fanout.is_empty() {
-						logic_map[nodeid] = Some(logical_design.add_constant_comb(
+						let new_id = logical_design.add_constant_comb(
 							vec![Signal::Id(self.signals[nodeid].unwrap())],
 							vec![1],
-						));
+						);
+						logic_map[nodeid] = Some(new_id);
+						logical_design.mark_as_port(
+							new_id,
+							Direction::Input,
+							node.mapped_id.clone(),
+						);
 					} else if !node.fanin.is_empty() {
-						logic_map[nodeid] = Some(logical_design.add_lamp((
+						let new_id = logical_design.add_lamp((
 							Signal::Id(self.signals[nodeid].unwrap()),
 							logical_design::DeciderOperator::NotEqual,
 							Signal::Constant(0),
-						)));
+						));
+						logic_map[nodeid] = Some(new_id);
+						logical_design.mark_as_port(
+							new_id,
+							Direction::Output,
+							node.mapped_id.clone(),
+						);
 					}
 				},
 				NodeType::CellBody { cell_type } => match cell_type {
