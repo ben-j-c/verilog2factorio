@@ -1,8 +1,11 @@
+use std::fmt::format;
+
 use metis::option::Opt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
 	ndarr::Arr2,
+	svg::SVG,
 	util::{hash_set, HashS},
 };
 
@@ -52,6 +55,25 @@ impl BBox {
 	const fn center(&self) -> (f64, f64) {
 		(self.x + self.w / 2.0, self.y + self.h / 2.0)
 	}
+
+	const fn xy(&self) -> (f64, f64) {
+		(self.x, self.y)
+	}
+
+	const fn xy_plus_wh(&self) -> (f64, f64) {
+		(self.x + self.w, self.y + self.h)
+	}
+
+	fn map_xy<F>(&self, func: F) -> (f64, f64)
+	where
+		F: Fn(f64) -> f64,
+	{
+		(func(self.x), func(self.y))
+	}
+
+	const fn dir(&self, other: (f64, f64)) -> (f64, f64) {
+		(other.0 - self.x, other.1 - self.y)
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -64,7 +86,7 @@ struct Cell {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct PlacementId(u32);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct AnalyticalPlacement {
 	cells: Vec<Cell>,
 	side_length: f64,
@@ -86,6 +108,10 @@ impl AnalyticalPlacement {
 		ret
 	}
 
+	pub(crate) fn num_cells(&self) -> usize {
+		self.cells.len()
+	}
+
 	pub(crate) fn add_cell(
 		&mut self,
 		pos: Option<(f64, f64)>,
@@ -96,7 +122,10 @@ impl AnalyticalPlacement {
 		let (x, y) = if let Some(xy) = pos {
 			xy
 		} else {
-			(self.rng.random::<f64>(), self.rng.random::<f64>())
+			(
+				self.rng.random::<f64>() * (self.side_length - w),
+				self.rng.random::<f64>() * (self.side_length - h),
+			)
 		};
 		let id = PlacementId(self.cells.len() as u32);
 		let cell = Cell {
@@ -115,9 +144,10 @@ impl AnalyticalPlacement {
 		self.cells.push(cell);
 	}
 
-	pub(crate) fn compute_cost(&self) -> (f64, bool) {
+	pub(crate) fn compute_cost(&self, connections: &Vec<(usize, usize)>) -> (f64, bool, i32) {
 		let mut cost = 0.0;
 		let mut sat = true;
+		let mut sat_count = 0;
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
 			if cell.fixed {
@@ -137,11 +167,27 @@ impl AnalyticalPlacement {
 				let overlap = cell.bbox.overlap(&cell2.bbox);
 				if overlap > 0.0 {
 					sat = false;
+					sat_count += 1;
 				}
 				cost += overlap;
 			}
 		}
-		(cost, sat)
+		for &(i, j) in connections {
+			let (x_i, y_i) = self.cells[i].bbox.center();
+			let (x_j, y_j) = self.cells[j].bbox.center();
+			let dx = x_i - x_j;
+			let dy = y_i - y_j;
+			let r2distance = dx * dx + dy * dy;
+			let r2_max = self.cells[i].max_distance.min(self.cells[j].max_distance);
+			if r2distance > r2_max * r2_max {
+				cost += r2distance.sqrt();
+				sat_count += 1;
+				sat = false;
+			} else if dx.abs() / 2.0 + dy.abs() > 2.0 {
+				cost += r2distance.sqrt() / 10.0;
+			}
+		}
+		(cost, sat, sat_count)
 	}
 
 	pub(crate) fn calculate_overlap_force(&self) -> Vec<(f64, f64)> {
@@ -171,7 +217,30 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn calcluate_spring_force(&self, connctions: Vec<Vec<usize>>) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_electrostatic_force(&self) -> Vec<(f64, f64)> {
+		let mut ret = vec![(0.0, 0.0); self.cells.len()];
+		for id1 in 0..self.cells.len() {
+			let cell1 = &self.cells[id1];
+			if cell1.fixed {
+				continue;
+			}
+			for id2 in 0..self.cells.len() {
+				let cell2 = &self.cells[id2];
+				if cell2.fixed {
+					continue;
+				}
+				let (ds, mag) = cell1.bbox.center_direction(&cell2.bbox);
+				if mag == 0.0 {
+					continue;
+				}
+				ret[id1].0 += ds.0 / (mag * mag);
+				ret[id1].1 += ds.1 / (mag * mag);
+			}
+		}
+		ret
+	}
+
+	pub(crate) fn calcluate_spring_force(&self, connctions: &Vec<Vec<usize>>) -> Vec<(f64, f64)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
@@ -182,12 +251,159 @@ impl AnalyticalPlacement {
 			for id2 in &connctions[id] {
 				let cell2 = &self.cells[*id2];
 				let (ds, mag) = cell.bbox.center_direction(&cell2.bbox);
-				force.0 += mag * ds.0;
-				force.1 += mag * ds.1;
+				if mag > 10.0 {
+					force.0 += mag * mag * ds.0 / 10.0;
+					force.1 += mag * mag * ds.1 / 10.0;
+				} else {
+					force.0 += mag * ds.0;
+					force.1 += mag * ds.1;
+				}
 			}
 			ret[id] = force;
 		}
 		ret
+	}
+
+	pub(crate) fn calculate_legalization_force(&self) -> Vec<(f64, f64)> {
+		let mut ret = vec![(0.0, 0.0); self.cells.len()];
+		for id in 0..self.cells.len() {
+			let cell = &self.cells[id];
+			if cell.fixed {
+				continue;
+			}
+			let want = (
+				(cell.bbox.x / cell.bbox.w).round() * cell.bbox.w,
+				(cell.bbox.y / cell.bbox.h).round() * cell.bbox.h,
+			);
+			let dir = cell.bbox.dir(want);
+			let mag = (dir.0 * dir.0 + dir.1 * dir.1).sqrt();
+			if mag == 0.0 {
+				continue;
+			}
+			ret[id] = (dir.0 / mag, dir.1 / mag);
+		}
+		ret
+	}
+
+	pub(crate) fn calculate_buckling_force(&self) -> Vec<(f64, f64)> {
+		let mut ret = vec![(0.0, 0.0); self.cells.len()];
+		for id in 0..self.cells.len() {
+			let cell = &self.cells[id];
+			if cell.fixed {
+				continue;
+			}
+			let b0 = self.bucket_idx((cell.bbox.x, cell.bbox.y));
+			let b1 = self.bucket_idx((cell.bbox.x + cell.bbox.w, cell.bbox.y + cell.bbox.h));
+			let mut to_check = hash_set::<PlacementId>();
+			for x in b0.0..=b1.0 {
+				for y in b0.1..=b1.1 {
+					to_check.extend(self.buckets[(x, y)].iter());
+				}
+			}
+			to_check.remove(&PlacementId(id as u32));
+			let mut max_dir = (0.0, 0.0);
+			let mut max_force = 0.0;
+			for id2 in to_check {
+				let cell2 = &self.cells[id2.0 as usize];
+				let overlap = cell.bbox.overlap(&cell2.bbox);
+				let (ds, _) = cell.bbox.center_direction(&cell2.bbox);
+				if overlap > max_force {
+					max_dir = ds;
+					max_force = overlap;
+				}
+			}
+			ret[id].0 = -max_dir.1 * max_force;
+			ret[id].0 = max_dir.0 * max_force;
+		}
+		ret
+	}
+
+	pub(crate) fn draw_placement(&self, connections: &Vec<(usize, usize)>, filename: &str) {
+		let scale = 25.0;
+		let mut svg = SVG::new();
+		svg.add_rect_ext(
+			0,
+			0,
+			(self.side_length * scale) as i32,
+			(self.side_length * scale) as i32,
+			(255, 255, 255, 1.0),
+			None,
+			None,
+		);
+		for id in 0..self.cells.len() {
+			let cell = &self.cells[id];
+			svg.add_rect_ext(
+				(cell.bbox.x * scale) as i32,
+				(cell.bbox.y * scale) as i32,
+				(cell.bbox.w * scale) as i32,
+				(cell.bbox.h * scale) as i32,
+				(100, 0, 0, 0.1),
+				Some(format!("{id}")),
+				None,
+			);
+		}
+		for &(i, j) in connections {
+			let cell_i = &self.cells[i];
+			let cell_j = &self.cells[j];
+			let (x1, y1) = cell_i.bbox.center();
+			let (x2, y2) = cell_j.bbox.center();
+			svg.add_line(
+				(x1 * scale) as i32,
+				(y1 * scale) as i32,
+				(x2 * scale) as i32,
+				(y2 * scale) as i32,
+				None,
+				None,
+			);
+		}
+		svg.save(filename).unwrap();
+	}
+
+	pub(crate) fn step_cells(&mut self, force: Vec<(f64, f64)>, factor: f64) {
+		for id in 0..self.cells.len() {
+			if self.cells[id].fixed {
+				continue;
+			}
+			let mut bbox_new = self.cells[id].bbox.clone();
+			let b0 = self.bucket_idx(bbox_new.xy());
+			let b1 = self.bucket_idx(bbox_new.xy_plus_wh());
+			for x in b0.0..=b1.0 {
+				for y in b0.1..=b1.1 {
+					self.buckets[(x, y)].remove(&PlacementId(id as u32));
+				}
+			}
+			bbox_new.x += force[id].0 * factor;
+			bbox_new.y += force[id].1 * factor;
+			bbox_new.x = bbox_new.x.clamp(0.0, self.side_length - bbox_new.w);
+			bbox_new.y = bbox_new.y.clamp(0.0, self.side_length - bbox_new.h);
+			let b0 = self.bucket_idx(bbox_new.xy());
+			let b1 = self.bucket_idx(bbox_new.xy_plus_wh());
+			for x in b0.0..=b1.0 {
+				for y in b0.1..=b1.1 {
+					self.buckets[(x, y)].insert(PlacementId(id as u32));
+				}
+			}
+			self.cells[id].bbox = bbox_new;
+		}
+	}
+
+	pub(crate) fn legalized(&self) -> Vec<(usize, usize)> {
+		let mut ret = vec![(0, 0); self.cells.len()];
+		for id in 0..self.cells.len() {
+			let cell = &self.cells[id];
+			let tmp = cell.bbox.map_xy(f64::round);
+			ret[id] = (tmp.0 as usize, tmp.1 as usize);
+		}
+		ret
+	}
+
+	pub(crate) fn apply_legalization(&mut self) {
+		for id in 0..self.cells.len() {
+			let cell = &mut self.cells[id];
+			let tmp = cell.bbox.map_xy(f64::round);
+			cell.bbox.x = tmp.0;
+			cell.bbox.y = tmp.1;
+		}
 	}
 
 	pub(crate) fn bucket_idx(&self, (x, y): (f64, f64)) -> (usize, usize) {

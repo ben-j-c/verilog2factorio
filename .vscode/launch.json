@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"tests::lua::single_decider",
+				"phy::design::test::synthetic_2d_n_mcmc_dense",
 				"--",
 				"--exact",
 				"--show-output"

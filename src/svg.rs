@@ -14,7 +14,7 @@ struct RectData {
 	y: i32,
 	w: i32,
 	h: i32,
-	colour: (u8, u8, u8),
+	colour: (u8, u8, u8, f32),
 	label: Option<String>,
 	hover: Option<String>,
 }
@@ -126,6 +126,29 @@ impl SVG {
 		w: i32,
 		h: i32,
 		colour: (u8, u8, u8),
+		label: Option<String>,
+		hover: Option<String>,
+	) -> ShapeId {
+		let rect = RectData {
+			x,
+			y,
+			w,
+			h,
+			colour: (colour.0, colour.1, colour.2, 1.0),
+			label: label.map(|s| s.to_string()),
+			hover: hover.map(|s| s.to_string()),
+		};
+		self.shapes.push(Shape::Rect(rect));
+		self.shapes.len() - 1
+	}
+
+	pub fn add_rect_ext(
+		&mut self,
+		x: i32,
+		y: i32,
+		w: i32,
+		h: i32,
+		colour: (u8, u8, u8, f32),
 		label: Option<String>,
 		hover: Option<String>,
 	) -> ShapeId {
@@ -349,7 +372,7 @@ impl SVG {
 		);
 
 		{
-			let colour_str = colour_to_string((255, 255, 255));
+			let colour_str = rgb_to_string((255, 255, 255));
 			svg_data.push_str(&format!(
 				r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}">"#,
 				0, 0, svg_w, svg_h, colour_str
@@ -360,7 +383,7 @@ impl SVG {
 		for shape in &self.shapes {
 			match shape {
 				Shape::Rect(r) => {
-					let colour_str = colour_to_string(r.colour);
+					let colour_str = rgba_to_string(r.colour);
 					svg_data.push_str(&format!(
 						r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}">"#,
 						r.x, r.y, r.w, r.h, colour_str
@@ -461,7 +484,7 @@ impl SVG {
 					label,
 					hover,
 				} => {
-					let colour_str = colour_to_string(*colour);
+					let colour_str = rgb_to_string(*colour);
 					svg_data.push_str(&format!(
 						r#"<circle cx="{}" cy="{}" r="{}" fill="{}">"#,
 						cx, cy, r, colour_str
@@ -519,6 +542,10 @@ fn circ_attachment(cx: i32, cy: i32, r: i32, attachment_index: u32) -> (i32, i32
 	}
 }
 
-fn colour_to_string(c: (u8, u8, u8)) -> String {
+fn rgb_to_string(c: (u8, u8, u8)) -> String {
 	format!("rgb({},{},{})", c.0, c.1, c.2)
+}
+
+fn rgba_to_string(c: (u8, u8, u8, f32)) -> String {
+	format!("rgba({},{},{},{})", c.0, c.1, c.2, c.3)
 }
