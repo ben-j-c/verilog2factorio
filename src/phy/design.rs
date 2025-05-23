@@ -6,6 +6,7 @@ use core::{f64, num, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::f64::consts::PI;
 use std::mem::swap;
 use std::ops::Rem;
 
@@ -184,7 +185,12 @@ impl PhysicalDesign {
 		) = self.split_connections_to_local_and_global(&connectivity);
 
 		self.place_global(&partition_global_connectivity);
-		self.place_local(logical, &partition_local_connectivity, &local_to_global);
+		self.place_local(
+			logical,
+			&partition_local_connectivity,
+			&partition_global_connectivity,
+			&local_to_global,
+		);
 		self.global_freeze_and_route(
 			logical,
 			&partition_global_connectivity,
@@ -338,31 +344,39 @@ impl PhysicalDesign {
 		&mut self,
 		logical: &LogicalDesign,
 		partition_local_connectivity: &Vec<Vec<Vec<usize>>>,
+		partition_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
 		local_to_global: &Vec<Vec<usize>>,
 	) {
 		for partition in 0..self.n_partitions {
-			println!(
-				"Partition local connectivity: {:?}",
-				partition_local_connectivity[partition as usize]
-			);
+			println!("=====PARTITION {partition}=====");
 			let initializations =
 				Self::get_initializations(&partition_local_connectivity[partition as usize]);
 			self.space[partition as usize] = Arr2::new([
 				self.side_length_single_partition,
 				self.side_length_single_partition,
 			]);
-			#[cfg(feature = "solve_as_mcmc_dense")]
 			let algo = Self::solve_as_mcmc_dense(
 				&partition_local_connectivity[partition as usize],
 				&initializations,
 				None,
 				self.side_length_single_partition,
 			);
-			#[cfg(not(feature = "solve_as_mcmc_dense"))]
+			let comb_positions = match algo {
+				Ok(pos) => pos,
+				Err(e) => {
+					println!("ERR: Placement algorithm failed");
+					println!("ERR: {}", e.0);
+					let _ =
+						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
+					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
+					panic!("failed to place");
+				},
+			};
 			let algo = self.solve_analytical_dense(
 				logical,
 				&partition_local_connectivity[partition as usize],
-				&initializations,
+				&partition_global_connectivity[partition as usize],
+				&comb_positions,
 				self.side_length_single_partition,
 				partition,
 			);
@@ -400,6 +414,7 @@ impl PhysicalDesign {
 				panic!("Have to bail due to failure in placement");
 			}
 			self.local_assignments[partition as usize] = comb_positions;
+			println!("=====DONE PARTITION=====");
 		}
 	}
 
@@ -436,7 +451,8 @@ impl PhysicalDesign {
 		&self,
 		logical: &LogicalDesign,
 		connections_per_node: &Vec<Vec<usize>>,
-		_initializations: &Vec<Vec<(usize, usize)>>,
+		global_connectivity: &Vec<Vec<(i32, usize, usize)>>,
+		initialization: &Vec<(usize, usize)>,
 		side_length: usize,
 		partition_id: i32,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
@@ -447,7 +463,12 @@ impl PhysicalDesign {
 		for id in 0..num_cells {
 			let node = self.get_logical(PhyId(id), logical);
 			let spec = node.function.wire_hop_type().wire_hop_spec();
-			placement.add_cell(None, spec.dim, false, spec.reach);
+			placement.add_cell(
+				Some((initialization[id].0 as f64, initialization[id].1 as f64)),
+				spec.dim,
+				false,
+				spec.reach,
+			);
 		}
 		let substation = WireHopType::Substation.wire_hop_spec();
 		for x in (8..side_length).step_by(18) {
@@ -464,7 +485,7 @@ impl PhysicalDesign {
 		let mut round = 0;
 		//let mut momentum = vec![(0.0, 0.0); placement.num_cells()];
 		while !cost.1 {
-			if round.rem(25) == 0 {
+			if round.rem(50) == 0 {
 				println!("{round}");
 				placement.draw_placement(&edges, "svg/solve_analytical_dense.svg");
 				let mut placement2 = placement.clone();
@@ -484,21 +505,23 @@ impl PhysicalDesign {
 			let legalization_force = placement.calculate_legalization_force();
 			//let elec = placement.calculate_electrostatic_force();
 			let buckle = placement.calculate_buckling_force();
+			let access = placement.calculate_accessibility_force(global_connectivity);
 
-			let t = round as f64 / 10_000.0;
+			let t = round as f64 / 1_000.0;
 
-			let spring_c = 4.0 / ((t * 3.0).powi(2) + 1.0);
-			let legalization_c =
-				160.0 * (1.0 - (-t / 5.0).exp()) * ((t * f64::consts::PI * 64.0).sin() + 1.0);
-			let overlap_c = 500.0 * ((t * f64::consts::PI * 40.0).sin() + 1.0);
-			//let elec_c = 0.0; //1.0 / ((t - 6.0) * (t - 6.0) / 5.0 + 1.0);
-			let buckle_c = 100.0 * ((-t * f64::consts::PI * 16.0).sin() + 1.0) + 10.0;
+			//let spring_c = 4.0 / ((t * 3.0).powi(2) + 1.0);
+			//let legalization_c =
+			//	160.0 * (1.0 - (-t / 5.0).exp()) * ((t * f64::consts::PI * 64.0).sin() + 1.0);
+			//let overlap_c = 500.0 * ((t * f64::consts::PI * 40.0).sin() + 1.0);
+			////let elec_c = 0.0; //1.0 / ((t - 6.0) * (t - 6.0) / 5.0 + 1.0);
+			//let buckle_c = 100.0 * ((-t * f64::consts::PI * 16.0).sin() + 1.0) + 10.0;
+			//let access_c = 2.0;
 
-			//let spring_c = 2.0;
-			//let legalization_c = 8.0;
-			//let overlap_c = 100.0;
-			//let elec_c = 1.0;
-			//let buckle_c = 50.0;
+			let spring_c = 2.0 / (t + 1.0);
+			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
+			let overlap_c = 1600.0 + (t + PI * 20.0).sin() * 100.0;
+			let buckle_c = 50.0;
+			let access_c = 8.0;
 
 			let mut force = vec![(0.0, 0.0); spring.len()];
 			for i in 0..num_cells {
@@ -506,18 +529,16 @@ impl PhysicalDesign {
 					+ overlap_c * overlap[i].0
 					+ legalization_c * legalization_force[i].0
 					//+ elec_c * elec[i].0
-					+ buckle_c * buckle[i].0;
+					+ buckle_c * buckle[i].0
+					+ access_c * access[i].0;
 				force[i].1 = spring_c * spring[i].1
 					+ overlap_c * overlap[i].1
 					+ legalization_c * legalization_force[i].1
 					//+ elec_c * elec[i].1
-					+ buckle_c * buckle[i].1;
+					+ buckle_c * buckle[i].1
+					+ access_c * access[i].1;
 			}
-			for i in 0..num_cells {
-				//momentum[i].0 = momentum[i].0 * 0.5 + force[i].0 * 0.5;
-				//momentum[i].1 = momentum[i].1 * 0.5 + force[i].1 * 0.5;
-			}
-			placement.step_cells(force, 0.001);
+			placement.step_cells(force, 0.00004);
 			cost = placement.compute_cost(&edges);
 			round += 1;
 		}
@@ -1942,7 +1963,7 @@ impl PhysicalDesign {
 		);
 		let edges_to_route =
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
-		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=20);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=10);
 		let mut success = false;
 		for margin in margin_range {
 			println!("Starting routing with margin {margin}");
@@ -1957,7 +1978,6 @@ impl PhysicalDesign {
 				}
 				#[cfg(debug_assertions)]
 				{
-					println!("Before routing {i}.");
 					//self.print_ascii_global_space();
 				}
 				let (input_sided, output_sided) = self.get_needed_routes(*edge, logical);
@@ -2378,7 +2398,7 @@ mod test {
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(50);
-		p.user_partition_size = Some(150);
+		p.user_partition_size = Some(300);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}

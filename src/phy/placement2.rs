@@ -313,7 +313,31 @@ impl AnalyticalPlacement {
 				}
 			}
 			ret[id].0 = -max_dir.1 * max_force;
-			ret[id].0 = max_dir.0 * max_force;
+			ret[id].1 = max_dir.0 * max_force;
+		}
+		ret
+	}
+
+	pub(crate) fn calculate_accessibility_force(
+		&self,
+		connctions: &Vec<Vec<(i32, usize, usize)>>,
+	) -> Vec<(f64, f64)> {
+		let mut ret = vec![(0.0, 0.0); self.cells.len()];
+		let center = BBox::new(0.0, 0.0, self.side_length, self.side_length);
+		for id in 0..self.cells.len() {
+			let cell = &self.cells[id];
+			if cell.fixed {
+				continue;
+			}
+			if connctions[id].is_empty() {
+				continue;
+			}
+			let (ds, mag) = center.center_direction(&cell.bbox);
+			if mag == 0.0 {
+				continue;
+			}
+			ret[id].0 = ds.0 / mag * self.side_length;
+			ret[id].1 = ds.1 / mag * self.side_length;
 		}
 		ret
 	}
