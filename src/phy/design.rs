@@ -2,12 +2,11 @@ use super::placement::global::GlobalPlacement;
 use super::route::Topology;
 use super::*;
 
-use core::{f64, num, panic};
+use core::{f64, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::f64::consts::PI;
-use std::mem::swap;
+use std::f32::consts::PI;
 use std::ops::Rem;
 
 use std::{
@@ -129,6 +128,8 @@ pub struct PhysicalDesign {
 	user_partition_size: Option<usize>,
 
 	route_cache: HashM<(usize, bool), (Vec<SpaceIndex>, Vec<PhyId>)>,
+
+	failed_routes: Vec<(usize, usize)>,
 }
 
 #[allow(dead_code)]
@@ -154,6 +155,8 @@ impl PhysicalDesign {
 			user_partition_margin: None,
 			user_partition_size: None,
 			route_cache: hash_map(),
+
+			failed_routes: vec![],
 		}
 	}
 
@@ -458,26 +461,26 @@ impl PhysicalDesign {
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
 		let num_cells = connections_per_node.len();
 		let edges = adjacency_to_edges(connections_per_node, true);
-		let mut placement = placement2::AnalyticalPlacement::new(side_length as f64);
+		let mut placement = placement2::AnalyticalPlacement::new(side_length as f32);
 
 		for id in 0..num_cells {
 			let node = self.get_logical(PhyId(id), logical);
 			let spec = node.function.wire_hop_type().wire_hop_spec();
 			placement.add_cell(
-				Some((initialization[id].0 as f64, initialization[id].1 as f64)),
-				spec.dim,
+				Some((initialization[id].0 as f32, initialization[id].1 as f32)),
+				(spec.dim.0 as f32, spec.dim.1 as f32),
 				false,
-				spec.reach,
+				spec.reach as f32,
 			);
 		}
 		let substation = WireHopType::Substation.wire_hop_spec();
 		for x in (8..side_length).step_by(18) {
 			for y in (8..side_length).step_by(18) {
 				placement.add_cell(
-					Some((x as f64, y as f64)),
-					substation.dim,
+					Some((x as f32, y as f32)),
+					(substation.dim.0 as f32, substation.dim.1 as f32),
 					true,
-					substation.reach,
+					substation.reach as f32,
 				);
 			}
 		}
@@ -494,50 +497,50 @@ impl PhysicalDesign {
 					break;
 				}
 			}
-			if round == 10_000_000 {
+			if round == 1_000_000 {
 				let mut ret = placement.legalized();
 				ret.resize(num_cells, (0, 0));
 				return Err(("Never satisfied constraints".to_owned(), ret));
 			}
 
-			let spring = placement.calcluate_spring_force(connections_per_node);
+			let spring = placement.calculate_spring_force(connections_per_node);
 			let overlap = placement.calculate_overlap_force();
 			let legalization_force = placement.calculate_legalization_force();
-			//let elec = placement.calculate_electrostatic_force();
+			let elec = placement.calculate_electrostatic_force();
 			let buckle = placement.calculate_buckling_force();
 			let access = placement.calculate_accessibility_force(global_connectivity);
 
-			let t = round as f64 / 1_000.0;
+			let t = round as f32 / 1_000.0;
 
 			//let spring_c = 4.0 / ((t * 3.0).powi(2) + 1.0);
 			//let legalization_c =
 			//	160.0 * (1.0 - (-t / 5.0).exp()) * ((t * f64::consts::PI * 64.0).sin() + 1.0);
 			//let overlap_c = 500.0 * ((t * f64::consts::PI * 40.0).sin() + 1.0);
-			////let elec_c = 0.0; //1.0 / ((t - 6.0) * (t - 6.0) / 5.0 + 1.0);
 			//let buckle_c = 100.0 * ((-t * f64::consts::PI * 16.0).sin() + 1.0) + 10.0;
 			//let access_c = 2.0;
-
-			let spring_c = 2.0 / (t + 1.0);
+			let spring_c = 10.0 / (t * 0.5 + 1.0);
 			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
+			let elec_c = 10.0;
 			let overlap_c = 1600.0 + (t + PI * 20.0).sin() * 100.0;
-			let buckle_c = 50.0;
-			let access_c = 8.0;
+			let buckle_c = 500.0;
+			let access_c = 16.0;
 
 			let mut force = vec![(0.0, 0.0); spring.len()];
 			for i in 0..num_cells {
 				force[i].0 = spring_c * spring[i].0
 					+ overlap_c * overlap[i].0
 					+ legalization_c * legalization_force[i].0
-					//+ elec_c * elec[i].0
+					- elec_c * elec[i].0
 					+ buckle_c * buckle[i].0
 					+ access_c * access[i].0;
 				force[i].1 = spring_c * spring[i].1
 					+ overlap_c * overlap[i].1
 					+ legalization_c * legalization_force[i].1
-					//+ elec_c * elec[i].1
+					- elec_c * elec[i].1
 					+ buckle_c * buckle[i].1
 					+ access_c * access[i].1;
 			}
+
 			placement.step_cells(force, 0.00004);
 			cost = placement.compute_cost(&edges);
 			round += 1;
@@ -1171,6 +1174,7 @@ impl PhysicalDesign {
 		self.nodes = bak.into_iter().filter(|n| !n.is_pole).collect_vec();
 		self.wires.clear();
 		self.route_cache = hash_map();
+		self.failed_routes = vec![];
 	}
 
 	fn place_comb_physical(
@@ -1569,6 +1573,23 @@ impl PhysicalDesign {
 				wire.node2_id.0 + 1,
 				wire.terminal1_id.0 - 1,
 				wire.terminal2_id.0 - 1,
+			);
+		}
+		for edge in &self.failed_routes {
+			let c1 = &self.nodes[edge.0];
+			let c2 = &self.nodes[edge.1];
+			let x1 = (c1.position.0 * (SCALE + 2.0)) as i32;
+			let y1 = (c1.position.1 * (SCALE + 2.0)) as i32;
+			let x2 = (c2.position.0 * (SCALE + 2.0)) as i32;
+			let y2 = (c2.position.1 * (SCALE + 2.0)) as i32;
+			svg.add_line_stroke_dasharray(
+				x1,
+				y1,
+				x2,
+				y2,
+				Some("blue".to_owned()),
+				Some(2),
+				Some("1".to_owned()),
 			);
 		}
 		svg.save(filename).unwrap()
@@ -1994,6 +2015,7 @@ impl PhysicalDesign {
 						Err(s) => {
 							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
+							self.failed_routes.push(*edge);
 							continue;
 						},
 					}
@@ -2011,6 +2033,7 @@ impl PhysicalDesign {
 						Err(s) => {
 							success = false;
 							println!("Failed durring routing on edge {i}: {s}");
+							self.failed_routes.push(*edge);
 							continue;
 						},
 					}
@@ -2018,6 +2041,11 @@ impl PhysicalDesign {
 			}
 			if success {
 				break;
+			} else {
+				self.save_svg(
+					logical,
+					format!("svg/global_freeze_routing_failure_{margin}.svg"),
+				);
 			}
 		}
 		#[cfg(debug_assertions)]
@@ -2398,7 +2426,7 @@ mod test {
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(50);
-		p.user_partition_size = Some(300);
+		p.user_partition_size = Some(200);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
 	}

@@ -11,19 +11,19 @@ use crate::{
 
 #[derive(Clone, Debug)]
 struct BBox {
-	x: f64,
-	y: f64,
-	w: f64,
-	h: f64,
+	x: f32,
+	y: f32,
+	w: f32,
+	h: f32,
 }
 
 impl BBox {
-	fn new(x: f64, y: f64, w: f64, h: f64) -> Self {
+	fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
 		Self { x, y, w, h }
 	}
 
 	/// https://www.desmos.com/calculator/wywzi2mula
-	const fn overlap(&self, other: &BBox) -> f64 {
+	const fn overlap(&self, other: &BBox) -> f32 {
 		let dx = {
 			let dx1 = (other.x + other.w - self.x).max(0.0).min(self.w);
 			let dx2 = (self.x + self.w - other.x).max(0.0).min(other.w);
@@ -37,11 +37,11 @@ impl BBox {
 		dx * dy
 	}
 
-	const fn area(self) -> f64 {
+	const fn area(self) -> f32 {
 		self.w * self.h
 	}
 
-	fn center_direction(&self, other: &BBox) -> ((f64, f64), f64) {
+	fn center_direction(&self, other: &BBox) -> ((f32, f32), f32) {
 		let c1 = self.center();
 		let c2 = other.center();
 		let ds = (c2.0 - c1.0, c2.1 - c1.1);
@@ -52,26 +52,26 @@ impl BBox {
 		((ds.0 / mag, ds.1 / mag), mag)
 	}
 
-	const fn center(&self) -> (f64, f64) {
+	const fn center(&self) -> (f32, f32) {
 		(self.x + self.w / 2.0, self.y + self.h / 2.0)
 	}
 
-	const fn xy(&self) -> (f64, f64) {
+	const fn xy(&self) -> (f32, f32) {
 		(self.x, self.y)
 	}
 
-	const fn xy_plus_wh(&self) -> (f64, f64) {
+	const fn xy_plus_wh(&self) -> (f32, f32) {
 		(self.x + self.w, self.y + self.h)
 	}
 
-	fn map_xy<F>(&self, func: F) -> (f64, f64)
+	fn map_xy<F>(&self, func: F) -> (f32, f32)
 	where
-		F: Fn(f64) -> f64,
+		F: Fn(f32) -> f32,
 	{
 		(func(self.x), func(self.y))
 	}
 
-	const fn dir(&self, other: (f64, f64)) -> (f64, f64) {
+	const fn dir(&self, other: (f32, f32)) -> (f32, f32) {
 		(other.0 - self.x, other.1 - self.y)
 	}
 }
@@ -80,7 +80,7 @@ impl BBox {
 struct Cell {
 	bbox: BBox,
 	fixed: bool,
-	max_distance: f64,
+	max_distance: f32,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -89,14 +89,14 @@ pub(crate) struct PlacementId(u32);
 #[derive(Debug, Clone)]
 pub(crate) struct AnalyticalPlacement {
 	cells: Vec<Cell>,
-	side_length: f64,
-	bucket_size: f64,
+	side_length: f32,
+	bucket_size: f32,
 	buckets: Arr2<HashS<PlacementId>>,
 	rng: StdRng,
 }
 
 impl AnalyticalPlacement {
-	pub(crate) fn new(side_length: f64) -> Self {
+	pub(crate) fn new(side_length: f32) -> Self {
 		let dim = (side_length / 2.0).max(1.0) as usize;
 		let ret = AnalyticalPlacement {
 			cells: vec![],
@@ -114,17 +114,17 @@ impl AnalyticalPlacement {
 
 	pub(crate) fn add_cell(
 		&mut self,
-		pos: Option<(f64, f64)>,
-		(w, h): (f64, f64),
+		pos: Option<(f32, f32)>,
+		(w, h): (f32, f32),
 		fixed: bool,
-		max_distance: f64,
+		max_distance: f32,
 	) {
 		let (x, y) = if let Some(xy) = pos {
 			xy
 		} else {
 			(
-				self.rng.random::<f64>() * (self.side_length - w),
-				self.rng.random::<f64>() * (self.side_length - h),
+				self.rng.random::<f32>() * (self.side_length - w),
+				self.rng.random::<f32>() * (self.side_length - h),
 			)
 		};
 		let id = PlacementId(self.cells.len() as u32);
@@ -144,7 +144,7 @@ impl AnalyticalPlacement {
 		self.cells.push(cell);
 	}
 
-	pub(crate) fn compute_cost(&self, connections: &Vec<(usize, usize)>) -> (f64, bool, i32) {
+	pub(crate) fn compute_cost(&self, connections: &Vec<(usize, usize)>) -> (f32, bool, i32) {
 		let mut cost = 0.0;
 		let mut sat = true;
 		let mut sat_count = 0;
@@ -190,7 +190,7 @@ impl AnalyticalPlacement {
 		(cost, sat, sat_count)
 	}
 
-	pub(crate) fn calculate_overlap_force(&self) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_overlap_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
@@ -217,7 +217,7 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn calculate_electrostatic_force(&self) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_electrostatic_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id1 in 0..self.cells.len() {
 			let cell1 = &self.cells[id1];
@@ -240,7 +240,7 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn calcluate_spring_force(&self, connctions: &Vec<Vec<usize>>) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_spring_force(&self, connctions: &Vec<Vec<usize>>) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
@@ -264,7 +264,7 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn calculate_legalization_force(&self) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_legalization_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
@@ -285,7 +285,7 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn calculate_buckling_force(&self) -> Vec<(f64, f64)> {
+	pub(crate) fn calculate_buckling_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
@@ -321,7 +321,7 @@ impl AnalyticalPlacement {
 	pub(crate) fn calculate_accessibility_force(
 		&self,
 		connctions: &Vec<Vec<(i32, usize, usize)>>,
-	) -> Vec<(f64, f64)> {
+	) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		let center = BBox::new(0.0, 0.0, self.side_length, self.side_length);
 		for id in 0..self.cells.len() {
@@ -336,8 +336,8 @@ impl AnalyticalPlacement {
 			if mag == 0.0 {
 				continue;
 			}
-			ret[id].0 = ds.0 / mag * self.side_length;
-			ret[id].1 = ds.1 / mag * self.side_length;
+			ret[id].0 = ds.0 / (mag * self.side_length).powi(2);
+			ret[id].1 = ds.1 / (mag * self.side_length).powi(2);
 		}
 		ret
 	}
@@ -383,7 +383,7 @@ impl AnalyticalPlacement {
 		svg.save(filename).unwrap();
 	}
 
-	pub(crate) fn step_cells(&mut self, force: Vec<(f64, f64)>, factor: f64) {
+	pub(crate) fn step_cells(&mut self, force: Vec<(f32, f32)>, factor: f32) {
 		for id in 0..self.cells.len() {
 			if self.cells[id].fixed {
 				continue;
@@ -415,7 +415,7 @@ impl AnalyticalPlacement {
 		let mut ret = vec![(0, 0); self.cells.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
-			let tmp = cell.bbox.map_xy(f64::round);
+			let tmp = cell.bbox.map_xy(f32::round);
 			ret[id] = (tmp.0 as usize, tmp.1 as usize);
 		}
 		ret
@@ -424,13 +424,13 @@ impl AnalyticalPlacement {
 	pub(crate) fn apply_legalization(&mut self) {
 		for id in 0..self.cells.len() {
 			let cell = &mut self.cells[id];
-			let tmp = cell.bbox.map_xy(f64::round);
+			let tmp = cell.bbox.map_xy(f32::round);
 			cell.bbox.x = tmp.0;
 			cell.bbox.y = tmp.1;
 		}
 	}
 
-	pub(crate) fn bucket_idx(&self, (x, y): (f64, f64)) -> (usize, usize) {
+	pub(crate) fn bucket_idx(&self, (x, y): (f32, f32)) -> (usize, usize) {
 		let mut retx = (x / self.bucket_size) as usize;
 		let mut rety = (y / self.bucket_size) as usize;
 		if x < 0.0 {

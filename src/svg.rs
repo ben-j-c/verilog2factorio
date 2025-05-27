@@ -39,6 +39,7 @@ enum Shape {
 		y2: i32,
 		colour: String,
 		stroke_width: i32,
+		stroke_dasharray: Option<String>,
 	},
 	Text {
 		x: i32,
@@ -183,6 +184,30 @@ impl SVG {
 			y2,
 			colour,
 			stroke_width,
+			stroke_dasharray: None,
+		});
+	}
+
+	pub fn add_line_stroke_dasharray(
+		&mut self,
+		x1: i32,
+		y1: i32,
+		x2: i32,
+		y2: i32,
+		colour: Option<String>,
+		width: Option<i32>,
+		stroke_dasharray: Option<String>,
+	) {
+		let colour = colour.unwrap_or_else(|| "black".to_owned());
+		let stroke_width = width.unwrap_or(1).min(1);
+		self.shapes.push(Shape::Line {
+			x1,
+			y1,
+			x2,
+			y2,
+			colour,
+			stroke_width,
+			stroke_dasharray,
 		});
 	}
 
@@ -260,6 +285,7 @@ impl SVG {
 			y2: top_margin + plot_height,
 			colour: "black".to_string(),
 			stroke_width: 1,
+			stroke_dasharray: None,
 		});
 		self.shapes.push(Shape::Line {
 			x1: left_margin,
@@ -268,6 +294,7 @@ impl SVG {
 			y2: top_margin + plot_height,
 			colour: "black".to_string(),
 			stroke_width: 1,
+			stroke_dasharray: None,
 		});
 
 		// Compute data point coordinates.
@@ -289,6 +316,7 @@ impl SVG {
 					y2: p2.1,
 					colour: "blue".to_string(),
 					stroke_width: 2,
+					stroke_dasharray: None,
 				});
 			}
 		}
@@ -436,11 +464,19 @@ impl SVG {
 					y2,
 					colour,
 					stroke_width,
+					stroke_dasharray,
 				} => {
-					svg_data.push_str(&format!(
-						r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" />"#,
-						x1, y1, x2, y2, colour, stroke_width
-					));
+					if let Some(stroke_dasharray) = stroke_dasharray {
+						svg_data.push_str(&format!(
+							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" />"#,
+							x1, y1, x2, y2, colour, stroke_width, stroke_dasharray
+						));
+					} else {
+						svg_data.push_str(&format!(
+							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" />"#,
+							x1, y1, x2, y2, colour, stroke_width
+						));
+					}
 				},
 				Shape::Text {
 					x,
