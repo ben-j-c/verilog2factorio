@@ -254,10 +254,17 @@ impl SerializableDesign {
 		let mut entities = vec![];
 		let mut idx_entities: HashMap<PhyId, usize> = HashMap::new();
 		physical.for_all_phy(|node| {
-			if node.is_pole {
+			if node.is_pole() {
+				let name = match node.hop_type {
+					crate::phy::WireHopType::Small => "small-electric-pole",
+					crate::phy::WireHopType::Medium => "medium-electric-pole",
+					crate::phy::WireHopType::Big => "big-electric-pole",
+					crate::phy::WireHopType::Substation => "substation",
+					_ => unreachable!(),
+				};
 				entities.push(Entity {
 					entity_number: entities.len() + 1,
-					name: "medium-electric-pole",
+					name,
 					position: node.position.into(),
 					direction: None,
 					connections: None,
@@ -266,7 +273,7 @@ impl SerializableDesign {
 					variation: None,
 					switch_state: None,
 					tags: None,
-					player_description: node.resolve_description(logical),
+					player_description: None,
 				});
 			} else {
 				entities.push(Entity {

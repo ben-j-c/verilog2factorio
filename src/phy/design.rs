@@ -8,6 +8,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::f32::consts::PI;
 use std::ops::Rem;
+use std::usize;
 
 use std::{
 	collections::{HashMap, HashSet, LinkedList},
@@ -77,7 +78,7 @@ pub struct PhyNode {
 	pub placed: bool,
 	pub orientation: u32,
 	pub partition: i32,
-	pub is_pole: bool,
+	pub hop_type: WireHopType,
 	pub routes: Vec<Route>,
 	pub foreign_routes: Vec<PhyId>,
 }
@@ -238,7 +239,7 @@ impl PhysicalDesign {
 					placed: false,
 					orientation: 4,
 					partition: 0,
-					is_pole: false,
+					hop_type: WireHopType::Combinator,
 					routes: vec![],
 					foreign_routes: vec![],
 				});
@@ -1169,9 +1170,7 @@ impl PhysicalDesign {
 			c.foreign_routes.clear();
 			c.routes.clear();
 		}
-		let mut bak = vec![];
-		std::mem::swap(&mut self.nodes, &mut bak);
-		self.nodes = bak.into_iter().filter(|n| !n.is_pole).collect_vec();
+		self.nodes.retain(|n| !n.is_pole());
 		self.wires.clear();
 		self.route_cache = hash_map();
 		self.failed_routes = vec![];
@@ -1311,7 +1310,7 @@ impl PhysicalDesign {
 		// Connect through routes.
 		let mut route_edges = vec![];
 		for (id, node) in self.nodes.iter().enumerate() {
-			if node.is_pole {
+			if node.is_pole() {
 				continue;
 			}
 			for route in &node.routes {
@@ -1386,7 +1385,7 @@ impl PhysicalDesign {
 		colour: WireColour,
 	) {
 		assert!(
-			self.nodes[id_pole.0].is_pole,
+			self.nodes[id_pole.0].is_pole(),
 			"Tried to connect wire to pole, but pole_id is not a pole!"
 		);
 		let id_wire = self.wires.len();
@@ -1507,21 +1506,58 @@ impl PhysicalDesign {
 			None,
 			None,
 		);
-		let mut rects = vec![];
+		let mut shapes = vec![];
 		for c in &self.nodes {
 			let node = ld.get_node(c.logic);
 			let mut x = (c.position.0 * (SCALE + 2.0)) as i32;
 			let y = (c.position.1 * (SCALE + 2.0)) as i32;
-			if c.is_pole {
-				// Otter brown
-				rects.push(svg.add_circle(
-					x + SCALE as i32,
-					y + SCALE as i32,
-					SCALE as i32 / 4,
-					(101, 67, 33),
-					None,
-					None,
-				));
+			if c.is_pole() {
+				match c.hop_type {
+					WireHopType::Small => {
+						// Otter brown
+						shapes.push(svg.add_circle(
+							x + SCALE as i32,
+							y + SCALE as i32,
+							SCALE as i32 / 6,
+							(101, 67, 33),
+							None,
+							None,
+						));
+					},
+					WireHopType::Medium => {
+						// Otter brown
+						shapes.push(svg.add_circle(
+							x + SCALE as i32,
+							y + SCALE as i32,
+							SCALE as i32 / 4,
+							(101, 67, 33),
+							None,
+							None,
+						));
+					},
+					WireHopType::Big => {
+						shapes.push(svg.add_circle(
+							x + SCALE as i32 * 2,
+							y + SCALE as i32 * 2,
+							SCALE as i32,
+							(101, 101, 101),
+							None,
+							None,
+						));
+					},
+					WireHopType::Substation => {
+						shapes.push(svg.add_rect(
+							x - SCALE as i32 / 2,
+							y + SCALE as i32 / 2,
+							SCALE as i32,
+							SCALE as i32,
+							(101, 101, 101),
+							Some("SS".to_owned()),
+							None,
+						));
+					},
+					_ => unreachable!(),
+				}
 				continue;
 			}
 			let (w, h, label, hover) = match &node.function {
@@ -1557,7 +1593,7 @@ impl PhysicalDesign {
 					unreachable!()
 				},
 			};
-			rects.push(svg.add_rect(
+			shapes.push(svg.add_rect(
 				x,
 				y,
 				w as i32,
@@ -1938,6 +1974,26 @@ impl PhysicalDesign {
 					failure = res2;
 				}
 			}
+			for x in (8..partition_dims.0).step_by(18) {
+				for y in (8..partition_dims.1).step_by(18) {
+					let id = PhyId(self.nodes.len());
+					self.nodes.push(PhyNode {
+						id,
+						logic: NodeId(usize::MAX),
+						position: ((part_x + x) as f64 + 0.5, (part_y + y) as f64 + 0.5),
+						placed: true,
+						orientation: 4,
+						partition: part as i32,
+						hop_type: WireHopType::Substation,
+						routes: vec![],
+						foreign_routes: vec![],
+					});
+					self.global_space[(x, y)] = id;
+					self.global_space[(x + 1, y)] = id;
+					self.global_space[(x, y + 1)] = id;
+					self.global_space[(x + 1, y + 1)] = id;
+				}
+			}
 		}
 	}
 
@@ -1960,7 +2016,7 @@ impl PhysicalDesign {
 					continue;
 				}
 				let node = &self.nodes[self.global_space[(x, y)].0];
-				if node.is_pole {
+				if node.is_pole() {
 					print!(" _P_ ");
 				} else {
 					print!(" {:3} ", self.global_space[(x, y)].0)
@@ -2078,7 +2134,7 @@ impl PhysicalDesign {
 				placed: true,
 				orientation: 4,
 				partition: -1,
-				is_pole: true,
+				hop_type: WireHopType::Medium,
 				routes: vec![],
 				foreign_routes: vec![],
 			});
@@ -2099,7 +2155,7 @@ impl PhysicalDesign {
 				placed: true,
 				orientation: 4,
 				partition: -1,
-				is_pole: true,
+				hop_type: WireHopType::Medium,
 				routes: vec![],
 				foreign_routes: vec![],
 			});
@@ -2361,6 +2417,25 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 		marks.insert(item.clone());
 	}
 	marks.into_iter().collect()
+}
+
+impl WireHopType {
+	pub fn is_comb(&self) -> bool {
+		matches!(self, Self::Combinator | Self::Lamp)
+	}
+
+	pub fn is_pole(&self) -> bool {
+		matches!(
+			self,
+			Self::Big | Self::Small | Self::Medium | Self::Substation
+		)
+	}
+}
+
+impl PhyNode {
+	pub fn is_pole(&self) -> bool {
+		self.hop_type.is_pole()
+	}
 }
 
 #[cfg(test)]
