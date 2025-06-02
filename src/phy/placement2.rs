@@ -252,8 +252,8 @@ impl AnalyticalPlacement {
 				let cell2 = &self.cells[*id2];
 				let (ds, mag) = cell.bbox.center_direction(&cell2.bbox);
 				if mag > 10.0 {
-					force.0 += mag * mag * ds.0 / 10.0;
-					force.1 += mag * mag * ds.1 / 10.0;
+					force.0 += mag * mag * mag * ds.0 / 100.0;
+					force.1 += mag * mag * mag * ds.1 / 100.0;
 				} else {
 					force.0 += mag * ds.0;
 					force.1 += mag * ds.1;
@@ -344,7 +344,14 @@ impl AnalyticalPlacement {
 
 	pub(crate) fn calculate_radial_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
-		let center_bbox = BBox::new(0., 0., self.side_length, self.side_length);
+		let mut center = (0.0, 0.0);
+		for id in 0..self.cells.len() {
+			center.0 += self.cells[id].bbox.x;
+			center.1 += self.cells[id].bbox.y;
+		}
+		center.0 /= self.cells.len() as f32;
+		center.1 /= self.cells.len() as f32;
+		let center_bbox = BBox::new(center.0, center.1, 0.0, 0.0);
 		for id1 in 0..self.cells.len() {
 			let cell1 = &self.cells[id1];
 			if cell1.fixed {
@@ -354,8 +361,8 @@ impl AnalyticalPlacement {
 			if mag == 0.0 {
 				continue;
 			}
-			ret[id1].0 -= ds.0 / (mag + 1.0);
-			ret[id1].1 -= ds.1 / (mag + 1.0);
+			ret[id1].0 -= ds.0 / (mag + 2.0);
+			ret[id1].1 -= ds.1 / (mag + 2.0);
 		}
 		ret
 	}

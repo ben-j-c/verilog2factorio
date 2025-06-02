@@ -171,9 +171,9 @@ impl PhysicalDesign {
 		ret
 	}
 
-	pub(crate) fn build_from(&mut self, logical: &LogicalDesign) {
+	pub(crate) fn build_from(&mut self, logical: &LogicalDesign) -> bool {
 		let partition_size = self.user_partition_size.unwrap_or(64);
-		let scale_factor = 1.3;
+		let scale_factor = 1.4;
 		self.side_length_single_partition =
 			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		self.extract_combs(logical);
@@ -195,7 +195,7 @@ impl PhysicalDesign {
 			&partition_global_connectivity,
 			&local_to_global,
 		);
-		self.global_freeze_and_route(
+		let res = self.global_freeze_and_route(
 			logical,
 			&partition_global_connectivity,
 			&local_to_global,
@@ -205,6 +205,7 @@ impl PhysicalDesign {
 		println!("Connecting combs.");
 		self.connect_combs(logical);
 		self.validate_against(logical);
+		res
 	}
 
 	pub(crate) fn for_all_phy<F>(&self, mut func: F)
@@ -525,9 +526,9 @@ impl PhysicalDesign {
 			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
 			let elec_c = 10.0;
 			let overlap_c = 1800.0 + (t + PI * 20.0).sin() * 100.0;
-			let buckle_c = 500.0;
-			let access_c = 16.0;
-			let radial_c = 100.0;
+			let buckle_c = 200.0;
+			let access_c = 1000.0;
+			let radial_c = 100.0 * side_length as f32 / 20.0 * (1.0 - (t * t / 1.0 + 1.0).recip());
 
 			let mut force = vec![(0.0, 0.0); spring.len()];
 			for i in 0..num_cells {
@@ -542,6 +543,7 @@ impl PhysicalDesign {
 					+ overlap_c * overlap[i].1
 					+ legalization_c * legalization_force[i].1
 					//- elec_c * elec[i].1
+					+ access_c * access[i].1
 					+ buckle_c * buckle[i].1
 					+ radial_c * radial[i].1;
 			}
@@ -2048,7 +2050,7 @@ impl PhysicalDesign {
 		partition_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
 		local_to_global: &Vec<Vec<usize>>,
 		global_to_local: &Vec<HashM<usize, usize>>,
-	) {
+	) -> bool {
 		let partition_dims = calculate_minimum_partition_dim(&self.local_assignments);
 		println!(
 			"Starting global freeze and route with partition dims ({}, {}).",
@@ -2124,6 +2126,7 @@ impl PhysicalDesign {
 		{
 			//self.print_ascii_global_space();
 		}
+		success
 	}
 
 	fn get_needed_routes(&self, edge: (usize, usize), logical: &LogicalDesign) -> (bool, bool) {
@@ -2516,11 +2519,11 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(10);
-		p.user_partition_size = Some(50);
-		p.build_from(&l);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(25);
+		p.user_partition_size = Some(200);
+		let res = p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
-		p.print_ascii_global_space();
+		assert!(res)
 	}
 
 	#[test]
