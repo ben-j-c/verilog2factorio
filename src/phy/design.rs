@@ -94,7 +94,7 @@ pub struct Wire {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WireHopType {
 	Small,
 	Medium,
@@ -361,6 +361,7 @@ impl PhysicalDesign {
 			]);
 			let algo = Self::solve_as_mcmc_dense(
 				&partition_local_connectivity[partition as usize],
+				&partition_global_connectivity[partition as usize],
 				&initializations,
 				None,
 				self.side_length_single_partition,
@@ -489,7 +490,7 @@ impl PhysicalDesign {
 		let mut round = 0;
 		//let mut momentum = vec![(0.0, 0.0); placement.num_cells()];
 		while !cost.1 {
-			if round.rem(50) == 0 {
+			if round.rem(500) == 0 {
 				println!("{round}");
 				placement.draw_placement(&edges, "svg/solve_analytical_dense.svg");
 				let mut placement2 = placement.clone();
@@ -507,9 +508,10 @@ impl PhysicalDesign {
 			let spring = placement.calculate_spring_force(connections_per_node);
 			let overlap = placement.calculate_overlap_force();
 			let legalization_force = placement.calculate_legalization_force();
-			let elec = placement.calculate_electrostatic_force();
+			//let elec = placement.calculate_electrostatic_force();
 			let buckle = placement.calculate_buckling_force();
 			let access = placement.calculate_accessibility_force(global_connectivity);
+			let radial = placement.calculate_radial_force();
 
 			let t = round as f32 / 1_000.0;
 
@@ -519,27 +521,29 @@ impl PhysicalDesign {
 			//let overlap_c = 500.0 * ((t * f64::consts::PI * 40.0).sin() + 1.0);
 			//let buckle_c = 100.0 * ((-t * f64::consts::PI * 16.0).sin() + 1.0) + 10.0;
 			//let access_c = 2.0;
-			let spring_c = 10.0 / (t * 0.5 + 1.0);
+			let spring_c = 15.0 / (t * 0.5 + 1.0);
 			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
 			let elec_c = 10.0;
-			let overlap_c = 1600.0 + (t + PI * 20.0).sin() * 100.0;
+			let overlap_c = 1800.0 + (t + PI * 20.0).sin() * 100.0;
 			let buckle_c = 500.0;
 			let access_c = 16.0;
+			let radial_c = 100.0;
 
 			let mut force = vec![(0.0, 0.0); spring.len()];
 			for i in 0..num_cells {
 				force[i].0 = spring_c * spring[i].0
 					+ overlap_c * overlap[i].0
 					+ legalization_c * legalization_force[i].0
-					- elec_c * elec[i].0
+					//- elec_c * elec[i].0
 					+ buckle_c * buckle[i].0
-					+ access_c * access[i].0;
+					+ access_c * access[i].0
+					+ radial_c * radial[i].0;
 				force[i].1 = spring_c * spring[i].1
 					+ overlap_c * overlap[i].1
 					+ legalization_c * legalization_force[i].1
-					- elec_c * elec[i].1
+					//- elec_c * elec[i].1
 					+ buckle_c * buckle[i].1
-					+ access_c * access[i].1;
+					+ radial_c * radial[i].1;
 			}
 
 			placement.step_cells(force, 0.00004);
@@ -555,6 +559,7 @@ impl PhysicalDesign {
 
 	fn solve_as_mcmc_dense(
 		connections_per_node: &Vec<Vec<usize>>,
+		global_connectivity: &Vec<Vec<(i32, usize, usize)>>,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
 		side_length: usize,
@@ -1508,7 +1513,6 @@ impl PhysicalDesign {
 		);
 		let mut shapes = vec![];
 		for c in &self.nodes {
-			let node = ld.get_node(c.logic);
 			let mut x = (c.position.0 * (SCALE + 2.0)) as i32;
 			let y = (c.position.1 * (SCALE + 2.0)) as i32;
 			if c.is_pole() {
@@ -1547,10 +1551,10 @@ impl PhysicalDesign {
 					},
 					WireHopType::Substation => {
 						shapes.push(svg.add_rect(
-							x - SCALE as i32 / 2,
-							y + SCALE as i32 / 2,
-							SCALE as i32,
-							SCALE as i32,
+							x,
+							y,
+							SCALE as i32 * 2,
+							SCALE as i32 * 2,
 							(101, 101, 101),
 							Some("SS".to_owned()),
 							None,
@@ -1560,6 +1564,7 @@ impl PhysicalDesign {
 				}
 				continue;
 			}
+			let node = ld.get_node(c.logic);
 			let (w, h, label, hover) = match &node.function {
 				ld::NodeFunction::Arithmetic { op, .. } => {
 					x -= SCALE as i32 / 2;
@@ -1977,10 +1982,13 @@ impl PhysicalDesign {
 			for x in (8..partition_dims.0).step_by(18) {
 				for y in (8..partition_dims.1).step_by(18) {
 					let id = PhyId(self.nodes.len());
+					let x = part_x * (partition_dims.0 + margin) + x + margin;
+					let y = part_y * (partition_dims.1 + margin) + y + margin;
+					let pos = (x as f64 + 0.5, y as f64 + 0.5);
 					self.nodes.push(PhyNode {
 						id,
 						logic: NodeId(usize::MAX),
-						position: ((part_x + x) as f64 + 0.5, (part_y + y) as f64 + 0.5),
+						position: pos,
 						placed: true,
 						orientation: 4,
 						partition: part as i32,
@@ -1988,6 +1996,10 @@ impl PhysicalDesign {
 						routes: vec![],
 						foreign_routes: vec![],
 					});
+					assert_eq!(self.global_space[(x, y)], PhyId::default());
+					assert_eq!(self.global_space[(x + 1, y)], PhyId::default());
+					assert_eq!(self.global_space[(x, y + 1)], PhyId::default());
+					assert_eq!(self.global_space[(x + 1, y + 1)], PhyId::default());
 					self.global_space[(x, y)] = id;
 					self.global_space[(x + 1, y)] = id;
 					self.global_space[(x, y + 1)] = id;
@@ -2017,7 +2029,11 @@ impl PhysicalDesign {
 				}
 				let node = &self.nodes[self.global_space[(x, y)].0];
 				if node.is_pole() {
-					print!(" _P_ ");
+					if node.hop_type == WireHopType::Substation {
+						print!(" _S_ ");
+					} else {
+						print!(" _P_ ");
+					}
 				} else {
 					print!(" {:3} ", self.global_space[(x, y)].0)
 				}
@@ -2500,10 +2516,11 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(50);
-		p.user_partition_size = Some(200);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(10);
+		p.user_partition_size = Some(50);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
+		p.print_ascii_global_space();
 	}
 
 	#[test]

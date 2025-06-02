@@ -342,6 +342,24 @@ impl AnalyticalPlacement {
 		ret
 	}
 
+	pub(crate) fn calculate_radial_force(&self) -> Vec<(f32, f32)> {
+		let mut ret = vec![(0.0, 0.0); self.cells.len()];
+		let center_bbox = BBox::new(0., 0., self.side_length, self.side_length);
+		for id1 in 0..self.cells.len() {
+			let cell1 = &self.cells[id1];
+			if cell1.fixed {
+				continue;
+			}
+			let (ds, mag) = cell1.bbox.center_direction(&center_bbox);
+			if mag == 0.0 {
+				continue;
+			}
+			ret[id1].0 -= ds.0 / (mag + 1.0);
+			ret[id1].1 -= ds.1 / (mag + 1.0);
+		}
+		ret
+	}
+
 	pub(crate) fn draw_placement(&self, connections: &Vec<(usize, usize)>, filename: &str) {
 		let scale = 25.0;
 		let mut svg = SVG::new();

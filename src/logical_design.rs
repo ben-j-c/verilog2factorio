@@ -402,20 +402,6 @@ pub struct MemoryPortWriteFilled {
 	pub en_wire: Option<NodeId>,
 }
 
-/// Performance? never heard of her.
-#[allow(dead_code)]
-struct LogicalDesignCache {
-	topological_order: Vec<NodeId>,
-	root_nodes: Vec<NodeId>,
-	leaf_nodes: Vec<NodeId>,
-	depth: Vec<i32>,
-	max_depth: i32,
-	rev_depth: Vec<i32>,
-	idx_depth: HashMap<i32, Vec<NodeId>>,
-	idx_rev_depth: HashMap<i32, Vec<NodeId>>,
-	valid: bool,
-}
-
 struct LogicalPort {
 	id: NodeId,
 	direction: Direction,
@@ -426,7 +412,6 @@ struct LogicalPort {
 pub struct LogicalDesign {
 	pub(crate) nodes: Vec<Node>,
 	pub(crate) ports: Vec<LogicalPort>,
-	cache: RefCell<LogicalDesignCache>,
 	pub(crate) description: String,
 }
 
@@ -453,17 +438,6 @@ impl LogicalDesign {
 		LogicalDesign {
 			nodes: vec![],
 			ports: vec![],
-			cache: RefCell::new(LogicalDesignCache {
-				topological_order: vec![],
-				root_nodes: vec![],
-				leaf_nodes: vec![],
-				depth: vec![],
-				max_depth: 0,
-				rev_depth: vec![],
-				idx_depth: HashMap::new(),
-				idx_rev_depth: HashMap::new(),
-				valid: true,
-			}),
 			description: "".to_string(),
 		}
 	}
@@ -479,7 +453,6 @@ impl LogicalDesign {
 
 	/// Add a node with the specific [`NodeFunction`] and the specific output [`Signal`]. Generally a low level API.
 	pub(crate) fn add_node(&mut self, function: NodeFunction, output: Vec<Signal>) -> NodeId {
-		self.cache.get_mut().valid = false;
 		let id = NodeId(self.nodes.len());
 		self.nodes.push(Node {
 			id,
@@ -502,7 +475,6 @@ impl LogicalDesign {
 			self.is_wire(out_node) != self.is_wire(in_node),
 			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
 		);
-		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout_red.push(in_node);
 		self.nodes[in_node.0].fanin_red.push(out_node);
 	}
@@ -513,7 +485,6 @@ impl LogicalDesign {
 			self.is_wire(out_node) != self.is_wire(in_node),
 			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
 		);
-		self.cache.get_mut().valid = false;
 		self.nodes[out_node.0].fanout_green.push(in_node);
 		self.nodes[in_node.0].fanin_green.push(out_node);
 	}
