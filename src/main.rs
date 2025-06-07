@@ -1,12 +1,18 @@
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{
+	fs::File,
+	io::BufReader,
+	os::unix::process::CommandExt,
+	path::{Path, PathBuf},
+};
 
 use checked_design::CheckedDesign;
-use clap::Parser;
+use clap::{builder::OsStr, Parser};
 use logical_design::LogicalDesign;
 use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
 use mapped_design::MappedDesign;
 use mlua::AnyUserData;
 use phy::PhysicalDesign;
+use rustyline::Cmd;
 use serializable_design::SerializableDesign;
 
 pub mod checked_design;
@@ -35,7 +41,9 @@ pub enum Error {
 	IOError(std::io::Error),
 	ReadlineError(rustyline::error::ReadlineError),
 	LuaErrorNoReturnedDesign,
-	ResultantFileNameIsBad,
+	ResultantFileNameIsBad(PathBuf),
+	V2FRootNotDefined(String),
+	YosysExeNotFound,
 }
 
 impl From<serde_json::Error> for Error {
@@ -69,6 +77,13 @@ struct Args {
 
 fn main() {
 	let args = Args::parse();
+	match std::env::var("V2F_ROOT") {
+		Ok(_) => {},
+		Err(_) => {
+			println!("Assuming V2F_ROOT as current working directory.");
+			std::env::set_var("V2F_ROOT", std::env::current_dir().unwrap())
+		},
+	}
 	match if args.input_file.ends_with(".lua") {
 		lua_flow(args)
 	} else {
@@ -104,21 +119,8 @@ fn lua_flow(args: Args) -> Result<String> {
 		let mut phyd = PhysicalDesign::new();
 		phyd.build_from(&logd.logd.borrow());
 		if logd.make_svg {
-			let filename = args.input_file.file_stem().map(|stem| {
-				let mut stem = stem.to_owned();
-				stem.push(".svg");
-				stem
-			});
-			if filename.is_none() {
-				return Err(Error::ResultantFileNameIsBad);
-			}
-			let folder = args.input_file.parent();
-			if folder.is_none() || !folder.unwrap().is_dir() {
-				return Err(Error::ResultantFileNameIsBad);
-			}
-			let mut file = PathBuf::from(folder.unwrap());
-			file.push(PathBuf::from(filename.unwrap()));
-			phyd.save_svg(&logd.logd.borrow(), file);
+			let svg_name = get_derivative_file_name(&args.input_file, ".svg")?;
+			phyd.save_svg(&logd.logd.borrow(), svg_name)?;
 		}
 		serd.build_from(&phyd, &logd.logd.borrow());
 		let blueprint_json = serde_json::to_string(&serd)?;
@@ -133,8 +135,65 @@ fn lua_flow(args: Args) -> Result<String> {
 	}
 }
 
+pub fn get_derivative_file_name<P, S>(filename: P, derivative: S) -> Result<PathBuf>
+where
+	P: AsRef<Path>,
+	S: AsRef<str>,
+{
+	let filename: &Path = filename.as_ref();
+	let mut newfilename = if let Some(s) = filename.file_stem() {
+		s.to_owned()
+	} else {
+		return Err(Error::ResultantFileNameIsBad(filename.into()));
+	};
+	/*let parent = if let Some(s) = filename.parent() {
+		s.to_owned()
+	} else {
+		return Err(Error::ResultantFileNameIsBad(filename.into()));
+	};*/
+	newfilename.push(derivative.as_ref());
+	Ok(newfilename.into())
+}
+
+pub fn get_v2f_root() -> Result<PathBuf> {
+	match std::env::var("V2F_ROOT") {
+		Ok(v) => {
+			let ret = PathBuf::from(v);
+			if ret.is_dir() {
+				return Ok(ret);
+			} else {
+				Err(Error::V2FRootNotDefined(format!("Not a directory")))
+			}
+		},
+		Err(_) => Err(Error::V2FRootNotDefined(format!("Env var not defined"))),
+	}
+}
+
+pub fn get_yosys_exe() -> Result<PathBuf> {
+	let v2f_root = get_v2f_root()?;
+	if let Ok(v) = std::env::var("YOSYS_EXE") {
+		if PathBuf::from(&v).is_file() {
+			return Ok(PathBuf::from(v));
+		} else {
+			return Err(Error::YosysExeNotFound); // They defined an env var, but it was bad
+		}
+	}
+	if v2f_root.join("yosys/yosys").is_file() {
+		return Ok(v2f_root.join("yosys/yosys"));
+	}
+	let res = std::process::Command::new("yosys")
+		.arg("--version")
+		.output();
+	if res.is_ok() {
+		return Ok(PathBuf::from("yosys"));
+	}
+	Err(Error::YosysExeNotFound)
+}
+
 #[cfg(test)]
 mod test {
+	use std::env;
+
 	use super::*;
 	#[allow(unused)]
 	use logical_design::ArithmeticOperator as Aop;
@@ -177,8 +236,10 @@ mod test {
 
 	#[test]
 	fn example_basics() {
+		env::set_var("V2F_ROOT", env::current_dir().unwrap());
+		env::set_current_dir("examples/lua/basics").expect("Failed to chdir");
 		let args = Args {
-			input_file: PathBuf::from("examples/lua/basics.lua"),
+			input_file: PathBuf::from("basics.lua"),
 		};
 		match lua_flow(args) {
 			Ok(_) => {},
@@ -190,6 +251,26 @@ mod test {
 				assert!(false);
 			},
 		}
-		assert!(PathBuf::from("examples/lua/basics.svg").is_file());
+		assert!(PathBuf::from("basics.svg").is_file());
+	}
+
+	#[test]
+	fn example_yosys() {
+		env::set_var("V2F_ROOT", env::current_dir().unwrap());
+		env::set_current_dir("examples/lua/yosys").expect("Failed to chdir");
+		let args = Args {
+			input_file: PathBuf::from("yosys.lua"),
+		};
+		match lua_flow(args) {
+			Ok(_) => {},
+			Err(e) => {
+				match e {
+					Error::LuaError(error) => println!("{}", error),
+					_ => println!("{:?}", e),
+				};
+				assert!(false);
+			},
+		}
+		assert!(PathBuf::from("yosys.svg").is_file());
 	}
 }

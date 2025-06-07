@@ -426,7 +426,7 @@ impl SVG {
 						let cy = r.y + r.h / 2;
 						svg_data.push_str(&format!(
 							r#"<text x="{}" y="{}" text-anchor="middle" alignment-baseline="middle" fill="black">{}</text>"#,
-							cx, cy, txt
+							cx, cy, txt.replace("<", "&lt;").replace(">", "&gt;")
 						));
 					}
 				},
@@ -498,7 +498,7 @@ impl SVG {
                             angle,
                             rx,
                             ry,
-                            text
+                            text.replace("<", "&lt;").replace(">", "&gt;")
                         ));
 					} else {
 						svg_data.push_str(&format!(
@@ -508,7 +508,7 @@ impl SVG {
 							colour,
 							font_size,
 							anchor.clone().unwrap_or_else(|| "start".to_string()),
-							text
+							text.replace("<", "&lt;").replace(">", "&gt;")
 						));
 					}
 				},
@@ -526,14 +526,17 @@ impl SVG {
 						cx, cy, r, colour_str
 					));
 					if let Some(txt) = &hover {
-						svg_data.push_str(&format!(r#"<title>{}</title>"#, txt));
+						svg_data.push_str(&format!(
+							r#"<title>{}</title>"#,
+							txt.replace("<", "&lt;").replace(">", "&gt;")
+						));
 					}
 					svg_data.push_str("</circle>");
 
 					if let Some(txt) = &label {
 						svg_data.push_str(&format!(
 							r#"<text x="{}" y="{}" text-anchor="middle" alignment-baseline="middle" fill="black">{}</text>"#,
-							cx, cy, txt
+							cx, cy, txt.replace("<", "&lt;").replace(">", "&gt;")
 						));
 					}
 				},

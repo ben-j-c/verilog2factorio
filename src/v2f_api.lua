@@ -1,3 +1,4 @@
+---@diagnostic disable: missing-return lowercase-global
 ---@class LogicalDesignAPI
 ---@field description string
 ---@field add_decider fun(self: LogicalDesignAPI): Decider
@@ -92,5 +93,23 @@ Terminal = {
 	connect = function(a, b) end
 }
 
+--- Get a truely empty design
 ---@return LogicalDesignAPI
 function get_empty_design() end
+
+---@class RTL
+---@field to_design fun(self: RTL): LogicalDesignAPI
+
+--- Take verilog code and map it to RTL. Right now RTL doesn't do much.
+---@param filename string
+---@return RTL
+function yosys_load_rtl(filename) end
+
+--- Take the RTL, or filename of the verilog code and turn it into a LogicalDesign.
+---@param rtl RTL|string
+---@return LogicalDesignAPI
+function yosys_map_rtl(rtl) end
+
+--- Enter an interactive terminal.
+---@param filename string|nil
+function enter_repl(filename) end

@@ -6,15 +6,17 @@ use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
+	fmt::format,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
-	path::PathBuf,
+	path::{Path, PathBuf},
 	rc::Rc,
 };
 
 use crate::{
 	checked_design::CheckedDesign,
+	get_derivative_file_name, get_v2f_root, get_yosys_exe,
 	logical_design::{
 		ArithmeticOperator, DeciderOperator, DeciderRowConjDisj, LogicalDesign, NodeId, Signal,
 		WireColour, NET_GREEN, NET_RED, NET_RED_GREEN,
@@ -24,6 +26,12 @@ use crate::{
 	signal_lookup_table,
 	sim::SimState,
 };
+
+impl From<crate::Error> for mlua::Error {
+	fn from(value: crate::Error) -> Self {
+		Self::RuntimeError(format!("{:?}", value))
+	}
+}
 
 pub(crate) struct LogicalDesignAPI {
 	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
@@ -40,6 +48,7 @@ pub(crate) struct SimStateAPI {
 	pub(crate) sim: Rc<RefCell<SimState>>,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct RTL {
 	filename: PathBuf,
 }
@@ -96,7 +105,7 @@ impl UserData for TerminalSide {
 impl UserData for WireColour {}
 
 impl FromLua for WireColour {
-	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match &value {
 			Value::String(s) => match s.to_str()?.as_ref() {
 				"red" => Ok(WireColour::Red),
@@ -233,8 +242,7 @@ fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error
 }
 
 fn method_check_yosys() -> Result<(), mlua::Error> {
-	let mut yosys_exe = PathBuf::from(std::env::current_exe()?.parent().unwrap());
-	yosys_exe.push("/yosys/yosys");
+	let yosys_exe = get_yosys_exe()?;
 	let output = std::process::Command::new(yosys_exe)
 		.arg("--version")
 		.output()?;
@@ -257,37 +265,37 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 
 fn method_load_rtl<P>(filename: P) -> Result<RTL, mlua::Error>
 where
-	P: Into<PathBuf>,
+	P: AsRef<Path>,
 {
-	let filename = filename.into();
+	let filename: &Path = filename.as_ref();
+	let filename_out = get_derivative_file_name(&filename, "_rtl.json")?;
 	method_check_yosys()?;
-	let exe_dir = PathBuf::from(std::env::current_exe()?.parent().unwrap());
+	let exe_dir = get_v2f_root()?;
 	if !exe_dir.is_dir() {
+		return Err(Error::RuntimeError(format!("Can't locate V2F_ROOT")));
+	}
+	if !filename.is_file() {
 		return Err(Error::RuntimeError(format!(
-			"Can't locate executable directory."
+			"{:?} is not a file.",
+			filename
 		)));
 	}
-	let file = PathBuf::from(filename.clone());
-	if !file.is_file() {
-		return Err(Error::RuntimeError(format!("{:?} is not a file.", file)));
-	}
-	let json_filename =
-		PathBuf::from(filename.parent().unwrap()).join(filename.file_stem().unwrap().to_owned());
 
 	{
-		let mut rtl_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
+		let mut rtl_script = File::open(exe_dir.join("v2flib/rtl.ys"))?;
 		let mut buf = Vec::new();
 		rtl_script.read_to_end(&mut buf)?;
 		let rtl_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
 		let rtl_script_text = rtl_script_text
-			.replace("{filename}", json_filename.to_str().unwrap())
+			.replace("{filename}", filename.to_str().unwrap())
+			.replace("{filename_out}", filename_out.as_os_str().to_str().unwrap())
 			.replace("{exe_dir}", exe_dir.to_str().unwrap());
 		let mut rtl_script_final = File::create("rtl.ys")?;
 		rtl_script_final.write_all(rtl_script_text.as_bytes())?;
 		rtl_script_final.flush()?;
 	}
 
-	let rtl_output = std::process::Command::new(exe_dir.join("/yosys/yosys"))
+	let rtl_output = std::process::Command::new(get_yosys_exe()?)
 		.arg("--quiet")
 		.arg("--quiet")
 		.arg("--scriptfile")
@@ -296,64 +304,60 @@ where
 	if !rtl_output.status.success() {
 		return Err(Error::runtime("Failed to compile to RTL."));
 	}
-	let filename = {
-		let mut tmp = json_filename.as_os_str().to_owned();
-		tmp.push("_rtl.json");
-		PathBuf::from(tmp)
-	};
-	return Ok(RTL { filename });
+
+	return Ok(RTL {
+		filename: filename_out,
+	});
 }
 
 fn method_map_rtl<P>(filename: P) -> Result<LogicalDesignAPI, mlua::Error>
 where
-	P: Into<PathBuf> + Clone,
+	P: AsRef<Path>,
 {
-	let filename: PathBuf = filename.into();
+	let filename_out = get_derivative_file_name(&filename, "_map.json")?;
+	method_check_yosys()?;
+	let filename: &Path = filename.as_ref();
 	if !filename.is_file() {
 		return Err(Error::RuntimeError(format!(
 			"{:?} is not a file.",
 			filename
 		)));
 	}
-	if !filename.ends_with(".rtl.json") {
+	if !filename.to_string_lossy().ends_with("_rtl.json") {
 		return Err(Error::RuntimeError(format!(
 			"{:?} is not an RTL json.",
 			filename
 		)));
 	}
-	let exe_dir = PathBuf::from(std::env::current_exe()?.parent().unwrap());
-	if !exe_dir.is_dir() {
-		return Err(Error::RuntimeError(format!(
-			"Can't locate executable directory."
-		)));
-	}
-
-	let json_filename =
-		PathBuf::from(filename.parent().unwrap()).join(filename.file_stem().unwrap().to_owned());
+	let exe_dir = get_v2f_root()?;
 	{
 		let mut buf = Vec::new();
-		let mut mapping_script = File::open(exe_dir.join("/v2flib/rtl.ys"))?;
+		let mut mapping_script = File::open(exe_dir.join("v2flib/mapping.ys"))?;
 		mapping_script.read_to_end(&mut buf)?;
 		let mapping_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
 		let mapping_script_text = mapping_script_text
-			.replace("{filename}", json_filename.to_str().unwrap())
+			.replace("{filename}", filename.to_str().unwrap())
+			.replace("{filename_out}", filename_out.to_str().unwrap())
 			.replace("{exe_dir}", exe_dir.to_str().unwrap());
 		let mut mappingscript_final = File::create("mapping.ys")?;
 		mappingscript_final.write_all(mapping_script_text.as_bytes())?;
 		mappingscript_final.flush()?;
 	}
 
-	let mapping_output = std::process::Command::new(exe_dir.join("/yosys/yosys"))
+	let mapping_output = std::process::Command::new(get_yosys_exe()?)
 		.arg("--quiet")
 		.arg("--quiet")
 		.arg("--scriptfile")
 		.arg("mapping.ys")
 		.output()?;
 	if !mapping_output.status.success() {
-		return Err(Error::runtime("Failed to techmap."));
+		match String::from_utf8(mapping_output.stderr) {
+			Ok(s) => return Err(Error::runtime(s)),
+			Err(_) => return Err(Error::runtime("<Failed to get stdout>")),
+		}
 	}
 
-	let file = File::open("")?;
+	let file = File::open(filename_out)?;
 	let reader = BufReader::new(file);
 	let mapped_design: MappedDesign =
 		serde_json::from_reader(reader).map_err(|_| Error::runtime("failed to map design."))?;
@@ -595,8 +599,7 @@ impl UserData for SimStateAPI {
 			Ok(())
 		});
 		methods.add_method("probe", |lua, this, data: AnyUserData| {
-			let mut signals: Vec<(i32, i32)> = vec![];
-			if let Ok(term) = data.borrow::<Terminal>() {
+			let signals: Vec<(i32, i32)> = if let Ok(term) = data.borrow::<Terminal>() {
 				let (nodeid, logd, colour) = term.get();
 				if logd.as_ptr() != this.logd.as_ptr() {
 					return Err(Error::runtime(
@@ -607,7 +610,7 @@ impl UserData for SimStateAPI {
 					WireColour::Red => NET_RED,
 					WireColour::Green => NET_GREEN,
 				};
-				signals = match term.0 {
+				match term.0 {
 					TerminalSide::Input(_, _) => this.sim.borrow().probe_input(nodeid, net),
 					TerminalSide::Output(_, _) => this.sim.borrow().probe_red_out(nodeid),
 				}
@@ -618,7 +621,7 @@ impl UserData for SimStateAPI {
 						"Supplied a combinator that doesn't belong to this design.",
 					));
 				}
-				signals = match *term_side {
+				match *term_side {
 					TerminalSide::Input(_, _) => {
 						this.sim.borrow().probe_input(nodeid, NET_RED_GREEN)
 					},
@@ -626,7 +629,7 @@ impl UserData for SimStateAPI {
 				}
 			} else {
 				return Err(Error::runtime("Passed an invalid type into probe."));
-			}
+			};
 			let ret = lua.create_table()?;
 			for s in signals {
 				ret.set(Signal::Id(s.0), s.1)?;
@@ -669,11 +672,7 @@ impl FromLua for RTL {
 	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match &value {
 			Value::String(filename) => method_load_rtl(filename.to_string_lossy()),
-			Value::UserData(data) if data.is::<RTL>() => Err(Error::FromLuaConversionError {
-				from: value.type_name(),
-				to: "RTL".to_owned(),
-				message: None,
-			}),
+			Value::UserData(data) => Ok(data.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
 				from: value.type_name(),
 				to: "RTL".to_owned(),
@@ -758,6 +757,11 @@ pub fn get_lua() -> Result<Lua, Error> {
 	lua.globals().set(
 		"yosys_load_rtl",
 		lua.create_function(|_, filename: String| method_load_rtl(filename))?,
+	)?;
+
+	lua.globals().set(
+		"yosys_map_rtl",
+		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename))?,
 	)?;
 
 	lua.globals().set(

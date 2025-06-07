@@ -55,7 +55,7 @@
 			},
 			"args": [
 				"--nocapture",
-				"phy::design::test::synthetic_2d_n_mcmc_dense",
+				"test::example_yosys",
 				"--",
 				"--exact",
 				"--show-output"

@@ -493,7 +493,9 @@ impl PhysicalDesign {
 		while !cost.1 {
 			if round.rem(500) == 0 {
 				println!("{round}");
-				placement.draw_placement(&edges, "svg/solve_analytical_dense.svg");
+				placement
+					.draw_placement(&edges, "svg/solve_analytical_dense.svg")
+					.ok();
 				let mut placement2 = placement.clone();
 				placement2.apply_legalization();
 				if placement2.compute_cost(&edges).1 {
@@ -553,7 +555,9 @@ impl PhysicalDesign {
 			round += 1;
 		}
 		placement.apply_legalization();
-		placement.draw_placement(&edges, &format!("svg/partition{partition_id}.svg"));
+		placement
+			.draw_placement(&edges, &format!("svg/partition{partition_id}.svg"))
+			.ok();
 		let mut ret = placement.legalized();
 		ret.resize(num_cells, (0, 0));
 		Ok(ret)
@@ -815,7 +819,7 @@ impl PhysicalDesign {
 					"Number",
 					"Count",
 				);
-				graph.save("svg/sat_count.svg").unwrap();
+				graph.save("svg/sat_count.svg").ok();
 				let mut graph = SVG::new();
 				graph.make_chart(
 					trend_of_bests
@@ -826,14 +830,15 @@ impl PhysicalDesign {
 					"Number",
 					"Count",
 				);
-				graph.save("svg/cost.svg").unwrap();
+				graph.save("svg/cost.svg").ok();
 			}
 
 			if !final_stage && (delta < 0.0 || new_cost.1)
 				|| final_stage && (delta < 0.0 && new_cost.1)
 			{
 				//best_cost = new.compute_cost(&connections, max_density);
-				new.draw_placement(&connections, max_density, "svg/best.svg");
+				new.draw_placement(&connections, max_density, "svg/best.svg")
+					.ok();
 				best = new.clone();
 				curr = new;
 				best_cost = new_cost;
@@ -1086,7 +1091,7 @@ impl PhysicalDesign {
 					"Number",
 					"Count",
 				);
-				graph.save("svg/sat_count.svg").unwrap();
+				graph.save("svg/sat_count.svg").ok();
 				let mut graph = SVG::new();
 				graph.make_chart(
 					trend_of_bests
@@ -1106,7 +1111,7 @@ impl PhysicalDesign {
 					max_density,
 				)
 				.save("svg/global_placement.svg")
-				.unwrap();
+				.ok();
 				best = new.clone();
 				curr = new;
 				best_cost = new_cost;
@@ -1497,7 +1502,7 @@ impl PhysicalDesign {
 		});
 	}
 
-	pub(crate) fn save_svg<P>(&self, ld: &LogicalDesign, filename: P)
+	pub(crate) fn save_svg<P>(&self, ld: &LogicalDesign, filename: P) -> Result<(), std::io::Error>
 	where
 		P: Into<std::path::PathBuf>,
 	{
@@ -1635,7 +1640,7 @@ impl PhysicalDesign {
 				Some("1".to_owned()),
 			);
 		}
-		svg.save(filename).unwrap()
+		svg.save(filename)
 	}
 
 	fn validate_against(&self, ld: &LogicalDesign) {
@@ -2066,7 +2071,8 @@ impl PhysicalDesign {
 			self.intra_partition_margin = margin;
 			self.reset_place_route();
 			self.global_freeze(logical, margin, partition_dims, local_to_global);
-			self.save_svg(logical, format!("svg/global_freeze_{margin}.svg"));
+			self.save_svg(logical, format!("svg/global_freeze_{margin}.svg"))
+				.ok();
 			for (i, edge) in edges_to_route.iter().enumerate() {
 				if self.close_enough_to_connect_phy(logical, PhyId(edge.0), PhyId(edge.1)) {
 					continue;
@@ -2119,7 +2125,8 @@ impl PhysicalDesign {
 				self.save_svg(
 					logical,
 					format!("svg/global_freeze_routing_failure_{margin}.svg"),
-				);
+				)
+				.ok();
 			}
 		}
 		#[cfg(debug_assertions)]
@@ -2473,7 +2480,8 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design(200);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg");
+		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg")
+			.expect("Failed to save");
 	}
 
 	#[test]
@@ -2481,7 +2489,8 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_memory_test_design(40);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/memory_n_mcmc.svg");
+		p.save_svg(&l, "svg/memory_n_mcmc.svg")
+			.expect("Failed to save");
 	}
 
 	#[test]
@@ -2489,7 +2498,8 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_dense_memory_test_design(1_024);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/dense_memory_n_mcmc.svg");
+		p.save_svg(&l, "svg/dense_memory_n_mcmc.svg")
+			.expect("Failed to save");
 
 		//let mut s = serializable_design::SerializableDesign::new();
 		//s.build_from(&p, &l);
@@ -2513,7 +2523,8 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design(100);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg");
+		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg")
+			.expect("Failed to save");
 	}
 
 	#[test]
@@ -2522,7 +2533,8 @@ mod test {
 		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(25);
 		p.user_partition_size = Some(200);
 		let res = p.build_from(&l);
-		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg");
+		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg")
+			.expect("Failed to save");
 		assert!(res)
 	}
 
@@ -2536,6 +2548,6 @@ mod test {
 		l.set_description_node(c1, "c1".to_owned());
 		l.set_description_node(c2, "c2".to_owned());
 		p.build_from(&l);
-		p.save_svg(&l, "svg/comb_pair.svg");
+		p.save_svg(&l, "svg/comb_pair.svg").expect("Failed to save");
 	}
 }

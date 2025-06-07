@@ -367,7 +367,11 @@ impl AnalyticalPlacement {
 		ret
 	}
 
-	pub(crate) fn draw_placement(&self, connections: &Vec<(usize, usize)>, filename: &str) {
+	pub(crate) fn draw_placement(
+		&self,
+		connections: &Vec<(usize, usize)>,
+		filename: &str,
+	) -> Result<(), std::io::Error> {
 		let scale = 25.0;
 		let mut svg = SVG::new();
 		svg.add_rect_ext(
@@ -405,7 +409,7 @@ impl AnalyticalPlacement {
 				None,
 			);
 		}
-		svg.save(filename).unwrap();
+		svg.save(filename)
 	}
 
 	pub(crate) fn step_cells(&mut self, force: Vec<(f32, f32)>, factor: f32) {

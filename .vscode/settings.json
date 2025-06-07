@@ -6,5 +6,8 @@
 	"Lua.workspace.library": [
 		"src/v2f_api.lua"
 	],
-	"Lua.runtime.version": "Lua 5.4"
+	"Lua.runtime.version": "Lua 5.4",
+	"Lua.diagnostics.disable": [
+		"lowercase-global"
+	]
 }

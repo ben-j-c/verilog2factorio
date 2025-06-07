@@ -1,6 +1,6 @@
-read_verilog {filename}
-read_verilog -lib {exe_dir}/v2flib/v2f_primitives.v
-hierarchy -libdir {exe_dir}/v2flib -check -top top
+read_verilog balancer.v
+read_verilog -lib /home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v
+hierarchy -libdir /home/ben/repo/verilog2factorio/v2flib -check -top top
 
 #coarse
 proc
@@ -29,4 +29,4 @@ opt_clean
 memory_collect
 
 opt -fast -full
-write_json {filename_out}
+write_json balancer_rtl.json

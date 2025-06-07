@@ -23,4 +23,5 @@ connect(a1.output.green, l1.input)
 logd:make_svg()
 logd:print()
 
+--- Returning a LogicalDesign tells verilog2factorio to perform physical planning and serialization.
 return logd

@@ -1,4 +1,4 @@
-read_json {filename}.json
+read_json {filename}
 techmap -map {exe_dir}/techmap/v2f_techmap.v;;
 techmap -dont_map $sdff -dont_map $dff -dont_map $dffa
 techmap -map {exe_dir}/yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
@@ -10,4 +10,5 @@ abc -fast -lut 8
 opt -fast
 opt_lut
 opt_clean
-write_json {filename}_map.json
+select top
+write_json -selected {filename_out}

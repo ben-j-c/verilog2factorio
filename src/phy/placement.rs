@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::ops::Rem;
 use std::{collections::BTreeSet, hash::BuildHasherDefault, isize, mem::swap, usize};
 
 use hashers::fnv::FNV1aHasher64;
@@ -1009,7 +1008,7 @@ impl Placement {
 		connections: &Vec<(usize, usize)>,
 		_max_density: i32,
 		filename: &str,
-	) {
+	) -> Result<(), std::io::Error> {
 		let mut svg = SVG::new();
 		let grid = SVG::new_grid(50, 25, 3);
 		for x in 0..self.side_length {
@@ -1047,7 +1046,7 @@ impl Placement {
 				None,
 			);
 		}
-		svg.save(filename).unwrap();
+		svg.save(filename)
 	}
 }
 
