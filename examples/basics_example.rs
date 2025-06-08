@@ -21,3 +21,5 @@ fn basics_example() {
 	}
 	assert!(PathBuf::from("basics.svg").is_file());
 }
+
+fn main() {}

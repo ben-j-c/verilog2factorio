@@ -374,7 +374,7 @@ impl PhysicalDesign {
 					println!("ERR: {}", e.0);
 					let _ =
 						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
-					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
+					let _ = self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
 					panic!("failed to place");
 				},
 			};
@@ -393,7 +393,7 @@ impl PhysicalDesign {
 					println!("ERR: {}", e.0);
 					let _ =
 						self.place_combs_physical_dense(&e.1, logical, partition, local_to_global);
-					self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
+					let _ = self.save_svg(logical, format!("./svg/failed{}.svg", 1.5).as_str());
 					panic!("failed to place");
 				},
 			};
@@ -526,7 +526,7 @@ impl PhysicalDesign {
 			//let access_c = 2.0;
 			let spring_c = 15.0 / (t * 0.5 + 1.0);
 			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
-			let elec_c = 10.0;
+			//let elec_c = 10.0;
 			let overlap_c = 1800.0 + (t + PI * 20.0).sin() * 100.0;
 			let buckle_c = 200.0;
 			let access_c = 1000.0;

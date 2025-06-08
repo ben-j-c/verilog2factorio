@@ -23,3 +23,5 @@ fn yosys_example() {
 	}
 	assert!(PathBuf::from("yosys.svg").is_file());
 }
+
+fn main() {}
