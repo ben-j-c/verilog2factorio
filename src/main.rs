@@ -193,6 +193,7 @@ pub fn get_yosys_exe() -> Result<PathBuf> {
 #[cfg(test)]
 mod test {
 	use std::env;
+	use std::io::Write;
 
 	use super::*;
 	#[allow(unused)]
@@ -262,7 +263,10 @@ mod test {
 			input_file: PathBuf::from("yosys.lua"),
 		};
 		match lua_flow(args) {
-			Ok(_) => {},
+			Ok(bp) => {
+				let mut f = File::create("balancer_blueprint.json").unwrap();
+				f.write_all(bp.as_bytes()).unwrap();
+			},
 			Err(e) => {
 				match e {
 					Error::LuaError(error) => println!("{}", error),

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Write};
 use std::vec;
 
 use itertools::Itertools;
@@ -48,6 +49,13 @@ impl NodeIo {
 			NodeIo::Cell { bits, .. } => bits[bit_number],
 		}
 	}
+
+	pub fn n_bits(&self) -> usize {
+		match self {
+			NodeIo::Port { bits, .. } => bits.len(),
+			NodeIo::Cell { bits, .. } => bits.len(),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +86,30 @@ impl CoarseExpr {
 				((upper ^ lower) as i32, *shift)
 			},
 			_ => panic!("Unwrapped a constant as a driver."),
+		}
+	}
+
+	pub fn is_driver(&self) -> bool {
+		matches!(self, CoarseExpr::DriverChunk { .. })
+	}
+
+	pub fn is_constant(&self) -> bool {
+		matches!(self, CoarseExpr::ConstantChunk { .. })
+	}
+
+	pub fn unwrap_constant_value(&self) -> &Vec<bool> {
+		match self {
+			CoarseExpr::DriverChunk { .. } => panic!("Unwrapped driver."),
+			CoarseExpr::ConstantChunk { value, .. } => value,
+		}
+	}
+
+	pub fn n_bits(&self) -> usize {
+		match self {
+			CoarseExpr::DriverChunk {
+				bit_start, bit_end, ..
+			} => bit_end - bit_start,
+			CoarseExpr::ConstantChunk { value, .. } => value.len(),
 		}
 	}
 }
@@ -425,6 +457,32 @@ impl BitSliceOps for Vec<bool> {
 			}
 		}
 		retval
+	}
+}
+
+impl Display for ConnectedDesign {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		writeln!(f, "Expr:")?;
+		for (i, x) in self.expr.iter().enumerate() {
+			writeln!(f, "{i} {:?}", x)?;
+		}
+		writeln!(f, "Fanin:")?;
+		for (i, x) in self.fanin.iter().enumerate() {
+			writeln!(f, "{i} {:?}", x)?;
+		}
+		writeln!(f, "Fanout:")?;
+		for (i, x) in self.fanout.iter().enumerate() {
+			writeln!(f, "{i} {:?}", x)?;
+		}
+		writeln!(f, "Mapped id to terminal:")?;
+		for x in self.mapped_id_to_terminal.iter() {
+			writeln!(f, "{:?}", x)?;
+		}
+		writeln!(f, "Node info:")?;
+		for (i, x) in self.node_info.iter().enumerate() {
+			writeln!(f, "{i} {:?}", x)?;
+		}
+		Ok(())
 	}
 }
 

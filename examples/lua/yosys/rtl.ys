@@ -28,5 +28,13 @@ memory_memx
 opt_clean
 memory_collect
 
-opt -fast -full
+opt_expr
+opt_merge -share_all -nomux
+opt_muxtree
+opt_reduce
+opt_merge -share_all
+opt_share
+opt_dff -sat
+opt_clean
+opt_expr
 write_json balancer_rtl.json

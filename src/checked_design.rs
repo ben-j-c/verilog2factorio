@@ -367,6 +367,9 @@ impl CheckedDesign {
 	}
 
 	fn resolve_coarse_exprs(&mut self) {
+		for x in &self.connected_design.expr {
+			println!("{:?}", x);
+		}
 		for nodeid in 0..self.nodes.len() {
 			let connected_id = *match self.node_type(nodeid) {
 				NodeType::CellInput { connected_id, .. } | NodeType::PortInput { connected_id } => {
@@ -379,7 +382,26 @@ impl CheckedDesign {
 			let node = &self.nodes[nodeid];
 			let fanin = node.fanin.clone();
 			let exprs = &self.connected_design.expr[connected_id].clone();
+			if exprs.len() == 2
+				&& exprs[0].is_driver()
+				&& exprs[1].is_constant()
+				&& exprs[1].unwrap_constant_value().get_constant::<i32>() == 0
+			{
+				if fanin.len() == 1 {
+					let fiid_cnxn = match self.node_type(fanin[0]) {
+						NodeType::CellOutput { connected_id, .. }
+						| NodeType::PortOutput { connected_id } => *connected_id,
+						_ => unreachable!(),
+					};
+					let driver = self.connected_design.node_info[fiid_cnxn].n_bits();
+					let sink = exprs[0].n_bits();
+					if driver == sink {
+						continue;
+					}
+				}
+			}
 			if exprs.len() > 1 {
+				println!("{:?}", exprs);
 				// Insert swizzle that takes in the fanin and outputs a single
 				let body = self.new_node(
 					"$swizzle",
