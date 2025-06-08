@@ -1,13 +1,13 @@
 //! This module is the core API that a user should use to create combinator designs.
 //! Here is an example usage to multiply the outputs from two constants and output to a lamp.
 //! ```rust
-//! use ArithmeticOperator as Aop;
-//! use DeciderOperator as Dop;
-//! use Signal as Sig;
-//! let mut d = LogicalDesign::new(); // 1
-//! let constant1 = d.add_constant_comb(vec![Sig::Id(0)], vec![100]); //2
-//! let constant2 = d.add_constant_comb(vec![Sig::Id(1)], vec![4]);
-//! let mult = d.add_arithmetic_comb((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10)); //3
+//! use v2f::logical_design::ArithmeticOperator as Aop;
+//! use v2f::logical_design::DeciderOperator as Dop;
+//! use v2f::logical_design::Signal as Sig;
+//! let mut d = v2f::logical_design::LogicalDesign::new(); // 1
+//! let constant1 = d.add_constant(vec![Sig::Id(0)], vec![100]); //2
+//! let constant2 = d.add_constant(vec![Sig::Id(1)], vec![4]);
+//! let mult = d.add_arithmetic((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10)); //3
 //! let lamp = d.add_lamp((Sig::Id(10), Dop::Equal, Sig::Constant(400)));
 //! let _wire_pre_mult = d.add_wire_red(vec![constant1, constant2], vec![mult]); // 4
 //! let _wire_post_mult = d.add_wire_red(vec![mult], vec![lamp]);
@@ -555,8 +555,8 @@ impl LogicalDesign {
 	///
 	/// Returns the id for that new combinator.
 	pub fn add_neg(&mut self, input: Signal, output: Signal) -> NodeId {
-		let ret = self.add_decider_comb();
-		self.add_decider_comb_input(
+		let ret = self.add_decider();
+		self.add_decider_input(
 			ret,
 			(input, DeciderOperator::Equal, Signal::Constant(0)),
 			DeciderRowConjDisj::FirstRow,
@@ -572,8 +572,8 @@ impl LogicalDesign {
 	/// The returned tuple is (D wire id, CLK wire id, Output combinator id)
 	pub(crate) fn add_latch(&mut self, data: Signal, clk: Signal) -> (NodeId, NodeId, NodeId) {
 		let in_control = {
-			let ic = self.add_decider_comb();
-			self.add_decider_comb_input(
+			let ic = self.add_decider();
+			self.add_decider_input(
 				ic,
 				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
@@ -585,8 +585,8 @@ impl LogicalDesign {
 		};
 
 		let mem_cell = {
-			let mc = self.add_decider_comb();
-			self.add_decider_comb_input(
+			let mc = self.add_decider();
+			self.add_decider_input(
 				mc,
 				(clk, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
@@ -732,9 +732,9 @@ impl LogicalDesign {
 		assert!(N > 1, "Invalid mux.");
 		let mut inputs = Vec::with_capacity(N as usize);
 		for i in 0..N {
-			let inp = self.add_decider_comb();
+			let inp = self.add_decider();
 			inputs.push(inp);
-			self.add_decider_comb_input(
+			self.add_decider_input(
 				inp,
 				(s, DeciderOperator::Equal, Signal::Constant(i)),
 				DeciderRowConjDisj::FirstRow,
@@ -792,8 +792,8 @@ impl LogicalDesign {
 		let mut wr_data_select_decode = vec![Vec::with_capacity(size as usize); write_ports.len()];
 		for (i, wport) in write_ports.iter().enumerate() {
 			for physical_address in 0..size {
-				let one_hot = self.add_decider_comb();
-				self.add_decider_comb_input(
+				let one_hot = self.add_decider();
+				self.add_decider_input(
 					one_hot,
 					(
 						wport.addr,
@@ -808,7 +808,7 @@ impl LogicalDesign {
 					if j <= i {
 						continue;
 					}
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						one_hot,
 						(wport.addr, DeciderOperator::NotEqual, wport2.addr),
 						DeciderRowConjDisj::And,
@@ -824,9 +824,9 @@ impl LogicalDesign {
 		// Address decoding write enable.
 		let mut wr_enable_decode = Vec::with_capacity(size as usize);
 		for physical_address in 0..size {
-			let one_hot = self.add_decider_comb();
+			let one_hot = self.add_decider();
 			for (i, wport) in write_ports.iter().enumerate() {
-				self.add_decider_comb_input(
+				self.add_decider_input(
 					one_hot,
 					(
 						wport.addr,
@@ -842,7 +842,7 @@ impl LogicalDesign {
 					NET_RED_GREEN,
 				);
 				if let Some(en_signal) = wport.en {
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						one_hot,
 						(en_signal, DeciderOperator::Equal, Signal::Constant(1)),
 						DeciderRowConjDisj::And,
@@ -942,9 +942,9 @@ impl LogicalDesign {
 		let mut mux1s = vec![Vec::with_capacity(size as usize); read_ports.len()];
 		for physical_address in 0..size {
 			for (i, rdport) in read_ports.iter().enumerate() {
-				let mux = self.add_decider_comb();
+				let mux = self.add_decider();
 				mux1s[i].push(mux);
-				self.add_decider_comb_input(
+				self.add_decider_input(
 					mux,
 					(
 						rdport.addr,
@@ -1096,11 +1096,11 @@ impl LogicalDesign {
 					signals.push(Signal::Id(i as i32));
 					constants.push(*v);
 				}
-				rom_combs.push(self.add_constant_comb(signals, constants));
+				rom_combs.push(self.add_constant(signals, constants));
 			}
 		} else {
 			for value in rom_values.iter() {
-				rom_combs.push(self.add_constant_comb(vec![preferred_output], vec![*value]));
+				rom_combs.push(self.add_constant(vec![preferred_output], vec![*value]));
 			}
 		}
 
@@ -1109,10 +1109,10 @@ impl LogicalDesign {
 			let mut mux1s = vec![];
 			addresses_ret.push(last_wire_input);
 			for (addr, constant) in rom_combs.iter().enumerate() {
-				let mux = self.add_decider_comb();
+				let mux = self.add_decider();
 				mux1s.push(mux);
 				if let Some(packing) = &density {
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						mux,
 						(
 							p.addr,
@@ -1123,7 +1123,7 @@ impl LogicalDesign {
 						NET_RED,
 						NET_RED_GREEN,
 					);
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						mux,
 						(
 							p.addr,
@@ -1135,7 +1135,7 @@ impl LogicalDesign {
 						NET_RED_GREEN,
 					);
 				} else {
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						mux,
 						(
 							p.addr,
@@ -1166,8 +1166,8 @@ impl LogicalDesign {
 				);
 				self.connect_red(*addresses_ret.last().unwrap(), addr_lower);
 				for i in 0..*packing as usize {
-					mux2s.push(self.add_decider_comb());
-					self.add_decider_comb_input(
+					mux2s.push(self.add_decider());
+					self.add_decider_input(
 						mux2s[i],
 						(p.addr, DeciderOperator::Equal, Signal::Constant(i as i32)),
 						DeciderRowConjDisj::FirstRow,
@@ -1321,7 +1321,7 @@ impl LogicalDesign {
 	/// Add an empty Decider Combinator to this design. You can then configure its input rows and outputs using [`add_decider_comb_input`] and [`add_decider_comb_output].
 	///
 	/// Returns the id for that new combinator.
-	pub fn add_decider_comb(&mut self) -> NodeId {
+	pub fn add_decider(&mut self) -> NodeId {
 		self.add_node(
 			NodeFunction::Decider {
 				expressions: vec![],
@@ -1339,7 +1339,7 @@ impl LogicalDesign {
 	/// Add an input row to the specified decider combinator. Each row is given as a (Signal, DeciderOperator, Signal),
 	/// and it is combined with previous rows according to the specified [DeciderRowConjDisj].
 	/// This allows you to build complex logical expressions spanning multiple signals and conditions.
-	pub fn add_decider_comb_input(
+	pub fn add_decider_input(
 		&mut self,
 		id: NodeId,
 		expr: (Signal, DeciderOperator, Signal),
@@ -1422,7 +1422,7 @@ impl LogicalDesign {
 
 	/// Add a new constant combinator to this design, with the specified output signals and their matching constant values.
 	/// For example, (vec![Signal::Id(0)], vec![100]) defines a combinator that always output 100 for the virtual signal, signal-0.
-	pub fn add_constant_comb(&mut self, output: Vec<Signal>, counts: Vec<i32>) -> NodeId {
+	pub fn add_constant(&mut self, output: Vec<Signal>, counts: Vec<i32>) -> NodeId {
 		assert_eq!(
 			output.len(),
 			counts.len(),
@@ -1594,7 +1594,7 @@ impl LogicalDesign {
 		assert_eq!(width, sig_in.len());
 		let mut counter = vec![false; width];
 
-		let lut_comb = self.add_decider_comb();
+		let lut_comb = self.add_decider();
 		self.add_decider_out_constant(lut_comb, sig_out, 1, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![lut_comb]);
 
@@ -1617,7 +1617,7 @@ impl LogicalDesign {
 					} else {
 						Signal::Constant(0)
 					};
-					self.add_decider_comb_input(
+					self.add_decider_input(
 						lut_comb,
 						(sig_left, DeciderOperator::Equal, sig_right),
 						conj_disj,

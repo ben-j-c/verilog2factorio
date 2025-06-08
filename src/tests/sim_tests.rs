@@ -10,7 +10,7 @@ fn delay_correctness() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, nop) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1]);
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
 		let mut nops = vec![];
 		nops.push(logd.add_nop_simple());
 		logd.add_wire_red_simple(c1, nops[0]);
@@ -74,7 +74,7 @@ fn constant_through_nop() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, nop, wire) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let nop = logd.add_nop_simple();
 		let wire = logd.add_wire_red_simple(c1, nop);
 		println!("{:?}", logd);
@@ -142,10 +142,10 @@ fn decider_simple() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
-		let d1 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
+		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(
 				Signal::Id(10),
@@ -175,10 +175,10 @@ fn decider_simple2() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
-		let d1 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
+		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(
 				Signal::Id(10),
@@ -209,10 +209,10 @@ fn decider_simple3() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
-		let d1 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
+		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(
 				Signal::Id(10),
@@ -223,7 +223,7 @@ fn decider_simple3() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(
 				Signal::Id(10),
@@ -254,12 +254,12 @@ fn decider_simple4() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, _, _, wire, wire2) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1234]);
-		let d1 = logd.add_decider_comb();
-		let d2 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
+		let d1 = logd.add_decider();
+		let d2 = logd.add_decider();
 		let wire = logd.add_wire_red(vec![c1], vec![d1, d2]);
 		let wire2 = logd.add_wire_red(vec![d1, d2], vec![]);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(
 				Signal::Id(10),
@@ -270,7 +270,7 @@ fn decider_simple4() {
 			NET_RED_GREEN,
 			NET_RED_GREEN,
 		);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d2,
 			(
 				Signal::Id(10),
@@ -301,15 +301,15 @@ fn decider_each1() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, c2, d1, d2) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1]);
-		let c2 = logd.add_constant_comb(vec![Signal::Id(10)], vec![2]);
-		let d1 = logd.add_decider_comb();
-		let d2 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
+		let c2 = logd.add_constant(vec![Signal::Id(10)], vec![2]);
+		let d1 = logd.add_decider();
+		let d2 = logd.add_decider();
 		logd.add_wire_red(vec![c1], vec![d1]);
 		logd.add_wire_red(vec![c1], vec![d2]);
 		logd.add_wire_green(vec![c2], vec![d1]);
 		logd.add_wire_green(vec![c2], vec![d2]);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
 			DeciderRowConjDisj::FirstRow,
@@ -317,7 +317,7 @@ fn decider_each1() {
 			NET_RED_GREEN,
 		);
 		logd.add_decider_out_input_count(d1, Signal::Each, NET_RED_GREEN);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d2,
 			(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
 			DeciderRowConjDisj::FirstRow,
@@ -350,12 +350,12 @@ fn decider_each2() {
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 	let (c1, c2, d1, _, _) = {
 		let mut logd = logd.borrow_mut();
-		let c1 = logd.add_constant_comb(vec![Signal::Id(10)], vec![1]);
-		let c2 = logd.add_constant_comb(vec![Signal::Id(11)], vec![2]);
-		let d1 = logd.add_decider_comb();
+		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
+		let c2 = logd.add_constant(vec![Signal::Id(11)], vec![2]);
+		let d1 = logd.add_decider();
 		let wire1 = logd.add_wire_red(vec![c1], vec![d1]);
 		let wire2 = logd.add_wire_green(vec![c2], vec![d1]);
-		logd.add_decider_comb_input(
+		logd.add_decider_input(
 			d1,
 			(Signal::Each, DeciderOperator::Equal, Signal::Constant(1)),
 			DeciderRowConjDisj::FirstRow,

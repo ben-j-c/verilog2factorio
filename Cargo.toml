@@ -3,6 +3,14 @@ name = "v2f"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "v2f"
+path = "src/lib.rs"
+
+[[bin]]
+name = "v2f"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
 hashers = "1.0.1"

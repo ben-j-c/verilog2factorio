@@ -418,7 +418,7 @@ impl UserData for Decider {
 				let net_left = (args.2 & 1 > 0, args.2 & 2 > 0);
 				let net_right = (args.3 & 1 > 0, args.3 & 2 > 0);
 				let res = catch_unwind(AssertUnwindSafe(|| {
-					this.logd.borrow_mut().add_decider_comb_input(
+					this.logd.borrow_mut().add_decider_input(
 						this.id,
 						(expr.0, expr.1, expr.2),
 						row_op.clone(),
@@ -507,7 +507,7 @@ impl UserData for LogicalDesignAPI {
 
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("add_decider", |_, this, _: ()| {
-			let id = this.logd.borrow_mut().add_decider_comb();
+			let id = this.logd.borrow_mut().add_decider();
 			Ok(Decider {
 				id,
 				logd: this.logd.clone(),
@@ -546,7 +546,7 @@ impl UserData for LogicalDesignAPI {
 				if sigs.len() != counts.len() {
 					return Err(Error::RuntimeError("Mismatched length.".to_owned()));
 				}
-				let id = this.logd.borrow_mut().add_constant_comb(sigs, counts);
+				let id = this.logd.borrow_mut().add_constant(sigs, counts);
 				Ok(Constant {
 					id,
 					logd: this.logd.clone(),

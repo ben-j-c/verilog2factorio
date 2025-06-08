@@ -8,8 +8,8 @@ pub(crate) fn get_simple_logical_design() -> LogicalDesign {
 	use DeciderOperator as Dop;
 	use Signal as Sig;
 	let mut d = LogicalDesign::new();
-	let constant1 = d.add_constant_comb(vec![Sig::Id(0)], vec![100]);
-	let constant2 = d.add_constant_comb(vec![Sig::Id(1)], vec![4]);
+	let constant1 = d.add_constant(vec![Sig::Id(0)], vec![100]);
+	let constant2 = d.add_constant(vec![Sig::Id(1)], vec![4]);
 	let mult = d.add_arithmetic((Sig::Id(1), Aop::Mult, Sig::Id(0)), Sig::Id(10));
 	let lamp = d.add_lamp((Sig::Id(10), Dop::Equal, Sig::Constant(400)));
 	let _wire_pre_mult = d.add_wire_red(vec![constant1, constant2], vec![mult]);
@@ -25,7 +25,7 @@ pub(crate) fn get_complex_40_logical_design() -> LogicalDesign {
 	let mut d = LogicalDesign::new();
 	let mut constants = vec![];
 	for i in 0..20 {
-		constants.push(d.add_constant_comb(vec![(Sig::Id(i))], vec![i + 1]));
+		constants.push(d.add_constant(vec![(Sig::Id(i))], vec![i + 1]));
 	}
 	let mut mults = vec![];
 	for i in 0..10 {
@@ -126,7 +126,7 @@ pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
 	);
 	assert_eq!(mpf_arr.len(), 1);
 	let port = mpf_arr.first().unwrap();
-	let addr = d.add_constant_comb(vec![Signal::Id(0)], vec![6]);
+	let addr = d.add_constant(vec![Signal::Id(0)], vec![6]);
 	let data = d.add_lamp((
 		Signal::Id(1),
 		DeciderOperator::Equal,
@@ -158,7 +158,7 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 	);
 	assert_eq!(mpf_arr.len(), 1);
 	let port = mpf_arr.first().unwrap();
-	let addr = d.add_constant_comb(vec![Signal::Id(0)], vec![6]);
+	let addr = d.add_constant(vec![Signal::Id(0)], vec![6]);
 	let data = d.add_lamp((
 		Signal::Id(1),
 		DeciderOperator::Equal,
@@ -202,7 +202,7 @@ mod test {
 	#[test]
 	fn output_to_input() {
 		let mut d = LogicalDesign::new();
-		let constant = d.add_constant_comb(vec![Sig::Id(2)], vec![100]);
+		let constant = d.add_constant(vec![Sig::Id(2)], vec![100]);
 		let lamp = d.add_lamp((Sig::Id(2), Dop::Equal, Sig::Constant(100)));
 		let wire = d.add_wire_red(vec![constant], vec![lamp]);
 		assert_eq!(d.nodes.len(), 3);
@@ -273,8 +273,8 @@ mod test {
 		let mut d = LogicalDesign::new();
 		let (wire_data, wire_clk, comb_out) =
 			d.add_dff(Signal::Id(0), Signal::Id(1), Signal::Id(2));
-		let c1 = d.add_constant_comb(vec![Signal::Id(0)], vec![0]);
-		let c2 = d.add_constant_comb(vec![Signal::Id(1)], vec![1]);
+		let c1 = d.add_constant(vec![Signal::Id(0)], vec![0]);
+		let c2 = d.add_constant(vec![Signal::Id(1)], vec![1]);
 		let l1 = d.add_lamp((Signal::Id(2), Dop::NotEqual, Signal::Constant(0)));
 		d.connect_red(c1, wire_data);
 		d.connect_red(c2, wire_clk);
@@ -292,8 +292,8 @@ mod test {
 	fn latch() {
 		let mut d = LogicalDesign::new();
 		let (wire_data, wire_clk, comb_out) = d.add_latch(Signal::Id(0), Signal::Id(1));
-		let c1 = d.add_constant_comb(vec![Signal::Id(0)], vec![0]);
-		let c2 = d.add_constant_comb(vec![Signal::Id(1)], vec![1]);
+		let c1 = d.add_constant(vec![Signal::Id(0)], vec![0]);
+		let c2 = d.add_constant(vec![Signal::Id(1)], vec![1]);
 		let l1 = d.add_lamp((Signal::Id(2), Dop::NotEqual, Signal::Constant(0)));
 		d.connect_red(c1, wire_data);
 		d.connect_red(c2, wire_clk);
@@ -363,7 +363,7 @@ mod test {
 		);
 		assert_eq!(mpf_arr.len(), 1);
 		let port = mpf_arr.first().unwrap();
-		let addr = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let addr = d.add_constant(vec![Sig::Id(0)], vec![6]);
 		let data = d.add_lamp((Sig::Id(1), Dop::Equal, Sig::Constant(2000)));
 		d.connect_red(addr, port.addr_wire);
 		d.add_wire_red(vec![port.data], vec![data]);
@@ -394,7 +394,7 @@ mod test {
 		);
 		assert_eq!(mpf_arr.len(), 1);
 		let port = mpf_arr.first().unwrap();
-		let addr_in = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let addr_in = d.add_constant(vec![Sig::Id(0)], vec![6]);
 		let data_lamp = d.add_lamp((Sig::Id(1), Dop::Equal, Sig::Constant(2000)));
 		d.connect_red(addr_in, port.addr_wire);
 		d.add_wire_red(vec![port.data], vec![data_lamp]);
@@ -429,7 +429,7 @@ mod test {
 		);
 		assert_eq!(mpf_arr.len(), 1);
 		let port = mpf_arr.first().unwrap();
-		let addr_in = d.add_constant_comb(vec![Sig::Id(0)], vec![6]);
+		let addr_in = d.add_constant(vec![Sig::Id(0)], vec![6]);
 		let data_lamp = d.add_lamp((Sig::Id(1), Dop::NotEqual, Sig::Constant(0)));
 		d.connect_red(addr_in, port.addr_wire);
 		d.add_wire_red(vec![port.data], vec![data_lamp]);
@@ -511,7 +511,7 @@ mod test {
 		);
 
 		// Setup read side.
-		let read_port = d.add_constant_comb(
+		let read_port = d.add_constant(
 			vec![Sig::Id(0), Sig::Id(1), Sig::Id(2), Sig::Id(3)],
 			vec![0, 0, 0, 0],
 		);
@@ -523,18 +523,16 @@ mod test {
 		d.add_wire_red_simple(rd_ports[0].data, read_lamp);
 
 		// Setup write0 side.
-		let write0_port =
-			d.add_constant_comb(vec![Sig::Id(4), Sig::Id(5), Sig::Id(6)], vec![0, 0, 0]);
+		let write0_port = d.add_constant(vec![Sig::Id(4), Sig::Id(5), Sig::Id(6)], vec![0, 0, 0]);
 		d.connect_red(write0_port, wr_ports[0].addr_wire);
 
 		// Setup write1 side.
-		let write1_port =
-			d.add_constant_comb(vec![Sig::Id(8), Sig::Id(9), Sig::Id(10)], vec![0, 0, 0]);
+		let write1_port = d.add_constant(vec![Sig::Id(8), Sig::Id(9), Sig::Id(10)], vec![0, 0, 0]);
 
 		d.connect_red(write1_port, wr_ports[0].addr_wire);
 
 		// CLK
-		let clk = d.add_constant_comb(vec![sig_red], vec![1]);
+		let clk = d.add_constant(vec![sig_red], vec![1]);
 		d.connect_red(clk, wr_ports[0].clk_wire.unwrap());
 
 		let mut p = PhysicalDesign::new();
@@ -571,8 +569,8 @@ mod test {
 		let (data_c, clock_c, comb_out) = {
 			let mut logd = logd.borrow_mut();
 			let (wire_data, wire_clk, comb_out) = logd.add_dff(sig_data, sig_clk, sig_q);
-			let c1 = logd.add_constant_comb(vec![sig_data], vec![0]);
-			let c2 = logd.add_constant_comb(vec![sig_clk], vec![0]);
+			let c1 = logd.add_constant(vec![sig_data], vec![0]);
+			let c2 = logd.add_constant(vec![sig_clk], vec![0]);
 			logd.connect_red(c1, wire_data);
 			logd.connect_red(c2, wire_clk);
 			logd.set_description_node(comb_out, "dff_q".to_owned());
@@ -646,9 +644,9 @@ mod test {
 			let mut logd = logd.borrow_mut();
 			let (wire_data, wire_clk, wire_en, comb_out) =
 				logd.add_dffe(sig_data, sig_clk, sig_en, sig_q);
-			let c1 = logd.add_constant_comb(vec![sig_data], vec![0]);
-			let c2 = logd.add_constant_comb(vec![sig_clk], vec![0]);
-			let c3 = logd.add_constant_comb(vec![sig_en], vec![0]);
+			let c1 = logd.add_constant(vec![sig_data], vec![0]);
+			let c2 = logd.add_constant(vec![sig_clk], vec![0]);
+			let c3 = logd.add_constant(vec![sig_en], vec![0]);
 			logd.connect_red(c1, wire_data);
 			logd.connect_red(c2, wire_clk);
 			logd.connect_red(c3, wire_en);
@@ -774,10 +772,10 @@ fn sim_dffe() {
 		let mut logd = logd.borrow_mut();
 		let (wire_data, wire_clk, wire_rst, wire_en, comb_out) =
 			logd.add_sdffe(sig_data, sig_clk, sig_rst, sig_en, sig_q);
-		let c1 = logd.add_constant_comb(vec![sig_data], vec![0]);
-		let c2 = logd.add_constant_comb(vec![sig_clk], vec![0]);
-		let c3 = logd.add_constant_comb(vec![sig_rst], vec![0]);
-		let c4 = logd.add_constant_comb(vec![sig_en], vec![0]);
+		let c1 = logd.add_constant(vec![sig_data], vec![0]);
+		let c2 = logd.add_constant(vec![sig_clk], vec![0]);
+		let c3 = logd.add_constant(vec![sig_rst], vec![0]);
+		let c4 = logd.add_constant(vec![sig_en], vec![0]);
 		logd.connect_red(c1, wire_data);
 		logd.connect_red(c2, wire_clk);
 		logd.connect_red(c3, wire_rst);

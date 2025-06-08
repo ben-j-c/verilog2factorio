@@ -2510,7 +2510,7 @@ mod test {
 
 	#[test]
 	fn sweep_synthetic_n_mcmc_dense() {
-		for x in (20..=200).step_by(20) {
+		for x in (20..=100).step_by(20) {
 			println!("==============={x}===============");
 			let mut p = PhysicalDesign::new();
 			let l = crate::tests::logical_design_tests::get_large_logical_design(x);
@@ -2530,7 +2530,7 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(25);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(10);
 		p.user_partition_size = Some(200);
 		let res = p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg")

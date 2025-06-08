@@ -1009,10 +1009,8 @@ impl CheckedDesign {
 				},
 				NodeType::PortBody => {
 					if !node.fanout.is_empty() {
-						let new_id = logical_design.add_constant_comb(
-							vec![Signal::Id(self.signals[nodeid].unwrap())],
-							vec![1],
-						);
+						let new_id = logical_design
+							.add_constant(vec![Signal::Id(self.signals[nodeid].unwrap())], vec![1]);
 						logic_map[nodeid] = Some(new_id);
 						logical_design.mark_as_port(
 							new_id,
@@ -1049,7 +1047,7 @@ impl CheckedDesign {
 						logic_map[node.fanout[0]] = Some(output)
 					},
 					BodyType::Constant { value } => {
-						logic_map[nodeid] = Some(logical_design.add_constant_comb(
+						logic_map[nodeid] = Some(logical_design.add_constant(
 							vec![Signal::Id(self.signals[node.fanout[0]].unwrap())],
 							vec![*value],
 						));
@@ -1394,8 +1392,8 @@ impl CheckedDesign {
 			return (ld_node, ld_node);
 		}
 		if let Some(op) = op.get_decider_op() {
-			let id = logical_design.add_decider_comb();
-			logical_design.add_decider_comb_input(
+			let id = logical_design.add_decider();
+			logical_design.add_decider_input(
 				id,
 				(sig_left, op, sig_right),
 				logical_design::DeciderRowConjDisj::Or,
