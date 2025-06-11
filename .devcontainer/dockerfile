@@ -2,7 +2,7 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:latest
 
 RUN apt-get update && \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-	metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config gperf \
+	git metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config gperf \
 	build-essential bison flex libreadline-dev gawk tcl-dev libffi-dev \
 	git graphviz xdot python3 libboost-system-dev libboost-python-dev \
 	libboost-filesystem-dev zlib1g-dev

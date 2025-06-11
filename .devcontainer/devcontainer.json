@@ -3,11 +3,7 @@
 	"build": {
 		"dockerfile": "dockerfile"
 	},
-	"postCreateCommand": [
-		"git submodule update --init --recursive",
-		"cd yosys && make config-gcc && make -j$(nproc)",
-		"cargo build --release"
-	],
+	"postCreateCommand": ".devcontainer/onPostCreate.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -23,8 +19,8 @@
 		},
 		"codespaces": {
 			"openFiles": [
-				"README.md",
-				"examples/lua/basics.lua"
+				"examples/lua/basics.lua",
+				"README.md"
 			]
 		}
 	}
