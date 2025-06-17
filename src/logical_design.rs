@@ -604,6 +604,59 @@ impl LogicalDesign {
 		(data_in_wire, clk_wire, mem_cell)
 	}
 
+	pub(crate) fn add_latch_arst(
+		&mut self,
+		data: Signal,
+		clk: Signal,
+		arst: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId) {
+		let in_control = {
+			let ic = self.add_decider();
+			self.add_decider_input(
+				ic,
+				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_input(
+				ic,
+				(arst, DeciderOperator::Equal, Signal::Constant(0)),
+				DeciderRowConjDisj::And,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_input_count(ic, data, NET_RED);
+			ic
+		};
+
+		let mem_cell = {
+			let mc = self.add_decider();
+			self.add_decider_input(
+				mc,
+				(clk, DeciderOperator::Equal, Signal::Constant(0)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_input(
+				mc,
+				(arst, DeciderOperator::Equal, Signal::Constant(0)),
+				DeciderRowConjDisj::And,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_input_count(mc, data, NET_RED);
+			mc
+		};
+
+		let clk_wire = self.add_wire_green(vec![], vec![in_control, mem_cell]);
+		self.add_wire_red(vec![in_control, mem_cell], vec![mem_cell]);
+		let data_in_wire = self.add_wire_red(vec![], vec![in_control]);
+
+		(data_in_wire, clk_wire, clk_wire, mem_cell)
+	}
+
 	/** Create a standard D-Flip-Flop in this design. Returned NodeIds match the order of the function signature.
 	Inputs are returned as wires, outputs are retured as combinators. */
 	pub(crate) fn add_dff(
@@ -652,15 +705,69 @@ impl LogicalDesign {
 		(latch_in_wire_1, clk_wire, final_out, latch_out_2)
 	}
 
+	pub(crate) fn add_adff_isolated(
+		&mut self,
+		input: Signal,
+		clk: Signal,
+		arst: Signal,
+		output: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
+		let clk_buf_1 = self.add_neg(clk, clk);
+		let clk_buf_2 = self.add_nop(clk, clk);
+		let arst_buf = self.add_nop(arst, arst);
+		let (latch_in_wire_1, clk_wire_1, arst_wire_1, latch_out_1) =
+			self.add_latch_arst(input, clk, arst);
+		let (latch_in_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
+			self.add_latch_arst(input, clk, arst);
+
+		self.connect_red(latch_out_1, latch_in_wire_2);
+		self.connect_green(clk_buf_1, clk_wire_1);
+		self.connect_green(clk_buf_2, clk_wire_2);
+		self.connect_green(arst_buf, arst_wire_1);
+		self.connect_green(arst_buf, arst_wire_2);
+		let clk_wire = self.add_wire_red(vec![], vec![clk_buf_1, clk_buf_2]);
+		let arst_wire = self.add_wire_green(vec![], vec![arst_buf]);
+
+		let final_out = self.add_nop(input, output);
+		self.add_wire_red(vec![latch_out_2], vec![final_out]);
+		(latch_in_wire_1, clk_wire, arst_wire, final_out, latch_out_2)
+	}
+
 	pub(crate) fn add_adffe(
 		&mut self,
-		_input: Signal,
-		_clk: Signal,
-		_en: Signal,
-		_arst: Signal,
-		_output: Signal,
+		input: Signal,
+		clk: Signal,
+		en: Signal,
+		arst: Signal,
+		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
-		todo!()
+		let (d_wire_internal, clk_wire, arst_wire, q, loopback) =
+			self.add_adff_isolated(input, clk, arst, output);
+		let muxab = self.add_mux_internal::<2>(input, en);
+		self.add_wire_green(vec![], vec![]);
+
+		let en_buf = self.add_nop(en, en);
+		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
+		let select = self.add_wire_green_simple(en_buf, muxab[0]);
+
+		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
+		self.connect_red(muxab[0], d_wire_internal);
+		self.add_wire_red_simple(loopback, muxab[0]);
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(d_wire_internal, "d_wire_internal".to_owned());
+			self.set_description_node(select, "d_select".to_owned());
+			self.set_description_node(arst_wire, "arst_wire".to_owned());
+			self.set_description_node(loopback, "loopback".to_owned());
+			self.set_description_node(q, "q".to_owned());
+			self.set_description_node(en_wire, "en_wire".to_owned());
+			self.set_description_node(clk_wire, "clk_wire".to_owned());
+			self.set_description_node(d_wire, "d_wire".to_owned());
+			self.set_description_node(en_buf, "en_buf".to_owned());
+			self.set_description_node(muxab[0], "mux_a".to_owned());
+			self.set_description_node(muxab[1], "mux_b".to_owned());
+		}
+		(d_wire, clk_wire, arst_wire, en_wire, q)
 	}
 
 	pub(crate) fn add_dffe(
