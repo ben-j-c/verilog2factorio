@@ -1,6 +1,7 @@
-module top(
+module balancer(
 	input signed [31:0] iron_plate_0,
 	input signed [31:0] iron_plate_1,
+	input signed [31:0] iron_plate_threshold
 	output reg [31:0] signal_A,
 	output reg [31:0] signal_B,
 );
@@ -9,7 +10,7 @@ module top(
 	v2f_rolling_accumulate iron0(iron_plate_0, tmp1);
 	v2f_rolling_accumulate iron1(iron_plate_1, tmp2);
 	always @(*) begin
-		signal_A = tmp1 > tmp2 + 10;
-		signal_B = tmp2 > tmp1 + 10;
+		signal_A = tmp1 > tmp2 + iron_plate_threshold;
+		signal_B = tmp2 > tmp1 + iron_plate_threshold;
 	end
 endmodule

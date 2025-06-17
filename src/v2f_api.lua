@@ -102,8 +102,9 @@ function get_empty_design() end
 
 --- Take verilog code and map it to RTL. Right now RTL doesn't do much.
 ---@param filename string
+---@param top_mod string
 ---@return RTL
-function yosys_load_rtl(filename) end
+function yosys_load_rtl(filename, top_mod) end
 
 --- Take the RTL, or filename of the verilog code and turn it into a LogicalDesign.
 ---@param rtl RTL|string

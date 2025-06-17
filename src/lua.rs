@@ -6,7 +6,6 @@ use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
-	fmt::format,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
@@ -263,7 +262,7 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 	}
 }
 
-fn method_load_rtl<P>(filename: P) -> Result<RTL, mlua::Error>
+fn method_load_rtl<P>(filename: P, top_mod: String) -> Result<RTL, mlua::Error>
 where
 	P: AsRef<Path>,
 {
@@ -289,7 +288,8 @@ where
 		let rtl_script_text = rtl_script_text
 			.replace("{filename}", filename.to_str().unwrap())
 			.replace("{filename_out}", filename_out.as_os_str().to_str().unwrap())
-			.replace("{exe_dir}", exe_dir.to_str().unwrap());
+			.replace("{exe_dir}", exe_dir.to_str().unwrap())
+			.replace("{top_mod}", &top_mod);
 		let mut rtl_script_final = File::create("rtl.ys")?;
 		rtl_script_final.write_all(rtl_script_text.as_bytes())?;
 		rtl_script_final.flush()?;
@@ -671,7 +671,9 @@ impl UserData for RTL {
 impl FromLua for RTL {
 	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match &value {
-			Value::String(filename) => method_load_rtl(filename.to_string_lossy()),
+			Value::String(filename) => {
+				method_load_rtl(filename.to_string_lossy(), "top".to_owned())
+			},
 			Value::UserData(data) => Ok(data.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
 				from: value.type_name(),
@@ -756,7 +758,9 @@ pub fn get_lua() -> Result<Lua, Error> {
 
 	lua.globals().set(
 		"yosys_load_rtl",
-		lua.create_function(|_, filename: String| method_load_rtl(filename))?,
+		lua.create_function(|_, (filename, top_mod): (String, String)| {
+			method_load_rtl(filename, top_mod)
+		})?,
 	)?;
 
 	lua.globals().set(

@@ -1,6 +1,6 @@
 read_json {filename}
 techmap -map {exe_dir}/techmap/v2f_techmap.v;;
-techmap -dont_map $sdff -dont_map $dff -dont_map $dffa
+techmap -dont_map $adff -dont_map $adffe -dont_map $dff -dont_map $dffe -dont_map $sdff -dont_map $sdffe
 techmap -map {exe_dir}/yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 8
 clean; opt_lut
 flowmap -maxlut 8
