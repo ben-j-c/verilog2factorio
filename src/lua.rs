@@ -50,6 +50,7 @@ pub(crate) struct SimStateAPI {
 #[derive(Debug, Clone)]
 pub(crate) struct RTL {
 	filename: PathBuf,
+	top_mod: String,
 }
 
 #[derive(Clone, Debug)]
@@ -307,10 +308,11 @@ where
 
 	return Ok(RTL {
 		filename: filename_out,
+		top_mod,
 	});
 }
 
-fn method_map_rtl<P>(filename: P) -> Result<LogicalDesignAPI, mlua::Error>
+fn method_map_rtl<P>(filename: P, top_mod: &String) -> Result<LogicalDesignAPI, mlua::Error>
 where
 	P: AsRef<Path>,
 {
@@ -338,7 +340,8 @@ where
 		let mapping_script_text = mapping_script_text
 			.replace("{filename}", filename.to_str().unwrap())
 			.replace("{filename_out}", filename_out.to_str().unwrap())
-			.replace("{exe_dir}", exe_dir.to_str().unwrap());
+			.replace("{exe_dir}", exe_dir.to_str().unwrap())
+			.replace("{top_mod}", top_mod);
 		let mut mappingscript_final = File::create("mapping.ys")?;
 		mappingscript_final.write_all(mapping_script_text.as_bytes())?;
 		mappingscript_final.flush()?;
@@ -663,7 +666,7 @@ impl UserData for SimStateAPI {
 impl UserData for RTL {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("to_design", |_, this: &RTL, _: ()| {
-			method_map_rtl(&this.filename)
+			method_map_rtl(&this.filename, &this.top_mod)
 		});
 	}
 }
@@ -765,7 +768,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 
 	lua.globals().set(
 		"yosys_map_rtl",
-		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename))?,
+		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename, &rtl.top_mod))?,
 	)?;
 
 	lua.globals().set(

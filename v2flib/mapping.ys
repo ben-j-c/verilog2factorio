@@ -10,5 +10,5 @@ abc -fast -lut 8
 opt -fast
 opt_lut
 opt_clean
-select top
+select {top_mod}
 write_json -selected {filename_out}

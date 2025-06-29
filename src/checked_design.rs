@@ -40,6 +40,7 @@ pub enum ImplementableOp {
 	V2FRollingAccumulate,
 	DFF,
 	LUT(usize),
+	PMux,
 	Memory,
 
 	Swizzle, // Imaginary cell
@@ -70,6 +71,7 @@ impl ImplementableOp {
 			ImplementableOp::Swizzle => BodyType::MultiPart,
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
 			ImplementableOp::Memory => BodyType::MultiPart,
+			ImplementableOp::PMux => BodyType::MultiPart,
 		}
 	}
 
@@ -1216,7 +1218,6 @@ impl CheckedDesign {
 					}
 					None
 				}
-
 				let mut rd_ports = vec![];
 				for i in 0..n_rd_ports {
 					let addr_idx = index_of(&mapped_in_port, &format!("RD_ADDR_{i}")).unwrap();
@@ -1343,6 +1344,17 @@ impl CheckedDesign {
 					}
 					(ret_in, ret_out)
 				}
+			},
+			ImplementableOp::PMux => {
+				let mapped_cell = mapped_cell.expect("Missing cell");
+				let (b, s, y) = logical_design.add_pmux(
+					&sig_in[0..sig_in.len() - 1],
+					sig_in[sig_in.len() - 1],
+					sig_out[0],
+				);
+				let mut bs = b;
+				bs.push(s);
+				(bs, vec![y])
 			},
 			_ => unreachable!(),
 		};

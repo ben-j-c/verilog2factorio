@@ -128,6 +128,12 @@ impl ImplementableOp {
 					.map(|i| format!("A{}", i))
 					.chain(vec!["Y".to_owned()])
 					.collect_vec(),
+				ImplementableOp::PMux => vec![
+					"A".to_owned(),
+					"B".to_owned(),
+					"S".to_owned(),
+					"Y".to_owned(),
+				],
 				_ => unreachable!(),
 			},
 			BodyType::Constant { .. } => vec!["Y".to_owned()],

@@ -231,3 +231,14 @@ module v2f_ne (A, B, Y);
 	output [Y_WIDTH-1:0] Y;
 	// Blackbox
 endmodule
+
+module v2f_pmux (A, B, S, Y);
+	parameter S_WIDTH = 0;
+	parameter WIDTH = 0;
+
+	input [WIDTH-1:0] A;
+	input [WIDTH*S_WIDTH*-1:0] B;
+	input [S_WIDTH-1:0] S;
+	output [WIDTH-1:0] Y;
+	// Blackbox
+endmodule

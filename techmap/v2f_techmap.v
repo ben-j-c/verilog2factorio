@@ -307,3 +307,18 @@ module v2f_rule_eq (A, B, Y);
 	v2f_eq #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
+
+(* techmap_celltype = "$pmux"*)
+module v2f_rule_pmux (A, B, S, Y);
+	parameter S_WIDTH = 0;
+	parameter WIDTH = 0;
+
+	input [WIDTH-1:0] A;
+	input [WIDTH*S_WIDTH*-1:0] B;
+	input [S_WIDTH-1:0] S;
+	output [WIDTH-1:0] Y;
+	wire _TECHMAP_FAIL_ = WIDTH > 32;
+	v2f_pmux #(.WIDTH(WIDTH), .S_WIDTH(S_WIDTH))
+		_TECHMAP_REPLACE_(.A(A), .B(B), .S(S), .Y(Y));
+	// Blackbox
+endmodule

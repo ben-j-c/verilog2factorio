@@ -423,6 +423,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_ge" => ImplementableOp::GreaterThanEqual,
 			"v2f_le" => ImplementableOp::LessThanEqual,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
+			"v2f_pmux" => ImplementableOp::PMux,
 			"$dff" => ImplementableOp::DFF,
 			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
 			"$lut" => ImplementableOp::LUT(0),
@@ -433,6 +434,8 @@ impl<'de> Deserialize<'de> for Cell {
 		if helper.cell_type == *"$mem_v2" {
 			Ok(convert_mem_v2(helper))
 		} else if helper.cell_type == *"$lut" {
+			Ok(convert_lut_ports(helper))
+		} else if helper.cell_type == *"v2f_pmux" {
 			Ok(convert_lut_ports(helper))
 		} else {
 			Ok(Cell {
@@ -605,6 +608,53 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 	Cell {
 		hide_name: pre_mapped.hide_name,
 		cell_type: ImplementableOp::LUT(pre_mapped.parameters["WIDTH"].from_bin_str().unwrap()),
+		model: pre_mapped.model,
+		parameters: pre_mapped.parameters,
+		attributes: pre_mapped.attributes,
+		port_directions: new_directions,
+		connections: new_connections,
+	}
+}
+
+//
+fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
+	let width = pre_mapped.parameters["WIDTH"]
+		.from_bin_str()
+		.expect("Must have width.");
+	let mut new_connections = HashMap::new();
+	let mut new_directions = HashMap::new();
+	assert!(pre_mapped.connections.contains_key("A"));
+	assert!(pre_mapped.connections.contains_key("B"));
+	assert!(pre_mapped.connections.contains_key("S"));
+	assert!(pre_mapped.connections.contains_key("Y"));
+	assert!(pre_mapped.port_directions.contains_key("A"));
+	assert!(pre_mapped.port_directions.contains_key("B"));
+	assert!(pre_mapped.port_directions.contains_key("S"));
+	assert!(pre_mapped.port_directions.contains_key("Y"));
+	assert_eq!(pre_mapped.port_directions["A"], Direction::Input);
+	assert_eq!(pre_mapped.port_directions["B"], Direction::Input);
+	assert_eq!(pre_mapped.port_directions["S"], Direction::Input);
+	assert_eq!(pre_mapped.port_directions["Y"], Direction::Output);
+	for (idx, chunk) in pre_mapped.connections["B"]
+		.iter()
+		.chunks(width)
+		.into_iter()
+		.enumerate()
+	{
+		let bits = chunk.copied().collect_vec();
+		assert_eq!(
+			bits.len(),
+			width,
+			"Width of port not multiple of pmux width."
+		);
+		new_connections.insert(format!("B{}", idx), bits);
+		new_directions.insert(format!("B{}", idx), Direction::Input);
+	}
+	new_connections.insert("Y".to_owned(), pre_mapped.connections["Y"].clone());
+	new_directions.insert("Y".to_owned(), Direction::Output);
+	Cell {
+		hide_name: pre_mapped.hide_name,
+		cell_type: ImplementableOp::PMux,
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,
