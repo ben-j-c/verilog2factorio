@@ -1900,6 +1900,80 @@
         }
       }
     },
+    "v2f_pmux": {
+      "attributes": {
+        "dynports": "00000000000000000000000000000001",
+        "blackbox": "00000000000000000000000000000001",
+        "cells_not_processed": "00000000000000000000000000000001",
+        "src": "/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:235.1-244.10"
+      },
+      "parameter_default_values": {
+        "S_WIDTH": "00000000000000000000000000000000",
+        "WIDTH": "00000000000000000000000000000000"
+      },
+      "ports": {
+        "A": {
+          "direction": "input",
+          "offset": -1,
+          "upto": 1,
+          "bits": [ 2, 3 ]
+        },
+        "B": {
+          "direction": "input",
+          "bits": [ 4 ]
+        },
+        "S": {
+          "direction": "input",
+          "offset": -1,
+          "upto": 1,
+          "bits": [ 5, 6 ]
+        },
+        "Y": {
+          "direction": "output",
+          "offset": -1,
+          "upto": 1,
+          "bits": [ 7, 8 ]
+        }
+      },
+      "cells": {
+      },
+      "netnames": {
+        "A": {
+          "hide_name": 0,
+          "bits": [ 2, 3 ],
+          "offset": -1,
+          "upto": 1,
+          "attributes": {
+            "src": "/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:239.20-239.21"
+          }
+        },
+        "B": {
+          "hide_name": 0,
+          "bits": [ 4 ],
+          "attributes": {
+            "src": "/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:240.29-240.30"
+          }
+        },
+        "S": {
+          "hide_name": 0,
+          "bits": [ 5, 6 ],
+          "offset": -1,
+          "upto": 1,
+          "attributes": {
+            "src": "/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:241.22-241.23"
+          }
+        },
+        "Y": {
+          "hide_name": 0,
+          "bits": [ 7, 8 ],
+          "offset": -1,
+          "upto": 1,
+          "attributes": {
+            "src": "/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:242.21-242.22"
+          }
+        }
+      }
+    },
     "v2f_pow": {
       "attributes": {
         "dynports": "00000000000000000000000000000001",

@@ -423,7 +423,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_ge" => ImplementableOp::GreaterThanEqual,
 			"v2f_le" => ImplementableOp::LessThanEqual,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
-			"v2f_pmux" => ImplementableOp::PMux,
+			"v2f_pmux" => ImplementableOp::PMux(false),
 			"$dff" => ImplementableOp::DFF,
 			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
 			"$lut" => ImplementableOp::LUT(0),
@@ -436,7 +436,7 @@ impl<'de> Deserialize<'de> for Cell {
 		} else if helper.cell_type == *"$lut" {
 			Ok(convert_lut_ports(helper))
 		} else if helper.cell_type == *"v2f_pmux" {
-			Ok(convert_lut_ports(helper))
+			Ok(convert_pmux_ports(helper))
 		} else {
 			Ok(Cell {
 				hide_name: helper.hide_name,
@@ -650,11 +650,24 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 		new_connections.insert(format!("B{}", idx), bits);
 		new_directions.insert(format!("B{}", idx), Direction::Input);
 	}
+	for (idx, bit) in pre_mapped.connections["S"].iter().enumerate() {
+		new_connections.insert(format!("S{}", idx), vec![*bit]);
+		new_directions.insert(format!("S{}", idx), Direction::Input);
+	}
+	let full_case = pre_mapped
+		.attributes
+		.get("full_case")
+		.map(|full_case| full_case.from_bin_str() == Some(1))
+		.unwrap_or_default();
+	if !full_case {
+		new_connections.insert(format!("A"), pre_mapped.connections["A"].clone());
+		new_directions.insert(format!("A"), Direction::Input);
+	}
 	new_connections.insert("Y".to_owned(), pre_mapped.connections["Y"].clone());
 	new_directions.insert("Y".to_owned(), Direction::Output);
 	Cell {
 		hide_name: pre_mapped.hide_name,
-		cell_type: ImplementableOp::PMux,
+		cell_type: ImplementableOp::PMux(full_case),
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,

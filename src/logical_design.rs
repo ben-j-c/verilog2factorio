@@ -835,20 +835,15 @@ impl LogicalDesign {
 		(d_wire, clk_wire, rst_wire, en_wire, q)
 	}
 
-	pub(crate) fn add_pmux<const N: i32>(
+	pub(crate) fn add_pmux(
 		&mut self,
+		a: Option<Signal>,
 		b: &[Signal],
-		s: Signal,
+		s: &[Signal],
 		y: Signal,
 	) -> (Vec<NodeId>, NodeId, NodeId) {
-		assert!(N > 1, "Invalid pmux.");
-		assert!(
-			!matches!(
-				s,
-				Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
-			),
-			"PMux not designed for each/everything."
-		);
+		let n = b.len();
+		assert!(n > 1, "Invalid pmux.");
 		assert!(
 			!matches!(
 				y,
@@ -856,33 +851,55 @@ impl LogicalDesign {
 			),
 			"PMux not designed for each/everything."
 		);
-		for i in 0..N {
+		for i in 0..n {
 			assert!(
 				!matches!(
-					b[i as usize],
+					b[i],
+					Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
+				),
+				"PMux not designed for each/everything."
+			);
+			assert!(
+				!matches!(
+					s[i],
 					Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
 				),
 				"PMux not designed for each/everything."
 			);
 		}
 
-		let mut b_muxes = Vec::with_capacity(N as usize + 2);
-		for i in 0..N {
+		let mut b_muxes = Vec::with_capacity(n as usize + 2);
+		for i in 0..n {
 			let inp = self.add_decider();
 
 			self.add_decider_input(
 				inp,
-				(s, DeciderOperator::Equal, Signal::Constant(i)),
+				(s[i], DeciderOperator::NotEqual, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
 				NET_RED,
 				NET_NONE,
 			);
 			self.add_decider_out_input_count(inp, b[i as usize], NET_RED);
-			if i > 0 {
-				b_muxes.push(self.add_wire_red(vec![inp, b_muxes[(i - 1) as usize]], vec![]));
-				self.add_wire_red(vec![], vec![inp, b_muxes[(i - 1) as usize]]);
+			if i != 0 {
+				b_muxes.push(self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]));
+				self.add_wire_red(vec![], vec![inp, b_muxes[i - 1]]);
 			}
 		}
+		let a_case = self.add_decider();
+		for i in 0..n {
+			self.add_decider_input(
+				a_case,
+				(s[i], DeciderOperator::Equal, Signal::Constant(0)),
+				if i == 0 {
+					DeciderRowConjDisj::FirstRow
+				} else {
+					DeciderRowConjDisj::And
+				},
+				NET_RED,
+				NET_NONE,
+			);
+		}
+		for i in 0..n {}
 		let y = self.add_nop(Signal::Anything, y);
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
 		let s = b_muxes[0];

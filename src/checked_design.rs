@@ -40,7 +40,7 @@ pub enum ImplementableOp {
 	V2FRollingAccumulate,
 	DFF,
 	LUT(usize),
-	PMux,
+	PMux(bool),
 	Memory,
 
 	Swizzle, // Imaginary cell
@@ -71,7 +71,7 @@ impl ImplementableOp {
 			ImplementableOp::Swizzle => BodyType::MultiPart,
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
 			ImplementableOp::Memory => BodyType::MultiPart,
-			ImplementableOp::PMux => BodyType::MultiPart,
+			ImplementableOp::PMux(_) => BodyType::MultiPart,
 		}
 	}
 
@@ -1345,16 +1345,16 @@ impl CheckedDesign {
 					(ret_in, ret_out)
 				}
 			},
-			ImplementableOp::PMux => {
-				let mapped_cell = mapped_cell.expect("Missing cell");
-				let (b, s, y) = logical_design.add_pmux(
-					&sig_in[0..sig_in.len() - 1],
+			ImplementableOp::PMux(full_case) => {
+				let (ab, s, y) = logical_design.add_pmux(
+					if full_case { None } else { Some(sig_in[0]) },
+					&sig_in[(!full_case as usize)..sig_in.len() - 1],
 					sig_in[sig_in.len() - 1],
 					sig_out[0],
 				);
-				let mut bs = b;
-				bs.push(s);
-				(bs, vec![y])
+				let mut abs = ab;
+				abs.push(s);
+				(abs, vec![y])
 			},
 			_ => unreachable!(),
 		};
