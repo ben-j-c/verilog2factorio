@@ -1,7 +1,9 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, io::BufReader, rc::Rc};
 
 use crate::{
+	checked_design::CheckedDesign,
 	logical_design::{LogicalDesign, Signal},
+	mapped_design::MappedDesign,
 	sim::SimState,
 };
 
@@ -378,4 +380,15 @@ fn decider_each2() {
 	assert_eq!(sim.probe_red_out(c1), vec![(10, 1)]); // This should be seen by the Each.
 	assert_eq!(sim.probe_red_out(c2), vec![(11, 2)]); // This one shouldn't be seen by the Each.
 	assert_eq!(sim.probe_red_out(d1), vec![(10, 1)]); // So we only get c1
+}
+
+#[test]
+fn test10_multiport_rom() {
+	let file = File::open("./test_designs/output/test10.json").unwrap();
+	let reader = BufReader::new(file);
+	let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+	let mut checked_design = CheckedDesign::new();
+	let mut logical_design = LogicalDesign::new();
+	checked_design.build_from(&mapped_design);
+	logical_design.build_from(&checked_design, &mapped_design);
 }
