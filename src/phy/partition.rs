@@ -133,7 +133,7 @@ pub(crate) fn report_partition_quality(
 	connectivity: &Vec<Vec<usize>>,
 	n_parts: i32,
 ) {
-	let n_edges: usize = connectivity.iter().map(|conn| conn.iter().count()).sum();
+	let n_edges: usize = connectivity.iter().map(|conn| conn.len()).sum();
 	println!("Partition quality:");
 	println!(
 		"Edges cut: {n_cuts} ({:.3}%)",

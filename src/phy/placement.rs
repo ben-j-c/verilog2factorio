@@ -476,23 +476,21 @@ pub(crate) fn simulated_spring_method(
 						(assignment1.0 as isize, assignment1.1 as isize - offy),
 					)
 				}
+			} else if *fy > 0 {
+				new.id_in_range_exclude_a1(
+					assignment1,
+					(assignment1.0 as isize - offx, assignment1.1 as isize + offy),
+				)
+			} else if *fy == 0 {
+				new.id_in_range_exclude_a1(
+					assignment1,
+					(assignment1.0 as isize - offx, assignment1.1 as isize),
+				)
 			} else {
-				if *fy > 0 {
-					new.id_in_range_exclude_a1(
-						assignment1,
-						(assignment1.0 as isize - offx, assignment1.1 as isize + offy),
-					)
-				} else if *fy == 0 {
-					new.id_in_range_exclude_a1(
-						assignment1,
-						(assignment1.0 as isize - offx, assignment1.1 as isize),
-					)
-				} else {
-					new.id_in_range_exclude_a1(
-						assignment1,
-						(assignment1.0 as isize - offx, assignment1.1 as isize - offy),
-					)
-				}
+				new.id_in_range_exclude_a1(
+					assignment1,
+					(assignment1.0 as isize - offx, assignment1.1 as isize - offy),
+				)
 			};
 			// Improvement: Look across all candidates and find the one that minimizes force/energy for this node.
 			if candidates.0.is_empty() && candidates.1.is_empty() {
@@ -1849,23 +1847,21 @@ pub mod global {
 							(assignment1.0 as isize, assignment1.1 as isize - offy),
 						)
 					}
+				} else if *fy > 0 {
+					new.id_in_range_exclude_a1(
+						assignment1,
+						(assignment1.0 as isize - offx, assignment1.1 as isize + offy),
+					)
+				} else if *fy == 0 {
+					new.id_in_range_exclude_a1(
+						assignment1,
+						(assignment1.0 as isize - offx, assignment1.1 as isize),
+					)
 				} else {
-					if *fy > 0 {
-						new.id_in_range_exclude_a1(
-							assignment1,
-							(assignment1.0 as isize - offx, assignment1.1 as isize + offy),
-						)
-					} else if *fy == 0 {
-						new.id_in_range_exclude_a1(
-							assignment1,
-							(assignment1.0 as isize - offx, assignment1.1 as isize),
-						)
-					} else {
-						new.id_in_range_exclude_a1(
-							assignment1,
-							(assignment1.0 as isize - offx, assignment1.1 as isize - offy),
-						)
-					}
+					new.id_in_range_exclude_a1(
+						assignment1,
+						(assignment1.0 as isize - offx, assignment1.1 as isize - offy),
+					)
 				};
 				// Improvement: Look across all candidates and find the one that minimizes force/energy for this node.
 				if candidates.0.is_empty() && candidates.1.is_empty() {

@@ -1,11 +1,11 @@
-use itertools::{izip, Itertools};
+use itertools::{chain, izip, Itertools};
 use serde::{
 	de::{self, Visitor},
 	Deserialize, Deserializer,
 };
 use std::collections::HashMap;
 
-use crate::checked_design::ImplementableOp;
+use crate::checked_design::{BodyType, ImplementableOp};
 
 pub type CellType = String;
 pub type ModelName = String;
@@ -211,8 +211,77 @@ pub struct Net {
 	signed: i32,
 }
 
+impl Cell {
+	/// Defines the canonical ordering of ports in fanin/fanout.
+	pub(crate) fn get_terminal_names(&self) -> Vec<String> {
+		match self.cell_type.get_body_type() {
+			BodyType::ABY => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
+			BodyType::AY => vec!["A".to_owned(), "Y".to_owned()],
+			BodyType::MultiPart => match &self.cell_type {
+				ImplementableOp::DFF => vec!["D".to_owned(), "CLK".to_owned(), "Q".to_owned()],
+				ImplementableOp::Swizzle => {
+					unreachable!("Imaginary cell encountered before it should be created.")
+				},
+				ImplementableOp::LUT(n) => (0..*n)
+					.map(|i| format!("A{}", i))
+					.chain(vec!["Y".to_owned()])
+					.collect_vec(),
+				ImplementableOp::PMux(full_case, s_width) => chain!(
+					if *full_case {
+						None
+					} else {
+						Some("A".to_owned())
+					},
+					(0..*s_width).map(|i| format!("B{}", i)),
+					(0..*s_width).map(|i| format!("S{}", i)),
+					["Y".to_owned()]
+				)
+				.collect_vec(),
+				ImplementableOp::Memory => {
+					let n_rd_ports = self.parameters["RD_PORTS"].unwrap_bin_str();
+					let n_wr_ports = self.parameters["WR_PORTS"].unwrap_bin_str();
+					let mut ports = vec![];
+					for i in 0..n_rd_ports {
+						let expected = [
+							format!("RD_ADDR_{i}"),
+							format!("RD_DATA_{i}"),
+							format!("RD_CLK_{i}"),
+							format!("RD_EN_{i}"),
+							format!("RD_ARST_{i}"),
+							format!("RD_SRST_{i}"),
+						];
+						for port in expected {
+							if self.port_directions.contains_key(&port) {
+								ports.push(port);
+							}
+						}
+					}
+					for i in 0..n_wr_ports {
+						let expected = [
+							format!("WR_ADDR_{i}"),
+							format!("WR_DATA_{i}"),
+							format!("WR_CLK_{i}"),
+							format!("WR_EN_{i}"),
+						];
+						for port in expected {
+							if self.port_directions.contains_key(&port) {
+								ports.push(port);
+							}
+						}
+					}
+					ports
+				},
+				_ => unreachable!(),
+			},
+			BodyType::Constant { .. } => vec!["Y".to_owned()],
+			BodyType::Nop => vec!["A".to_owned(), "Y".to_owned()],
+		}
+	}
+}
+
 pub(crate) trait FromBinStr {
 	fn from_bin_str(&self) -> Option<usize>;
+	fn unwrap_bin_str(&self) -> usize;
 }
 
 pub(crate) trait IntoBoolVec {
@@ -247,6 +316,10 @@ impl FromBinStr for String {
 			}
 		}
 		Some(retval)
+	}
+
+	fn unwrap_bin_str(&self) -> usize {
+		self.from_bin_str().expect("String is not correct format.")
 	}
 }
 
@@ -423,7 +496,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_ge" => ImplementableOp::GreaterThanEqual,
 			"v2f_le" => ImplementableOp::LessThanEqual,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
-			"v2f_pmux" => ImplementableOp::PMux(false),
+			"v2f_pmux" => ImplementableOp::PMux(false, 0),
 			"$dff" => ImplementableOp::DFF,
 			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
 			"$lut" => ImplementableOp::LUT(0),
@@ -460,9 +533,9 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		&& cell.parameters["RD_SRST_VALUE"]
 			.chars()
 			.all(|c| c == '0' || c == 'x');
-	let abits = cell.parameters["ABITS"].from_bin_str().unwrap();
-	let width = cell.parameters["WIDTH"].from_bin_str().unwrap();
-	let wr_port_count = cell.parameters["WR_PORTS"].from_bin_str().unwrap();
+	let abits = cell.parameters["ABITS"].unwrap_bin_str();
+	let width = cell.parameters["WIDTH"].unwrap_bin_str();
+	let wr_port_count = cell.parameters["WR_PORTS"].unwrap_bin_str();
 	assert!(
 		!cell.parameters["RD_TRANSPARENCY_MASK"].contains("1"),
 		"Currently memory doesn't support transparent reads."
@@ -499,10 +572,7 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		cell.connections["RD_SRST"].iter(),
 	)
 	.collect_vec();
-	assert_eq!(
-		rd_ports.len(),
-		cell.parameters["RD_PORTS"].from_bin_str().unwrap()
-	);
+	assert_eq!(rd_ports.len(), cell.parameters["RD_PORTS"].unwrap_bin_str());
 
 	let tmp1 = cell.connections["WR_ADDR"].iter().copied().chunks(abits);
 	let tmp2 = cell.connections["WR_DATA"].iter().copied().chunks(width);
@@ -524,10 +594,7 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 			}),
 	)
 	.collect_vec();
-	assert_eq!(
-		wr_ports.len(),
-		cell.parameters["WR_PORTS"].from_bin_str().unwrap()
-	);
+	assert_eq!(wr_ports.len(), cell.parameters["WR_PORTS"].unwrap_bin_str());
 
 	let mut directions = HashMap::new();
 	let mut connections: HashMap<String, Vec<Bit>> = HashMap::new();
@@ -607,7 +674,7 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 	new_directions.insert("Y".to_owned(), Direction::Output);
 	Cell {
 		hide_name: pre_mapped.hide_name,
-		cell_type: ImplementableOp::LUT(pre_mapped.parameters["WIDTH"].from_bin_str().unwrap()),
+		cell_type: ImplementableOp::LUT(pre_mapped.parameters["WIDTH"].unwrap_bin_str()),
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,
@@ -616,11 +683,8 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 	}
 }
 
-//
 fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
-	let width = pre_mapped.parameters["WIDTH"]
-		.from_bin_str()
-		.expect("Must have width.");
+	let width = pre_mapped.parameters["WIDTH"].unwrap_bin_str();
 	let mut new_connections = HashMap::new();
 	let mut new_directions = HashMap::new();
 	assert!(pre_mapped.connections.contains_key("A"));
@@ -659,15 +723,16 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 		.get("full_case")
 		.map(|full_case| full_case.from_bin_str() == Some(1))
 		.unwrap_or_default();
+	let s_width = pre_mapped.parameters["S_WIDTH"].unwrap_bin_str();
 	if !full_case {
-		new_connections.insert(format!("A"), pre_mapped.connections["A"].clone());
-		new_directions.insert(format!("A"), Direction::Input);
+		new_connections.insert("A".to_string(), pre_mapped.connections["A"].clone());
+		new_directions.insert("A".to_string(), Direction::Input);
 	}
 	new_connections.insert("Y".to_owned(), pre_mapped.connections["Y"].clone());
 	new_directions.insert("Y".to_owned(), Direction::Output);
 	Cell {
 		hide_name: pre_mapped.hide_name,
-		cell_type: ImplementableOp::PMux(full_case),
+		cell_type: ImplementableOp::PMux(full_case, s_width),
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,

@@ -1,12 +1,9 @@
-use std::{collections::HashMap, default};
-
 use itertools::izip;
 
 use crate::{
 	logical_design::{DeciderOperator, DeciderRowConjDisj, Node, NodeId, Signal},
-	ndarr::Arr2,
 	signal_lookup_table::n_ids,
-	util::{hash_map, hash_set, HashM, HashS},
+	util::{hash_set, HashS},
 };
 
 use super::{OutputState, SimState};
@@ -101,7 +98,7 @@ impl SimState {
 						output_signals[sig_id] += c;
 					} else {
 						output_signals[sig_id] +=
-							self.get_seen_signal_count(node.id, sig_id as i32, network);
+							self.get_seen_signal_count(node.id, sig_id, network);
 					}
 				}
 			} else {
@@ -126,13 +123,11 @@ impl SimState {
 			if sat {
 				if has_each_output {
 					// Todo handle if the fucker has an Each on some other output (:
+				} else if let Some(c) = constant {
+					output_signals[output_id] += c;
 				} else {
-					if let Some(c) = constant {
-						output_signals[output_id] += c;
-					} else {
-						output_signals[output_id] +=
-							self.get_seen_signal_count(node.id, output_id, network)
-					}
+					output_signals[output_id] +=
+						self.get_seen_signal_count(node.id, output_id, network)
 				}
 			}
 		}

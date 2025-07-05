@@ -42,7 +42,7 @@ where
 		let total_size: usize = dims.iter().product();
 		Self {
 			data: vec![T::default(); total_size],
-			dims: dims,
+			dims,
 		}
 	}
 

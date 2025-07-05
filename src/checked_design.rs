@@ -5,7 +5,7 @@ use std::{
 
 type NodeId = usize;
 
-use itertools::Itertools;
+use itertools::{chain, Itertools};
 
 use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
@@ -15,6 +15,7 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
+	util::index_of,
 };
 use crate::{mapped_design::MappedDesign, signal_lookup_table::lookup_id};
 
@@ -40,7 +41,7 @@ pub enum ImplementableOp {
 	V2FRollingAccumulate,
 	DFF,
 	LUT(usize),
-	PMux(bool),
+	PMux(bool, usize),
 	Memory,
 
 	Swizzle, // Imaginary cell
@@ -71,7 +72,7 @@ impl ImplementableOp {
 			ImplementableOp::Swizzle => BodyType::MultiPart,
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
 			ImplementableOp::Memory => BodyType::MultiPart,
-			ImplementableOp::PMux(_) => BodyType::MultiPart,
+			ImplementableOp::PMux(_, _) => BodyType::MultiPart,
 		}
 	}
 
@@ -138,8 +139,8 @@ impl NodeType {
 
 	fn mapped_terminal_name(&self) -> &str {
 		match self {
-			NodeType::CellInput { port, .. } => &port,
-			NodeType::CellOutput { port, .. } => &port,
+			NodeType::CellInput { port, .. } => port,
+			NodeType::CellOutput { port, .. } => port,
 			_ => panic!(),
 		}
 	}
@@ -388,18 +389,17 @@ impl CheckedDesign {
 				&& exprs[0].is_driver()
 				&& exprs[1].is_constant()
 				&& exprs[1].unwrap_constant_value().get_constant::<i32>() == 0
+				&& fanin.len() == 1
 			{
-				if fanin.len() == 1 {
-					let fiid_cnxn = match self.node_type(fanin[0]) {
-						NodeType::CellOutput { connected_id, .. }
-						| NodeType::PortOutput { connected_id } => *connected_id,
-						_ => unreachable!(),
-					};
-					let driver = self.connected_design.node_info[fiid_cnxn].n_bits();
-					let sink = exprs[0].n_bits();
-					if driver == sink {
-						continue;
-					}
+				let fiid_cnxn = match self.node_type(fanin[0]) {
+					NodeType::CellOutput { connected_id, .. }
+					| NodeType::PortOutput { connected_id } => *connected_id,
+					_ => unreachable!(),
+				};
+				let driver = self.connected_design.node_info[fiid_cnxn].n_bits();
+				let sink = exprs[0].n_bits();
+				if driver == sink {
+					continue;
 				}
 			}
 			if exprs.len() > 1 {
@@ -1197,27 +1197,15 @@ impl CheckedDesign {
 						.into_iter()
 						.rev()
 						.collect_vec(),
-					mapped_cell.unwrap().parameters["WIDTH"]
-						.from_bin_str()
-						.unwrap(),
+					mapped_cell.unwrap().parameters["WIDTH"].unwrap_bin_str(),
 				);
 				(input_wires, vec![output_comb])
 			},
 			ImplementableOp::Memory => {
 				let cell = mapped_cell.unwrap();
-				let n_rd_ports = cell.attributes["RD_PORTS"].from_bin_str().unwrap();
-				let n_wr_ports = cell.attributes["WR_PORTS"].from_bin_str().unwrap();
+				let n_rd_ports = cell.parameters["RD_PORTS"].unwrap_bin_str();
+				let n_wr_ports = cell.parameters["WR_PORTS"].unwrap_bin_str();
 
-				fn index_of(strings: &[&str], target: &str) -> Option<usize> {
-					let mut i = 0;
-					for s in strings {
-						if *s == target {
-							return Some(i);
-						}
-						i += 1;
-					}
-					None
-				}
 				let mut rd_ports = vec![];
 				for i in 0..n_rd_ports {
 					let addr_idx = index_of(&mapped_in_port, &format!("RD_ADDR_{i}")).unwrap();
@@ -1260,21 +1248,20 @@ impl CheckedDesign {
 				if n_wr_ports == 0 {
 					let mut ret_in = vec![];
 					let mut ret_out = vec![];
-					let width: usize = cell.parameters["WIDTH"].from_bin_str().unwrap();
+					let width: usize = cell.parameters["WIDTH"].unwrap_bin_str();
+					assert!(width <= 32, "Too wide");
 					let rom_values = cell.parameters["INIT"]
 						.chars()
 						.chunks(width)
 						.into_iter()
-						.map(|rom_value| {
-							rom_value.collect::<String>().from_bin_str().unwrap() as i32
-						})
+						.map(|rom_value| rom_value.collect::<String>().unwrap_bin_str() as i32)
 						.collect_vec();
 					let rd_ports = logical_design.add_rom(
 						rd_ports,
 						rom_values,
 						cell.attributes
 							.get("density")
-							.map(|d| d.from_bin_str().unwrap() as i32),
+							.map(|d| d.unwrap_bin_str() as i32),
 					);
 					for p in rd_ports {
 						ret_in.push(p.addr_wire);
@@ -1315,7 +1302,7 @@ impl CheckedDesign {
 					let (rd_ports, wr_ports) = logical_design.add_ram(
 						rd_ports,
 						wr_ports,
-						cell.attributes["SIZE"].from_bin_str().unwrap() as u32,
+						cell.attributes["SIZE"].unwrap_bin_str() as u32,
 					);
 					let mut ret_in = vec![];
 					let mut ret_out = vec![];
@@ -1345,16 +1332,16 @@ impl CheckedDesign {
 					(ret_in, ret_out)
 				}
 			},
-			ImplementableOp::PMux(full_case) => {
-				let (ab, s, y) = logical_design.add_pmux(
+			ImplementableOp::PMux(full_case, s_width) => {
+				let b_start = full_case as usize;
+				let s_start = b_start + s_width;
+				let (a, b, s, y) = logical_design.add_pmux(
 					if full_case { None } else { Some(sig_in[0]) },
-					&sig_in[(!full_case as usize)..sig_in.len() - 1],
-					sig_in[sig_in.len() - 1],
+					&sig_in[b_start..s_start],
+					&sig_in[s_start..sig_in.len()],
 					sig_out[0],
 				);
-				let mut abs = ab;
-				abs.push(s);
-				(abs, vec![y])
+				(chain!(a, b, s).collect_vec(), vec![y])
 			},
 			_ => unreachable!(),
 		};

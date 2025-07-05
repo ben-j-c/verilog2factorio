@@ -327,7 +327,7 @@ impl PhysicalDesign {
 			let mut y = 0;
 			let mut ydir = false;
 			for c in Self::get_bfs_order(0, local_connectivity) {
-				initial[c] = (x, y as usize);
+				initial[c] = (x, y);
 				x += 2;
 				if (x / 2) % 3 == 0 {
 					x -= 4;
@@ -385,6 +385,7 @@ impl PhysicalDesign {
 				&comb_positions,
 				self.side_length_single_partition,
 				partition,
+				local_to_global,
 			);
 			let comb_positions = match algo {
 				Ok(pos) => pos,
@@ -397,12 +398,10 @@ impl PhysicalDesign {
 					panic!("failed to place");
 				},
 			};
-			if let Err(_) = self.place_combs_physical_dense(
-				&comb_positions,
-				logical,
-				partition,
-				local_to_global,
-			) {
+			if self
+				.place_combs_physical_dense(&comb_positions, logical, partition, local_to_global)
+				.is_err()
+			{
 				println!("Failed to place all cells. Here was the assignments:");
 				for (idx, p) in comb_positions.iter().enumerate() {
 					println!("{idx}: {:?}", p);
@@ -461,13 +460,14 @@ impl PhysicalDesign {
 		initialization: &Vec<(usize, usize)>,
 		side_length: usize,
 		partition_id: i32,
+		local_to_global: &Vec<Vec<usize>>,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
 		let num_cells = connections_per_node.len();
 		let edges = adjacency_to_edges(connections_per_node, true);
 		let mut placement = placement2::AnalyticalPlacement::new(side_length as f32);
 
 		for id in 0..num_cells {
-			let node = self.get_logical(PhyId(id), logical);
+			let node = self.get_logical(PhyId(local_to_global[partition_id as usize][id]), logical);
 			let spec = node.function.wire_hop_type().wire_hop_spec();
 			placement.add_cell(
 				Some((initialization[id].0 as f32, initialization[id].1 as f32)),
@@ -674,7 +674,7 @@ impl PhysicalDesign {
 		};
 
 		let mut new_best = true;
-		let mut stage_2 = false;
+		let stage_2 = false;
 		let mut final_stage = false;
 		let mut step = 0;
 		let mut trend_of_bests = vec![];
@@ -783,7 +783,7 @@ impl PhysicalDesign {
 							&mut rng,
 							&curr,
 							&mut new,
-							&connections_per_node,
+							connections_per_node,
 							side_length,
 							max_density,
 						);
@@ -1057,7 +1057,7 @@ impl PhysicalDesign {
 							&mut rng,
 							&curr,
 							&mut new,
-							&connections_per_node,
+							connections_per_node,
 							side_length,
 							max_density,
 						);
@@ -1207,6 +1207,7 @@ impl PhysicalDesign {
 						return Result::Err(format!("Sub-cell ({x}, {y}) is OOB."));
 					}
 					if self.space[partition as usize][key] != PhyId::default() {
+						dbg!(ld_node);
 						return Result::Err(format!(
 							"Sub-cell ({x}, {y}) overlaps with an existing cell."
 						));
@@ -1216,6 +1217,7 @@ impl PhysicalDesign {
 						return Result::Err(format!("Sub-cell ({x}, {y}) is OOB."));
 					}
 					if self.global_space[key] != PhyId::default() {
+						dbg!(ld_node);
 						return Result::Err(format!(
 							"Sub-cell ({x}, {y}) overlaps with an existing cell."
 						));
@@ -2063,7 +2065,7 @@ impl PhysicalDesign {
 		);
 		let edges_to_route =
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
-		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(3..=10);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(1..=10);
 		let mut success = false;
 		for margin in margin_range {
 			println!("Starting routing with margin {margin}");
@@ -2171,8 +2173,7 @@ impl PhysicalDesign {
 		};
 		let near_side_pole_id = last_id;
 		let mut far_side_pole_id = last_id;
-		while !path.is_empty() {
-			let loc = path.pop().unwrap();
+		while let Some(loc) = path.pop() {
 			let id = PhyId(self.nodes.len());
 			self.nodes.push(PhyNode {
 				id,

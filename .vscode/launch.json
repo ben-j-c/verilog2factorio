@@ -44,22 +44,14 @@
 			"cargo": {
 				"args": [
 					"test",
-					"--no-run",
-					"--bin=v2f",
-					"--package=v2f",
-				],
-				"filter": {
-					"name": "v2f",
-					"kind": "bin",
-				}
+					"--",
+					"--nocapture",
+					"--show-output",
+					"--exact",
+					"tests::logical_design_tests::test10",
+				]
 			},
-			"args": [
-				"--nocapture",
-				"test::example_yosys",
-				"--",
-				"--exact",
-				"--show-output"
-			],
+			"args": [],
 			"cwd": "${workspaceFolder}"
 		}
 	]

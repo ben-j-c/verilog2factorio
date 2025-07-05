@@ -1,7 +1,3 @@
-use std::{env, path::PathBuf};
-
-use v2f::*;
-
 #[test]
 fn basics_example() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());

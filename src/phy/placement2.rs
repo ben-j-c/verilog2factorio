@@ -1,6 +1,3 @@
-use std::fmt::format;
-
-use metis::option::Opt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
@@ -98,14 +95,14 @@ pub(crate) struct AnalyticalPlacement {
 impl AnalyticalPlacement {
 	pub(crate) fn new(side_length: f32) -> Self {
 		let dim = (side_length / 2.0).max(1.0) as usize;
-		let ret = AnalyticalPlacement {
+
+		AnalyticalPlacement {
 			cells: vec![],
 			side_length,
 			bucket_size: 2.0,
 			buckets: Arr2::new([dim, dim]),
 			rng: StdRng::seed_from_u64(0x1234ABCD),
-		};
-		ret
+		}
 	}
 
 	pub(crate) fn num_cells(&self) -> usize {
@@ -138,7 +135,7 @@ impl AnalyticalPlacement {
 		let b1 = self.bucket_idx((cell.bbox.x + cell.bbox.w, cell.bbox.y + cell.bbox.h));
 		for x in b0.0..=b1.0 {
 			for y in b0.1..=b1.1 {
-				self.buckets[(x as usize, y as usize)].insert(id);
+				self.buckets[(x, y)].insert(id);
 			}
 		}
 		self.cells.push(cell);

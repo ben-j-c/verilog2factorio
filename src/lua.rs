@@ -117,7 +117,7 @@ impl FromLua for WireColour {
 				}),
 			},
 			Value::UserData(data) if data.is::<WireColour>() => {
-				Ok(data.borrow::<WireColour>().unwrap().clone())
+				Ok(*data.borrow::<WireColour>().unwrap())
 			},
 			_ => Err(mlua::Error::FromLuaConversionError {
 				from: value.type_name(),
@@ -237,7 +237,8 @@ fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error
 	if let Err(_) = res {
 		Err(Error::RuntimeError("Invalid connection.".to_owned()))
 	} else {
-		Ok(res.unwrap())
+		res.unwrap();
+		Ok(())
 	}
 }
 
@@ -252,8 +253,8 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 			output.status
 		)));
 	}
-	let result = String::from_utf8(output.stdout)
-		.or_else(|_| Err(Error::runtime("Can't get the version.")))?;
+	let result =
+		String::from_utf8(output.stdout).map_err(|_| Error::runtime("Can't get the version."))?;
 	if !result.starts_with("Yosys 0.52 (git sha1 fee39a328") {
 		Err(Error::runtime(
 			"Wrong yosys version, expected \"Yosys 0.52 (git sha1 fee39a328\"",
@@ -268,11 +269,11 @@ where
 	P: AsRef<Path>,
 {
 	let filename: &Path = filename.as_ref();
-	let filename_out = get_derivative_file_name(&filename, "_rtl.json")?;
+	let filename_out = get_derivative_file_name(filename, "_rtl.json")?;
 	method_check_yosys()?;
 	let exe_dir = get_v2f_root()?;
 	if !exe_dir.is_dir() {
-		return Err(Error::RuntimeError(format!("Can't locate V2F_ROOT")));
+		return Err(Error::RuntimeError("Can't locate V2F_ROOT".to_string()));
 	}
 	if !filename.is_file() {
 		return Err(Error::RuntimeError(format!(
@@ -306,10 +307,10 @@ where
 		return Err(Error::runtime("Failed to compile to RTL."));
 	}
 
-	return Ok(RTL {
+	Ok(RTL {
 		filename: filename_out,
 		top_mod,
-	});
+	})
 }
 
 fn method_map_rtl<P>(filename: P, top_mod: &String) -> Result<LogicalDesignAPI, mlua::Error>
@@ -813,7 +814,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 						incomplete_input: true,
 						..
 					}) => {
-						line.push_str("\n");
+						line.push('\n');
 						prompt = ">> ";
 						continue;
 					},

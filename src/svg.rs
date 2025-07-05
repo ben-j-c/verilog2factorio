@@ -68,6 +68,12 @@ pub struct GridSpec {
 	margin: i32,
 }
 
+impl Default for SVG {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl SVG {
 	pub fn new() -> Self {
 		SVG { shapes: Vec::new() }
@@ -158,7 +164,7 @@ impl SVG {
 			y,
 			w,
 			h,
-			colour: colour,
+			colour,
 			label: label.map(|s| s.to_string()),
 			hover: hover.map(|s| s.to_string()),
 		};

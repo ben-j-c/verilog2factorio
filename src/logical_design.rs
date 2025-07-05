@@ -23,8 +23,7 @@
 //! See [LogicalDesign] for more details on how to build designs.
 
 use std::{
-	cell::RefCell,
-	collections::{BTreeSet, HashMap, HashSet},
+	collections::{BTreeSet, HashSet},
 	fmt::Display,
 	hash::Hash,
 	panic::UnwindSafe,
@@ -841,9 +840,10 @@ impl LogicalDesign {
 		b: &[Signal],
 		s: &[Signal],
 		y: Signal,
-	) -> (Vec<NodeId>, NodeId, NodeId) {
+	) -> (Option<NodeId>, Vec<NodeId>, Vec<NodeId>, NodeId) {
 		let n = b.len();
-		assert!(n > 1, "Invalid pmux.");
+		assert!(n > 1);
+		assert_eq!(b.len(), s.len());
 		assert!(
 			!matches!(
 				y,
@@ -868,10 +868,11 @@ impl LogicalDesign {
 			);
 		}
 
-		let mut b_muxes = Vec::with_capacity(n as usize + 2);
+		let mut mux_wires = Vec::with_capacity(n);
+		let mut b_muxes = Vec::with_capacity(n);
 		for i in 0..n {
 			let inp = self.add_decider();
-
+			b_muxes.push(inp);
 			self.add_decider_input(
 				inp,
 				(s[i], DeciderOperator::NotEqual, Signal::Constant(0)),
@@ -879,31 +880,37 @@ impl LogicalDesign {
 				NET_RED,
 				NET_NONE,
 			);
-			self.add_decider_out_input_count(inp, b[i as usize], NET_RED);
+			self.add_decider_out_input_count(inp, b[i], NET_RED);
 			if i != 0 {
-				b_muxes.push(self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]));
+				mux_wires.push(self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]));
 				self.add_wire_red(vec![], vec![inp, b_muxes[i - 1]]);
 			}
 		}
-		let a_case = self.add_decider();
-		for i in 0..n {
-			self.add_decider_input(
-				a_case,
-				(s[i], DeciderOperator::Equal, Signal::Constant(0)),
-				if i == 0 {
-					DeciderRowConjDisj::FirstRow
-				} else {
-					DeciderRowConjDisj::And
-				},
-				NET_RED,
-				NET_NONE,
-			);
-		}
-		for i in 0..n {}
+		let a_mux = if let Some(a_signal) = a {
+			let a_case = self.add_decider();
+			for i in 0..n {
+				self.add_decider_input(
+					a_case,
+					(s[i], DeciderOperator::Equal, Signal::Constant(0)),
+					if i == 0 {
+						DeciderRowConjDisj::FirstRow
+					} else {
+						DeciderRowConjDisj::And
+					},
+					NET_RED,
+					NET_NONE,
+				);
+			}
+			self.add_decider_out_input_count(a_case, a_signal, NET_RED_GREEN);
+			self.add_wire_red(vec![], vec![b_muxes[0], a_case]);
+			Some(self.add_wire_red(vec![b_muxes[0], a_case], vec![]))
+		} else {
+			None
+		};
+
 		let y = self.add_nop(Signal::Anything, y);
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
-		let s = b_muxes[0];
-		(b_muxes, s, y)
+		(a_mux, mux_wires.clone(), b_muxes, y)
 	}
 
 	fn add_mux_internal<const N: i32>(&mut self, data: Signal, s: Signal) -> Vec<NodeId> {
@@ -1871,48 +1878,34 @@ impl LogicalDesign {
 		let node = &self.nodes[id1.0];
 		if id1_input {
 			if id2_input {
-				return node
-					.iter_fanin(colour)
-					.map(|wire| {
-						self.get_node(*wire)
-							.iter_fanin_both()
-							.chain(self.get_node(*wire).iter_fanout(colour))
-							.any(|id| *id == id2)
-					})
-					.any(|b| b);
+				node.iter_fanin(colour).any(|wire| {
+					self.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanout(colour))
+						.any(|id| *id == id2)
+				})
 			} else {
-				return node
-					.iter_fanin(colour)
-					.map(|wire| {
-						self.get_node(*wire)
-							.iter_fanin_both()
-							.chain(self.get_node(*wire).iter_fanin(colour))
-							.any(|id| *id == id2)
-					})
-					.any(|b| b);
+				node.iter_fanin(colour).any(|wire| {
+					self.get_node(*wire)
+						.iter_fanin_both()
+						.chain(self.get_node(*wire).iter_fanin(colour))
+						.any(|id| *id == id2)
+				})
 			}
+		} else if id2_input {
+			node.iter_fanout(colour).any(|wire| {
+				self.get_node(*wire)
+					.iter_fanin_both()
+					.chain(self.get_node(*wire).iter_fanout(colour))
+					.any(|id| *id == id2)
+			})
 		} else {
-			if id2_input {
-				return node
-					.iter_fanout(colour)
-					.map(|wire| {
-						self.get_node(*wire)
-							.iter_fanin_both()
-							.chain(self.get_node(*wire).iter_fanout(colour))
-							.any(|id| *id == id2)
-					})
-					.any(|b| b);
-			} else {
-				return node
-					.iter_fanout(colour)
-					.map(|wire| {
-						self.get_node(*wire)
-							.iter_fanin_both()
-							.chain(self.get_node(*wire).iter_fanin(colour))
-							.any(|id| *id == id2)
-					})
-					.any(|b| b);
-			}
+			node.iter_fanout(colour).any(|wire| {
+				self.get_node(*wire)
+					.iter_fanin_both()
+					.chain(self.get_node(*wire).iter_fanin(colour))
+					.any(|id| *id == id2)
+			})
 		}
 	}
 
@@ -1972,12 +1965,11 @@ impl LogicalDesign {
 		let colour = self.get_wire_colour(nodeid);
 		network
 			.iter()
-			.map(|wire_id| {
+			.flat_map(|wire_id| {
 				self.nodes[wire_id.0]
 					.iter_fanin(colour)
 					.chain(self.nodes[wire_id.0].iter_fanout(colour))
 			})
-			.flatten()
 			.copied()
 			.collect_vec()
 	}

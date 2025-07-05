@@ -14,10 +14,9 @@ use crate::{
 		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
 		NET_RED_GREEN,
 	},
-	ndarr::Arr2,
-	signal_lookup_table::{self, n_ids},
+	signal_lookup_table::{self},
 	svg::SVG,
-	util::{hash_map, hash_set, HashM, HashS},
+	util::{hash_map, hash_set, HashM},
 };
 
 #[derive(Debug, Clone)]
@@ -605,7 +604,7 @@ impl SimState {
 			if no_print {
 				print!("-- No signals --");
 			}
-			println!("");
+			println!();
 		}
 		println!("GREEN: (signal_id, count)");
 		for node_num in 0..self.state.len() {
@@ -623,7 +622,7 @@ impl SimState {
 			if no_print {
 				print!("-- No signals --");
 			}
-			println!("");
+			println!();
 		}
 		println!("Nes:\n {:?}", self.network);
 		println!("--------------");
@@ -930,12 +929,12 @@ impl Index<i32> for OutputState {
 		if !self.data.contains_key(&index) {
 			return &self.zero;
 		}
-		return self.data.get(&index).unwrap();
+		self.data.get(&index).unwrap()
 	}
 }
 
 impl IndexMut<i32> for OutputState {
 	fn index_mut(&mut self, index: i32) -> &mut Self::Output {
-		return self.data.entry(index).or_default();
+		self.data.entry(index).or_default()
 	}
 }

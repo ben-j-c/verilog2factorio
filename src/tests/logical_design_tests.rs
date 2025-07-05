@@ -1,6 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, io::BufReader, rc::Rc};
 
-use crate::{logical_design::*, signal_lookup_table, sim::SimState};
+use crate::{
+	checked_design::CheckedDesign, logical_design::*, mapped_design::MappedDesign,
+	phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
+	sim::SimState,
+};
 
 #[cfg(test)]
 pub(crate) fn get_simple_logical_design() -> LogicalDesign {
@@ -923,4 +927,22 @@ fn sim_dffe() {
 
 	let traces = sim.render_traces();
 	traces.save("svg/sim_sdffe_traces.svg").unwrap();
+}
+
+#[test]
+fn test10() {
+	let file = File::open("./test_designs/output/test10.json").unwrap();
+	let reader = BufReader::new(file);
+	let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
+	let mut checked_design = CheckedDesign::new();
+	let mut logical_design = LogicalDesign::new();
+	let mut physical_design = PhysicalDesign::new();
+	let mut serializable_design = SerializableDesign::new();
+	checked_design.build_from(&mapped_design);
+	logical_design.build_from(&checked_design, &mapped_design);
+	physical_design.build_from(&logical_design);
+	let _ = physical_design.save_svg(&logical_design, "svg/test10.svg");
+	serializable_design.build_from(&physical_design, &logical_design);
+	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+	println!("\n{}", blueprint_json);
 }

@@ -4,6 +4,7 @@ use std::{
 };
 
 use hashers::fnv::FNV1aHasher64;
+use itertools::Itertools;
 
 pub(crate) fn hash_set<K>() -> HashSet<K, BuildHasherDefault<FNV1aHasher64>> {
 	HashSet::default()
@@ -15,3 +16,59 @@ pub(crate) fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64
 
 pub(crate) type HashM<K, V> = HashMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
 pub(crate) type HashS<K> = HashSet<K, BuildHasherDefault<FNV1aHasher64>>;
+
+pub(crate) fn construct_bidirectional_join<S1, S2>(
+	lhs: &[S1],
+	rhs: &[S2],
+) -> (Vec<usize>, Vec<usize>)
+where
+	S1: AsRef<str>,
+	S2: AsRef<str>,
+{
+	assert_eq!(lhs.len(), rhs.len());
+	let lhs_index =
+		lhs.iter()
+			.enumerate()
+			.fold(hash_map::<&str, usize>(), |mut map, (idx, the_str)| {
+				map.insert(the_str.as_ref(), idx);
+				map
+			});
+	let rhs_index =
+		rhs.iter()
+			.enumerate()
+			.fold(hash_map::<&str, usize>(), |mut map, (idx, the_str)| {
+				map.insert(the_str.as_ref(), idx);
+				map
+			});
+	let forward = lhs
+		.iter()
+		.map(|the_str| {
+			rhs_index
+				.get(the_str.as_ref())
+				.copied()
+				.unwrap_or(usize::MAX)
+		})
+		.collect_vec();
+	let reverse = rhs
+		.iter()
+		.map(|the_str| {
+			lhs_index
+				.get(the_str.as_ref())
+				.copied()
+				.unwrap_or(usize::MAX)
+		})
+		.collect_vec();
+
+	(forward, reverse)
+}
+
+pub(crate) fn index_of(strings: &[&str], target: &str) -> Option<usize> {
+	let mut i = 0;
+	for s in strings {
+		if *s == target {
+			return Some(i);
+		}
+		i += 1;
+	}
+	None
+}

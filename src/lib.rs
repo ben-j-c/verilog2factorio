@@ -103,7 +103,7 @@ pub fn lua_flow(args: Args) -> Result<String> {
 		}
 		serd.build_from(&phyd, &logd.logd.borrow());
 		let blueprint_json = serde_json::to_string(&serd)?;
-		return Ok(blueprint_json);
+		Ok(blueprint_json)
 	} else if let Ok(phyd) = eval.borrow::<PhysicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		serd.build_from(&phyd.phyd.borrow(), &phyd.logd.borrow());
@@ -139,12 +139,12 @@ pub fn get_v2f_root() -> Result<PathBuf> {
 		Ok(v) => {
 			let ret = PathBuf::from(v);
 			if ret.is_dir() {
-				return Ok(ret);
+				Ok(ret)
 			} else {
-				Err(Error::V2FRootNotDefined(format!("Not a directory")))
+				Err(Error::V2FRootNotDefined("Not a directory".to_string()))
 			}
 		},
-		Err(_) => Err(Error::V2FRootNotDefined(format!("Env var not defined"))),
+		Err(_) => Err(Error::V2FRootNotDefined("Env var not defined".to_string())),
 	}
 }
 

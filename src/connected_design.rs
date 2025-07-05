@@ -4,7 +4,6 @@ use std::vec;
 
 use itertools::Itertools;
 
-use crate::checked_design::*;
 use crate::mapped_design::{Bit, Direction, Integer};
 use crate::mapped_design::{BitSliceOps, MappedDesign};
 
@@ -114,34 +113,6 @@ impl CoarseExpr {
 	}
 }
 
-impl ImplementableOp {
-	fn get_terminal_names(&self) -> Vec<String> {
-		match self.get_body_type() {
-			BodyType::ABY => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
-			BodyType::AY => vec!["A".to_owned(), "Y".to_owned()],
-			BodyType::MultiPart => match self {
-				ImplementableOp::DFF => vec!["D".to_owned(), "CLK".to_owned(), "Q".to_owned()],
-				ImplementableOp::Swizzle => {
-					unreachable!("Imaginary cell encountered before it should be created.")
-				},
-				ImplementableOp::LUT(n) => (0..*n)
-					.map(|i| format!("A{}", i))
-					.chain(vec!["Y".to_owned()])
-					.collect_vec(),
-				ImplementableOp::PMux => vec![
-					"A".to_owned(),
-					"B".to_owned(),
-					"S".to_owned(),
-					"Y".to_owned(),
-				],
-				_ => unreachable!(),
-			},
-			BodyType::Constant { .. } => vec!["Y".to_owned()],
-			BodyType::Nop => vec!["A".to_owned(), "Y".to_owned()],
-		}
-	}
-}
-
 impl ConnectedDesign {
 	pub fn new() -> Self {
 		ConnectedDesign {
@@ -186,7 +157,7 @@ impl ConnectedDesign {
 
 		let mut io_map = vec![];
 		mapped_design.for_all_cells(|_, mapped_id, cell| {
-			for terminal_name in cell.cell_type.get_terminal_names() {
+			for terminal_name in cell.get_terminal_names() {
 				let (terminal_number, _) = self.terminal_name2typeid[&terminal_name];
 				let ioid: NodeId = io_map.len();
 				io_map.push(NodeIo::Cell {
