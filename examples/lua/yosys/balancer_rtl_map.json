@@ -1,7 +1,7 @@
 {
   "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
-    "top": {
+    "balancer": {
       "attributes": {
         "top": "00000000000000000000000000000001",
         "src": "balancer.v:1.1-15.10"
@@ -39,7 +39,7 @@
           },
           "attributes": {
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "balancer.v:12.21-12.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:53.3-53.41"
+            "src": "balancer.v:12.21-12.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:67.3-67.41"
           },
           "port_directions": {
             "A": "input",
@@ -64,7 +64,7 @@
           },
           "attributes": {
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "balancer.v:13.21-13.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:53.3-53.41"
+            "src": "balancer.v:13.21-13.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:67.3-67.41"
           },
           "port_directions": {
             "A": "input",
@@ -89,7 +89,7 @@
           },
           "attributes": {
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "balancer.v:12.14-12.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:223.3-223.41"
+            "src": "balancer.v:12.14-12.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:237.3-237.41"
           },
           "port_directions": {
             "A": "input",
@@ -114,7 +114,7 @@
           },
           "attributes": {
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "balancer.v:13.14-13.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:223.3-223.41"
+            "src": "balancer.v:13.14-13.30|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:237.3-237.41"
           },
           "port_directions": {
             "A": "input",

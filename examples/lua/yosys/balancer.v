@@ -1,4 +1,4 @@
-module top(
+module balancer(
 	input signed [31:0] iron_plate_0,
 	input signed [31:0] iron_plate_1,
 	output reg [31:0] signal_A,
