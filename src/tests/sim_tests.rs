@@ -384,11 +384,21 @@ fn decider_each2() {
 
 #[test]
 fn test10_multiport_rom() {
+	let step_count = 5;
 	let file = File::open("./test_designs/output/test10.json").unwrap();
 	let reader = BufReader::new(file);
 	let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
 	let mut checked_design = CheckedDesign::new();
-	let mut logical_design = LogicalDesign::new();
+	let mut logd = LogicalDesign::new();
 	checked_design.build_from(&mapped_design);
-	logical_design.build_from(&checked_design, &mapped_design);
+	logd.build_from(&checked_design, &mapped_design);
+	let signal_1_1_in = logd.get_port_node("signal_1_1").unwrap();
+	let signal_1_2_in = logd.get_port_node("signal_1_2").unwrap();
+	let signal_2_1_out = logd.get_port_node("signal_2_1").unwrap();
+	let signal_2_2_out = logd.get_port_node("signal_2_2").unwrap();
+	let logd = Rc::new(RefCell::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	{
+		let logd = logd.borrow_mut();
+	}
 }

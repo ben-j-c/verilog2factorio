@@ -8,7 +8,6 @@ opt -fast
 abc -fast
 abc -fast -lut 8
 opt -fast
-opt -full
 opt_lut
 opt_clean
 select alu

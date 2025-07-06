@@ -38,4 +38,3 @@ opt_dff -sat
 opt_clean
 opt_expr
 write_json alu_rtl.json
-show

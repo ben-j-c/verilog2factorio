@@ -2,5 +2,6 @@
 
 rtl = yosys_load_rtl("alu.v", "alu")
 logd = yosys_map_rtl(rtl)
+logd:make_svg()
 
 return logd

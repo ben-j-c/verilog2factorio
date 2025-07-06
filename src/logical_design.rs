@@ -881,8 +881,9 @@ impl LogicalDesign {
 				NET_NONE,
 			);
 			self.add_decider_out_input_count(inp, b[i], NET_RED);
+			mux_wires.push(self.add_wire_red(vec![], vec![inp]));
 			if i != 0 {
-				mux_wires.push(self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]));
+				self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]);
 				self.add_wire_red(vec![], vec![inp, b_muxes[i - 1]]);
 			}
 		}
@@ -902,15 +903,15 @@ impl LogicalDesign {
 				);
 			}
 			self.add_decider_out_input_count(a_case, a_signal, NET_RED_GREEN);
-			self.add_wire_red(vec![], vec![b_muxes[0], a_case]);
-			Some(self.add_wire_red(vec![b_muxes[0], a_case], vec![]))
+			self.add_wire_red(vec![b_muxes[0], a_case], vec![]);
+			Some(self.add_wire_red(vec![], vec![b_muxes[0], a_case]))
 		} else {
 			None
 		};
 
 		let y = self.add_nop(Signal::Anything, y);
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
-		(a_mux, mux_wires.clone(), b_muxes, y)
+		(a_mux, mux_wires.clone(), mux_wires, y)
 	}
 
 	fn add_mux_internal<const N: i32>(&mut self, data: Signal, s: Signal) -> Vec<NodeId> {
@@ -1827,6 +1828,58 @@ impl LogicalDesign {
 		(vec![retwire; width], lut_comb)
 	}
 
+	pub fn add_reduce_and(&mut self, a: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {
+		assert!(
+			matches!(y, Signal::Id(_)),
+			"Must have regular signal as output."
+		);
+		let reducer = self.add_decider();
+		self.add_decider_out_constant(reducer, y, 1, NET_RED_GREEN);
+		for (idx, a) in a.iter().enumerate() {
+			self.add_decider_input(
+				reducer,
+				(*a, DeciderOperator::NotEqual, Signal::Constant(0)),
+				if idx == 0 {
+					DeciderRowConjDisj::FirstRow
+				} else {
+					DeciderRowConjDisj::And
+				},
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+		}
+		(
+			vec![self.add_wire_red(vec![], vec![reducer]); a.len()],
+			reducer,
+		)
+	}
+
+	pub fn add_reduce_or(&mut self, a: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {
+		assert!(
+			matches!(y, Signal::Id(_)),
+			"Must have regular signal as output."
+		);
+		let reducer = self.add_decider();
+		self.add_decider_out_constant(reducer, y, 1, NET_RED_GREEN);
+		for (idx, a) in a.iter().enumerate() {
+			self.add_decider_input(
+				reducer,
+				(*a, DeciderOperator::NotEqual, Signal::Constant(0)),
+				if idx == 0 {
+					DeciderRowConjDisj::FirstRow
+				} else {
+					DeciderRowConjDisj::Or
+				},
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+		}
+		(
+			vec![self.add_wire_red(vec![], vec![reducer]); a.len()],
+			reducer,
+		)
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn have_shared_wire(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
 		let (input, output) = self.have_shared_wire_discriminate_side(ldid_1, ldid_2);
@@ -2048,6 +2101,16 @@ impl LogicalDesign {
 			direction,
 			name,
 		});
+	}
+
+	pub fn get_port_node<S>(&self, name: S) -> Option<NodeId>
+	where
+		S: AsRef<str>,
+	{
+		self.ports
+			.iter()
+			.find(|v| v.name == name.as_ref())
+			.map(|v| v.id)
 	}
 }
 

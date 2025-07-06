@@ -44,14 +44,32 @@
 			"cargo": {
 				"args": [
 					"test",
-					"--",
-					"--nocapture",
-					"--show-output",
-					"--exact",
-					"tests::logical_design_tests::test10",
+					"--lib",
 				]
 			},
-			"args": [],
+			"args": [
+				"--nocapture",
+				"--show-output",
+				"--exact",
+				"tests::logical_design_tests::test10",
+			],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "debug alu_example",
+			"cargo": {
+				"args": [
+					"test",
+					"--example",
+					"alu_example",
+				]
+			},
+			"args": [
+				"--nocapture",
+				"--show-output",
+			],
 			"cwd": "${workspaceFolder}"
 		}
 	]

@@ -38,6 +38,9 @@ pub enum ImplementableOp {
 	NotEqual,
 	GreaterThanEqual,
 	LessThanEqual,
+	ReduceAnd,
+	ReduceOr,
+	Neg,
 	V2FRollingAccumulate,
 	DFF,
 	LUT(usize),
@@ -73,6 +76,9 @@ impl ImplementableOp {
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
 			ImplementableOp::Memory => BodyType::MultiPart,
 			ImplementableOp::PMux(_, _) => BodyType::MultiPart,
+			ImplementableOp::ReduceAnd => BodyType::MultiPart,
+			ImplementableOp::ReduceOr => BodyType::MultiPart,
+			ImplementableOp::Neg => BodyType::AY,
 		}
 	}
 
@@ -1333,7 +1339,7 @@ impl CheckedDesign {
 				}
 			},
 			ImplementableOp::PMux(full_case, s_width) => {
-				let b_start = full_case as usize;
+				let b_start = !full_case as usize;
 				let s_start = b_start + s_width;
 				let (a, b, s, y) = logical_design.add_pmux(
 					if full_case { None } else { Some(sig_in[0]) },
@@ -1342,6 +1348,14 @@ impl CheckedDesign {
 					sig_out[0],
 				);
 				(chain!(a, b, s).collect_vec(), vec![y])
+			},
+			ImplementableOp::ReduceAnd => {
+				let (input_wires, output_comb) = logical_design.add_reduce_and(&sig_in, sig_out[0]);
+				(input_wires, vec![output_comb])
+			},
+			ImplementableOp::ReduceOr => {
+				let (input_wires, output_comb) = logical_design.add_reduce_or(&sig_in, sig_out[0]);
+				(input_wires, vec![output_comb])
 			},
 			_ => unreachable!(),
 		};
@@ -1371,6 +1385,13 @@ impl CheckedDesign {
 				);
 				logical_design.add_wire_red(vec![acc, pre_filter], vec![acc, post_filter]);
 				(pre_filter, post_filter)
+			},
+			ImplementableOp::Neg => {
+				let neg = logical_design.add_arithmetic(
+					(Signal::Constant(0), ArithmeticOperator::Sub, sig_in),
+					sig_out,
+				);
+				(neg, neg)
 			},
 			_ => {
 				unreachable!()

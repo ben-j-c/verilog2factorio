@@ -1,11 +1,14 @@
 use itertools::{chain, izip, Itertools};
+use rayon::collections::hash_map;
 use serde::{
 	de::{self, Visitor},
 	Deserialize, Deserializer,
 };
-use std::collections::HashMap;
 
-use crate::checked_design::{BodyType, ImplementableOp};
+use crate::{
+	checked_design::{BodyType, ImplementableOp},
+	util::{hash_map, HashM},
+};
 
 pub type CellType = String;
 pub type ModelName = String;
@@ -20,9 +23,9 @@ pub type ParameterName = String;
 pub struct MappedDesign {
 	creator: String,
 	#[serde(default)]
-	modules: HashMap<String, Module>,
+	modules: HashM<String, Module>,
 	#[serde(default)]
-	models: HashMap<String, Model>,
+	models: HashM<String, Model>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -32,15 +35,15 @@ pub struct Model {}
 #[derive(Deserialize, Debug)]
 pub struct Module {
 	#[serde(default)]
-	attributes: HashMap<String, String>,
+	attributes: HashM<String, String>,
 	#[serde(default)]
-	ports: HashMap<String, Port>,
+	ports: HashM<String, Port>,
 	#[serde(default)]
-	cells: HashMap<String, Cell>,
+	cells: HashM<String, Cell>,
 	#[serde(default)]
-	memories: HashMap<String, Memory>,
+	memories: HashM<String, Memory>,
 	#[serde(default)]
-	netnames: HashMap<String, Net>,
+	netnames: HashM<String, Net>,
 }
 
 #[allow(dead_code)]
@@ -165,13 +168,13 @@ pub struct MappedCell {
 	#[serde(default)]
 	pub model: ModelName,
 	#[serde(default)]
-	pub parameters: HashMap<ParameterName, Parameter>,
+	pub parameters: HashM<ParameterName, Parameter>,
 	#[serde(default)]
-	pub attributes: HashMap<AttributeName, Attribute>,
+	pub attributes: HashM<AttributeName, Attribute>,
 	#[serde(default)]
-	pub port_directions: HashMap<PortName, Direction>,
+	pub port_directions: HashM<PortName, Direction>,
 	#[serde(default)]
-	pub connections: HashMap<PortName, Vec<Bit>>,
+	pub connections: HashM<PortName, Vec<Bit>>,
 }
 
 #[derive(Debug)]
@@ -179,10 +182,10 @@ pub struct Cell {
 	pub hide_name: i32,
 	pub cell_type: ImplementableOp,
 	pub model: ModelName,
-	pub parameters: HashMap<ParameterName, Parameter>,
-	pub attributes: HashMap<AttributeName, Attribute>,
-	pub port_directions: HashMap<PortName, Direction>,
-	pub connections: HashMap<PortName, Vec<Bit>>,
+	pub parameters: HashM<ParameterName, Parameter>,
+	pub attributes: HashM<AttributeName, Attribute>,
+	pub port_directions: HashM<PortName, Direction>,
+	pub connections: HashM<PortName, Vec<Bit>>,
 }
 
 #[allow(dead_code)]
@@ -190,7 +193,7 @@ pub struct Cell {
 pub struct Memory {
 	hide_name: i32,
 	#[serde(default)]
-	attributes: HashMap<AttributeName, Attribute>,
+	attributes: HashM<AttributeName, Attribute>,
 	width: i32,
 	start_offset: u64,
 	size: u64,
@@ -201,7 +204,7 @@ pub struct Memory {
 pub struct Net {
 	hide_name: i32,
 	#[serde(default)]
-	attributes: HashMap<AttributeName, Attribute>,
+	attributes: HashM<AttributeName, Attribute>,
 	bits: Vec<Bit>,
 	#[serde(default)]
 	offset: isize,
@@ -270,6 +273,14 @@ impl Cell {
 						}
 					}
 					ports
+				},
+				ImplementableOp::ReduceAnd => {
+					let width = self.parameters["A_WIDTH"].unwrap_bin_str();
+					chain!((0..width).map(|i| format!("A{i}")), ["Y".to_owned()]).collect_vec()
+				},
+				ImplementableOp::ReduceOr => {
+					let width = self.parameters["A_WIDTH"].unwrap_bin_str();
+					chain!((0..width).map(|i| format!("A{i}")), ["Y".to_owned()]).collect_vec()
 				},
 				_ => unreachable!(),
 			},
@@ -495,7 +506,10 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_ne" => ImplementableOp::NotEqual,
 			"v2f_ge" => ImplementableOp::GreaterThanEqual,
 			"v2f_le" => ImplementableOp::LessThanEqual,
+			"v2f_reduce_or" => ImplementableOp::Add,
+			"v2f_reduce_and" => ImplementableOp::Add,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
+			"v2f_neg" => ImplementableOp::Neg,
 			"v2f_pmux" => ImplementableOp::PMux(false, 0),
 			"$dff" => ImplementableOp::DFF,
 			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
@@ -510,6 +524,8 @@ impl<'de> Deserialize<'de> for Cell {
 			Ok(convert_lut_ports(helper))
 		} else if helper.cell_type == *"v2f_pmux" {
 			Ok(convert_pmux_ports(helper))
+		} else if helper.cell_type.starts_with("v2f_reduce") {
+			Ok(convert_reduce_x_ports(helper))
 		} else {
 			Ok(Cell {
 				hide_name: helper.hide_name,
@@ -596,8 +612,8 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 	.collect_vec();
 	assert_eq!(wr_ports.len(), cell.parameters["WR_PORTS"].unwrap_bin_str());
 
-	let mut directions = HashMap::new();
-	let mut connections: HashMap<String, Vec<Bit>> = HashMap::new();
+	let mut directions = hash_map();
+	let mut connections: HashM<String, Vec<Bit>> = hash_map();
 	for i in 0..rd_ports.len() {
 		let (addr, data, arst, clk, en, srst) = &rd_ports[i];
 		directions.insert(format!("RD_ADDR_{}", i), Direction::Input);
@@ -658,8 +674,8 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 // Mark of shame.
 // Wow I have the foresight of a goldfish. I should have really looked at what a LUT is mapped at before I made that huge ass commit that assumes LUTs will have single bit ports. It's like wow how could this happen to me?! Good luck for me that I didn't have this option and didn't need to do some global bullshit or you would see yet another XXX_design.rs file to fix myopic me.
 fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
-	let mut new_connections = HashMap::new();
-	let mut new_directions = HashMap::new();
+	let mut new_connections = hash_map();
+	let mut new_directions = hash_map();
 	assert!(pre_mapped.connections.contains_key("A"));
 	assert!(pre_mapped.connections.contains_key("Y"));
 	assert!(pre_mapped.port_directions.contains_key("A"));
@@ -685,8 +701,8 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 
 fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 	let width = pre_mapped.parameters["WIDTH"].unwrap_bin_str();
-	let mut new_connections = HashMap::new();
-	let mut new_directions = HashMap::new();
+	let mut new_connections = hash_map();
+	let mut new_directions = hash_map();
 	assert!(pre_mapped.connections.contains_key("A"));
 	assert!(pre_mapped.connections.contains_key("B"));
 	assert!(pre_mapped.connections.contains_key("S"));
@@ -704,6 +720,7 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 		.chunks(width)
 		.into_iter()
 		.enumerate()
+		.take(pre_mapped.parameters["S_WIDTH"].unwrap_bin_str())
 	{
 		let bits = chunk.copied().collect_vec();
 		assert_eq!(
@@ -733,6 +750,37 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 	Cell {
 		hide_name: pre_mapped.hide_name,
 		cell_type: ImplementableOp::PMux(full_case, s_width),
+		model: pre_mapped.model,
+		parameters: pre_mapped.parameters,
+		attributes: pre_mapped.attributes,
+		port_directions: new_directions,
+		connections: new_connections,
+	}
+}
+
+fn convert_reduce_x_ports(pre_mapped: MappedCell) -> Cell {
+	let mut new_connections = hash_map();
+	let mut new_directions = hash_map();
+	assert!(pre_mapped.connections.contains_key("A"));
+	assert!(pre_mapped.connections.contains_key("Y"));
+	assert!(pre_mapped.port_directions.contains_key("A"));
+	assert!(pre_mapped.port_directions.contains_key("Y"));
+	assert_eq!(pre_mapped.port_directions["A"], Direction::Input);
+	assert_eq!(pre_mapped.port_directions["Y"], Direction::Output);
+	for (idx, bit) in pre_mapped.connections["A"].iter().enumerate() {
+		new_connections.insert(format!("A{}", idx), vec![*bit]);
+		new_directions.insert(format!("A{}", idx), pre_mapped.port_directions["A"]);
+	}
+	new_connections.insert("Y".to_owned(), pre_mapped.connections["Y"].clone());
+	new_directions.insert("Y".to_owned(), Direction::Output);
+	let cell_type = match pre_mapped.cell_type.as_str() {
+		"v2f_reduce_or" => ImplementableOp::ReduceOr,
+		"v2f_reduce_and" => ImplementableOp::ReduceAnd,
+		_ => unreachable!(),
+	};
+	Cell {
+		hide_name: pre_mapped.hide_name,
+		cell_type,
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,

@@ -337,7 +337,9 @@ impl ConnectedDesign {
 		bit_number: usize,
 	) -> (usize, usize) {
 		let io_entry = &io_map[ioid];
-		let ioid_driver = bit_map[io_entry.bit(bit_number).id_unwrap().0 as usize]
+		let bit_id = io_entry.bit(bit_number).id_unwrap().0;
+		let attached = &bit_map[bit_id as usize];
+		let ioid_driver = match attached
 			.iter()
 			.enumerate()
 			.find(|(terminal_number, terminal_ioids)| {
@@ -345,7 +347,12 @@ impl ConnectedDesign {
 					&& !terminal_ioids.is_empty()
 			})
 			.map(|(_, ioid_driver)| *ioid_driver.first().unwrap())
-			.unwrap();
+		{
+			Some(v) => v,
+			None => panic!(
+				"Can't find driver for bit {bit_id} in the design. I.e., I think its floating."
+			),
+		};
 		let bits_driver = match &io_map[ioid_driver] {
 			NodeIo::Port { bits, .. } => bits,
 			NodeIo::Cell { bits, .. } => bits,
