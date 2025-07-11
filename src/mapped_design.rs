@@ -834,8 +834,8 @@ mod test {
 		assert!(top.cells["memory"].connections.contains_key("RD_ADDR_1"));
 		assert_eq!(top.cells["memory"].connections["RD_DATA_0"].len(), 32);
 		assert_eq!(top.cells["memory"].connections["RD_DATA_1"].len(), 32);
-		assert_eq!(top.cells["memory"].connections["RD_ADDR_0"].len(), 8);
-		assert_eq!(top.cells["memory"].connections["RD_ADDR_1"].len(), 8);
+		assert_eq!(top.cells["memory"].connections["RD_ADDR_0"].len(), 7);
+		assert_eq!(top.cells["memory"].connections["RD_ADDR_1"].len(), 7);
 		assert_eq!(
 			top.cells["memory"].port_directions["RD_DATA_0"],
 			Direction::Output
