@@ -54,13 +54,14 @@ Read the docs to get a better understanding on how to use the APIs. For beginner
 
 # Sample images
 
+## Simulation traces for a DFFE
+The program can also simulate your design so you can experiment more quickly in code rather than in game. Here is a simple DFF simulation I do in the tests to verify functionality.
+![DFFE simulated](svg/sim_dffe_traces.svg)
+
 ## 64 word ROM
-This program supports generating SVGs of your designs so you don't need to import them into factorio to get an idea of what it looks like. Here is an example placement for a 64x32 bit ROM. I call this physical design rendering. This ROM is in the test_designs folder where you can see the verilog and the yosys script.
+This program supports generating SVGs of your designs so you don't need to import them into factorio to get an idea of what it looks like. Here is an example placement for a 64x32 bit ROM with two ports. I call this physical design rendering. This ROM is in the test_designs folder where you can see the verilog and the yosys script. The physical design rendering can also be annotated with the simulation state; this allows for much better global visibility over the traces at the expense of time visibility. If you open this SVG in a new tab, you can get hover text for each combinator which describes the input and output signals.
 ![64 word ROM](svg/test10_phy_sim.svg)
 
-## Simulation traces for a DFFE
-The program can also simulate your design so you can experiment more quickly in code rather than in game. Here is a simple DFF simulation I do in the tests to verify functionality. The physical design rendering can also be annotated with the simulation state; this allows for much better global visibility over the traces at the expense of time visibility.
-![DFFE simulated](svg/sim_dffe_traces.svg)
 
 ## Simulation traces for a DFF
 
