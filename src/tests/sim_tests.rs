@@ -1,9 +1,19 @@
-use std::{cell::RefCell, fs::File, io::BufReader, rc::Rc};
+use std::{
+	cell::RefCell,
+	fs::File,
+	io::{BufRead, BufReader, Read},
+	rc::Rc,
+};
+
+use serde::Serialize;
 
 use crate::{
 	checked_design::CheckedDesign,
 	logical_design::{LogicalDesign, Signal},
 	mapped_design::MappedDesign,
+	phy::PhysicalDesign,
+	serializable_design::SerializableDesign,
+	signal_lookup_table,
 	sim::SimState,
 };
 
@@ -384,7 +394,19 @@ fn decider_each2() {
 
 #[test]
 fn test10_multiport_rom() {
-	let step_count = 5;
+	let period = 4;
+	let data_len = 64;
+	let mut data = vec![];
+	{
+		let data_file = File::open("./test_designs/test8_memory_hex.txt").unwrap();
+		let reader = BufReader::new(data_file);
+		for line in reader.lines() {
+			let hex_str = line.unwrap();
+			let value = u32::from_str_radix(&hex_str, 16).unwrap();
+			data.push(value as i32);
+		}
+	}
+
 	let file = File::open("./test_designs/output/test10.json").unwrap();
 	let reader = BufReader::new(file);
 	let mapped_design: MappedDesign = serde_json::from_reader(reader).unwrap();
@@ -392,13 +414,44 @@ fn test10_multiport_rom() {
 	let mut logd = LogicalDesign::new();
 	checked_design.build_from(&mapped_design);
 	logd.build_from(&checked_design, &mapped_design);
-	let signal_1_1_in = logd.get_port_node("signal_1_1").unwrap();
-	let signal_1_2_in = logd.get_port_node("signal_1_2").unwrap();
-	let signal_2_1_out = logd.get_port_node("signal_2_1").unwrap();
-	let signal_2_2_out = logd.get_port_node("signal_2_2").unwrap();
+	let mut phy = PhysicalDesign::new();
+	phy.build_from(&logd);
+	let mut serializable_design = SerializableDesign::new();
+	serializable_design.build_from(&phy, &logd);
+	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
+	println!("{blueprint_json}");
+	let in_1 = logd.get_port_node("signal_1_1").unwrap();
+	let in_2 = logd.get_port_node("signal_1_2").unwrap();
+	let out_1 = logd.get_port_node("signal_2_1").unwrap();
+	let out_2 = logd.get_port_node("signal_2_2").unwrap();
+
+	let signal_2 = signal_lookup_table::lookup_id("signal_2").unwrap();
+
 	let logd = Rc::new(RefCell::new(logd));
 	let mut sim = SimState::new(logd.clone());
-	{
-		let logd = logd.borrow_mut();
+	sim.add_trace(in_1);
+	sim.add_trace(in_2);
+
+	for idx in 0..data_len {
+		let idx1 = idx;
+		let idx2 = ((idx + data_len / 2) % data_len) as usize;
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_ith_output_count(in_1, 0, idx1 as i32);
+			logd.set_ith_output_count(in_2, 0, idx2 as i32);
+		}
+		for _ in 0..period {
+			let logd = logd.borrow();
+			sim.step(1);
+			let _ = phy.save_svg_full(Some(&sim), &logd, "svg/test10_phy_sim.svg");
+		}
+		assert_eq!(
+			sim.probe_input(out_1, NET_RED_GREEN),
+			vec![(signal_2, data[idx])]
+		);
+		assert_eq!(
+			sim.probe_input(out_2, NET_RED_GREEN),
+			vec![(signal_2, data[idx2])]
+		);
 	}
 }

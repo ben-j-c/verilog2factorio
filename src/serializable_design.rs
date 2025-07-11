@@ -183,7 +183,7 @@ struct DeciderCombinatorOutput {
 struct ProgrammableSpeakerCircuitParameters {}
 
 #[derive(Debug, Clone, Serialize)]
-struct Position {
+pub(crate) struct Position {
 	x: f64,
 	y: f64,
 }
@@ -265,7 +265,10 @@ impl SerializableDesign {
 				entities.push(Entity {
 					entity_number: entities.len() + 1,
 					name,
-					position: node.position.into(),
+					position: Position {
+						x: node.position.0 + 1.5,
+						y: node.position.1 + 1.5,
+					},
 					direction: None,
 					connections: None,
 					neighbours: None,

@@ -1333,7 +1333,16 @@ impl LogicalDesign {
 						NET_RED_GREEN,
 					);
 				}
+				//if let Some(_) = &density {
 				self.add_decider_out_input_count(mux, Signal::Everything, NET_GREEN);
+				//} else {
+				//	self.add_decider_out_constant(
+				//		mux,
+				//		preferred_output,
+				//		rom_values[addr],
+				//		NET_GREEN,
+				//	);
+				//}
 				self.add_wire_green(vec![*constant], vec![mux]);
 				self.connect_red(last_wire_input, mux);
 				last_wire_input = self.add_wire_red(vec![], vec![mux]);
@@ -1769,6 +1778,14 @@ impl LogicalDesign {
 		self.description = description
 	}
 
+	pub(crate) fn set_constants_output(&mut self, nodeid: NodeId) {
+		let node = &mut self.nodes[nodeid.0];
+		match &mut node.function {
+			NodeFunction::Constant { enabled, constants } => todo!(),
+			_ => panic!("Tried to read node {:?} as a constant. {:?}", nodeid, node),
+		}
+	}
+
 	/// A pattern for a lookup table. ehhhhh too lazy to spec it now. Raise an issue if you want me to.
 	pub fn add_lut(
 		&mut self,
@@ -2111,6 +2128,20 @@ impl LogicalDesign {
 			.iter()
 			.find(|v| v.name == name.as_ref())
 			.map(|v| v.id)
+	}
+
+	pub fn get_named_node<S>(&self, name: S) -> Option<NodeId>
+	where
+		S: AsRef<str>,
+	{
+		self.ports
+			.iter()
+			.find(|v| v.name == name.as_ref())
+			.map(|v| v.id)
+	}
+
+	pub fn is_port(&self, id: NodeId) -> Option<Direction> {
+		self.ports.iter().find(|v| v.id == id).map(|v| v.direction)
 	}
 }
 

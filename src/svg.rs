@@ -592,5 +592,6 @@ fn rgb_to_string(c: (u8, u8, u8)) -> String {
 }
 
 fn rgba_to_string(c: (u8, u8, u8, f32)) -> String {
+	let (a, b, d, f) = c;
 	format!("rgba({},{},{},{})", c.0, c.1, c.2, c.3)
 }

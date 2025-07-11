@@ -230,6 +230,7 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("discharge-defense-remote");
 	sig_def!("artillery-targeting-remote");
 
+	signal_type = Some("virtual");
 	sig_def!("signal-0");
 	sig_def!("signal-1");
 	sig_def!("signal-2");

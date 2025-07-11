@@ -45,13 +45,14 @@
 				"args": [
 					"test",
 					"--lib",
+					"--no-run"
 				]
 			},
 			"args": [
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::test10",
+				"tests::sim_tests::test10_multiport_rom",
 			],
 			"cwd": "${workspaceFolder}"
 		},
@@ -62,6 +63,7 @@
 			"cargo": {
 				"args": [
 					"test",
+					"--norun",
 					"--example",
 					"alu_example",
 				]

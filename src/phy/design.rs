@@ -16,9 +16,11 @@ use std::{
 	vec,
 };
 
-use crate::logical_design::NodeId;
+use crate::logical_design::{NodeFunction, NodeId, NET_GREEN, NET_RED};
+use crate::mapped_design::Direction;
 use crate::ndarr::Arr2;
 use crate::phy::placement::*;
+use crate::sim::SimState;
 use crate::util::{self, hash_map, hash_set, HashM, HashS};
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
@@ -1504,12 +1506,52 @@ impl PhysicalDesign {
 		});
 	}
 
-	pub(crate) fn save_svg<P>(&self, ld: &LogicalDesign, filename: P) -> Result<(), std::io::Error>
+	pub(crate) fn save_svg_full<P>(
+		&self,
+		sim: Option<&SimState>,
+		ld: &LogicalDesign,
+		filename: P,
+	) -> Result<(), std::io::Error>
 	where
 		P: Into<std::path::PathBuf>,
 	{
 		const SCALE: f64 = 20.0;
 		const GREY: (u8, u8, u8) = (230, 230, 230);
+		fn format_comb_hint(
+			sim: Option<&SimState>,
+			ld: &LogicalDesign,
+			id: NodeId,
+		) -> Option<String> {
+			let node = ld.get_node(id);
+			match sim {
+				Some(sim) => {
+					let green = sim.probe_green_out(id);
+					let red = sim.probe_red_out(id);
+					let mut ret = if let Some(desc) = &node.description {
+						desc.clone() + "\n"
+					} else {
+						String::new()
+					};
+					ret += &format!("Outputs:\n\tRed: {red:?}\n\tGreen: {green:?}");
+
+					let green = sim.probe_input(id, NET_GREEN);
+					let red = sim.probe_input(id, NET_RED);
+					ret += &format!("\nInputs:\n\tRed: {red:?}\n\tGreen: {green:?}");
+
+					Some(ret)
+				},
+				None => node.description.clone(),
+			}
+		}
+
+		fn pick_colour(ld: &LogicalDesign, id: NodeId) -> (u8, u8, u8) {
+			match ld.is_port(id) {
+				Some(Direction::Input) => (230, 100, 100),
+				Some(Direction::Output) => (100, 100, 230),
+				Some(Direction::Inout) => (230, 100, 230),
+				None => GREY,
+			}
+		}
 		let mut svg = SVG::new();
 		svg.add_rect(
 			0,
@@ -1581,7 +1623,7 @@ impl PhysicalDesign {
 						SCALE * 2.0,
 						SCALE,
 						Some(op.resolve_string()),
-						node.description.clone(),
+						format_comb_hint(sim, ld, c.logic),
 					)
 				},
 				ld::NodeFunction::Decider { expressions, .. } => {
@@ -1591,17 +1633,17 @@ impl PhysicalDesign {
 							SCALE * 2.0,
 							SCALE,
 							Some(e.1.resolve_string()),
-							node.description.clone(),
+							format_comb_hint(sim, ld, c.logic),
 						)
 					} else {
 						(SCALE * 2.0, SCALE, Some("D"), node.description.clone())
 					}
 				},
 				ld::NodeFunction::Constant { .. } => {
-					(SCALE, SCALE, Some("C"), node.description.clone())
+					(SCALE, SCALE, Some("C"), format_comb_hint(sim, ld, c.logic))
 				},
 				ld::NodeFunction::Lamp { .. } => {
-					(SCALE, SCALE, Some("L"), node.description.clone())
+					(SCALE, SCALE, Some("L"), format_comb_hint(sim, ld, c.logic))
 				},
 				_ => {
 					unreachable!()
@@ -1612,7 +1654,7 @@ impl PhysicalDesign {
 				y,
 				w as i32,
 				h as i32,
-				GREY,
+				pick_colour(ld, c.logic),
 				label.map(|x| x.to_owned()),
 				hover,
 			));
@@ -1643,6 +1685,13 @@ impl PhysicalDesign {
 			);
 		}
 		svg.save(filename)
+	}
+
+	pub(crate) fn save_svg<P>(&self, ld: &LogicalDesign, filename: P) -> Result<(), std::io::Error>
+	where
+		P: Into<std::path::PathBuf>,
+	{
+		self.save_svg_full(None, ld, filename)
 	}
 
 	fn validate_against(&self, ld: &LogicalDesign) {

@@ -203,7 +203,8 @@ impl SimState {
 	}
 
 	pub fn probe_input(&self, id: NodeId, net: (bool, bool)) -> Vec<(i32, i32)> {
-		let red = if let Some(input_red) = self.state[id.0].netmap.input_red {
+		let netmap = &self.state[id.0].netmap;
+		let red = if let Some(input_red) = netmap.output_red {
 			let wire_id = self.network[input_red.0].wires.first().unwrap();
 			if net.0 {
 				self.probe_red_out(*wire_id)
@@ -213,7 +214,7 @@ impl SimState {
 		} else {
 			vec![]
 		};
-		let green = if let Some(input_green) = self.state[id.0].netmap.input_green {
+		let green = if let Some(input_green) = netmap.output_green {
 			let wire_id = self.network[input_green.0].wires.first().unwrap();
 			if net.1 {
 				self.probe_green_out(*wire_id)
@@ -244,10 +245,12 @@ impl SimState {
 			}
 		}
 		while i < red.len() {
-			ret.push(red[i])
+			ret.push(red[i]);
+			i += 1;
 		}
 		while j < green.len() {
-			ret.push(green[j])
+			ret.push(green[j]);
+			j += 1;
 		}
 		ret
 	}
@@ -421,7 +424,6 @@ impl SimState {
 		new_state_red: &mut Vec<OutputState>,
 		new_state_green: &mut Vec<OutputState>,
 	) {
-		let n_ids = signal_lookup_table::n_ids();
 		let (op, input_1, input_2, input_left_network, input_right_network) =
 			node.function.unwrap_arithmetic();
 		assert!(input_1 != Signal::Anything);

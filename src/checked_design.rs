@@ -376,9 +376,6 @@ impl CheckedDesign {
 	}
 
 	fn resolve_coarse_exprs(&mut self) {
-		for x in &self.connected_design.expr {
-			println!("{:?}", x);
-		}
 		for nodeid in 0..self.nodes.len() {
 			let connected_id = *match self.node_type(nodeid) {
 				NodeType::CellInput { connected_id, .. } | NodeType::PortInput { connected_id } => {
@@ -409,7 +406,6 @@ impl CheckedDesign {
 				}
 			}
 			if exprs.len() > 1 {
-				println!("{:?}", exprs);
 				// Insert swizzle that takes in the fanin and outputs a single
 				let body = self.new_node(
 					"$swizzle",
@@ -710,12 +706,25 @@ impl CheckedDesign {
 				sig += 1;
 			}
 		}
+		println!("\n\n");
+		let topo_order = self.get_topo_order();
+		topo_order
+			.iter()
+			.map(|x| {
+				(
+					*x,
+					self.node_type(*x).clone(),
+					signal_choices[*x],
+					self.nodes[*x].fanin.clone(),
+					self.nodes[*x].fanout.clone(),
+				)
+			})
+			.for_each(|tpl| println!("{:?}", tpl));
 	}
 
 	fn signals_correctness_check(&self, signal_choices: &[Option<i32>]) {
 		// Final correctness check
 		for nodeid in 0..self.nodes.len() {
-			println!("{:?}", nodeid);
 			let node = &self.nodes[nodeid];
 			match node.node_type {
 				NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
@@ -1018,7 +1027,7 @@ impl CheckedDesign {
 				NodeType::PortBody => {
 					if !node.fanout.is_empty() {
 						let new_id = logical_design
-							.add_constant(vec![Signal::Id(self.signals[nodeid].unwrap())], vec![1]);
+							.add_constant(vec![Signal::Id(self.signals[nodeid].unwrap())], vec![0]);
 						logic_map[nodeid] = Some(new_id);
 						logical_design.mark_as_port(
 							new_id,
@@ -1243,7 +1252,7 @@ impl CheckedDesign {
 					}
 					rd_ports.push(MemoryReadPort {
 						addr: sig_in[addr_idx],
-						data: sig_in[data_idx],
+						data: sig_out[data_idx],
 						clk: clk_idx.map(|idx| sig_in[idx]),
 						en: en_idx.map(|idx| sig_in[idx]),
 						rst: rst_spec,
@@ -1258,9 +1267,17 @@ impl CheckedDesign {
 					assert!(width <= 32, "Too wide");
 					let rom_values = cell.parameters["INIT"]
 						.chars()
+						.rev()
 						.chunks(width)
 						.into_iter()
-						.map(|rom_value| rom_value.collect::<String>().unwrap_bin_str() as i32)
+						.map(|rom_value| {
+							rom_value
+								.collect_vec()
+								.iter()
+								.rev()
+								.collect::<String>()
+								.unwrap_bin_str() as i32
+						})
 						.collect_vec();
 					let rd_ports = logical_design.add_rom(
 						rd_ports,
