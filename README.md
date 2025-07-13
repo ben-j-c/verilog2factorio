@@ -73,4 +73,5 @@ In the [ALU example](examples/lua/alu), you can see how to use the Lua to genera
 
 ## Animated Physical Placement
 Here is an output from one of the synthetic tests. It's a single partition thats being placed analytically after initialization.
+
 ![Synthetic](svg/large_logical_design_p3.svg)
