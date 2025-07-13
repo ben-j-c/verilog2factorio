@@ -388,6 +388,7 @@ impl PhysicalDesign {
 				self.side_length_single_partition,
 				partition,
 				local_to_global,
+				true,
 			);
 			let comb_positions = match algo {
 				Ok(pos) => pos,
@@ -463,10 +464,11 @@ impl PhysicalDesign {
 		side_length: usize,
 		partition_id: i32,
 		local_to_global: &Vec<Vec<usize>>,
+		animated: bool,
 	) -> Result<Vec<(usize, usize)>, (String, Vec<(usize, usize)>)> {
 		let num_cells = connections_per_node.len();
 		let edges = adjacency_to_edges(connections_per_node, true);
-		let mut placement = placement2::AnalyticalPlacement::new(side_length as f32);
+		let mut placement = placement2::AnalyticalPlacement::new(side_length as f32, animated);
 
 		for id in 0..num_cells {
 			let node = self.get_logical(PhyId(local_to_global[partition_id as usize][id]), logical);
@@ -495,9 +497,11 @@ impl PhysicalDesign {
 		while !cost.1 {
 			if round.rem(500) == 0 {
 				println!("{round}");
-				placement
-					.draw_placement(&edges, "svg/solve_analytical_dense.svg")
-					.ok();
+				if !animated {
+					placement
+						.draw_placement(&edges, "svg/solve_analytical_dense.svg")
+						.ok();
+				}
 				let mut placement2 = placement.clone();
 				placement2.apply_legalization();
 				if placement2.compute_cost(&edges).1 {
@@ -2517,6 +2521,8 @@ impl PhyNode {
 #[cfg(test)]
 mod test {
 
+	use std::fs;
+
 	use super::*;
 	#[test]
 	fn new() {
@@ -2530,8 +2536,10 @@ mod test {
 		let mut p = PhysicalDesign::new();
 		let l = crate::tests::logical_design_tests::get_large_logical_design(200);
 		p.build_from(&l);
-		p.save_svg(&l, "svg/n_combs_connectivity_averaging.svg")
+		p.save_svg(&l, "svg/large_logical_design.svg")
 			.expect("Failed to save");
+		fs::rename("svg/partition3.svg", "svg/large_logical_design_p3.svg")
+			.expect("Failed to move");
 	}
 
 	#[test]

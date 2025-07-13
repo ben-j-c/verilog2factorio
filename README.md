@@ -70,3 +70,7 @@ This program supports generating SVGs of your designs so you don't need to impor
 ## ALU Placement
 In the [ALU example](examples/lua/alu), you can see how to use the Lua to generate images. The following image is the physical design rendering for a 32 bit ALU. The Verilog and Lua flow code can be seen in the examples folder.
 ![ALU](examples/lua/alu/alu.svg)
+
+## Animated Physical Placement
+Here is an output from one of the synthetic tests. It's a single partition thats being placed analytically after initialization.
+![Synthetic](svg/large_logical_design_p3.svg)

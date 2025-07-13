@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
@@ -90,10 +91,12 @@ pub(crate) struct AnalyticalPlacement {
 	bucket_size: f32,
 	buckets: Arr2<HashS<PlacementId>>,
 	rng: StdRng,
+	animated: bool,
+	cell_history: Vec<Vec<(f32, f32)>>,
 }
 
 impl AnalyticalPlacement {
-	pub(crate) fn new(side_length: f32) -> Self {
+	pub(crate) fn new(side_length: f32, animated: bool) -> Self {
 		let dim = (side_length / 2.0).max(1.0) as usize;
 
 		AnalyticalPlacement {
@@ -102,6 +105,8 @@ impl AnalyticalPlacement {
 			bucket_size: 2.0,
 			buckets: Arr2::new([dim, dim]),
 			rng: StdRng::seed_from_u64(0x1234ABCD),
+			animated,
+			cell_history: vec![],
 		}
 	}
 
@@ -380,9 +385,11 @@ impl AnalyticalPlacement {
 			None,
 			None,
 		);
+		let mut id_map_cells = vec![usize::MAX; self.cells.len()];
+		let mut id_map_connections = vec![usize::MAX; connections.len()];
 		for id in 0..self.cells.len() {
 			let cell = &self.cells[id];
-			svg.add_rect_ext(
+			let shape_id = svg.add_rect_ext(
 				(cell.bbox.x * scale) as i32,
 				(cell.bbox.y * scale) as i32,
 				(cell.bbox.w * scale) as i32,
@@ -391,13 +398,14 @@ impl AnalyticalPlacement {
 				Some(format!("{id}")),
 				None,
 			);
+			id_map_cells[id] = shape_id;
 		}
-		for &(i, j) in connections {
-			let cell_i = &self.cells[i];
-			let cell_j = &self.cells[j];
+		for (idx, (i, j)) in connections.iter().enumerate() {
+			let cell_i = &self.cells[*i];
+			let cell_j = &self.cells[*j];
 			let (x1, y1) = cell_i.bbox.center();
 			let (x2, y2) = cell_j.bbox.center();
-			svg.add_line(
+			let shape_id = svg.add_line(
 				(x1 * scale) as i32,
 				(y1 * scale) as i32,
 				(x2 * scale) as i32,
@@ -405,11 +413,47 @@ impl AnalyticalPlacement {
 				None,
 				None,
 			);
+			id_map_connections[idx] = shape_id;
+		}
+		if self.animated {
+			for frame in (0..self.cell_history.len()).step_by(4) {
+				let cell_pos = &self.cell_history[frame];
+				for id in 0..self.cells.len() {
+					let pos = cell_pos[id];
+					svg.add_animation_step_rect(
+						id_map_cells[id],
+						((pos.0 * scale) as i32, (pos.1 * scale) as i32),
+					);
+				}
+				for (idx, (i, j)) in connections.iter().enumerate() {
+					let mut cell_i_bbox = self.cells[*i].bbox.clone();
+					let mut cell_j_bbox = self.cells[*j].bbox.clone();
+					cell_i_bbox.x = cell_pos[*i].0;
+					cell_i_bbox.y = cell_pos[*i].1;
+					cell_j_bbox.x = cell_pos[*j].0;
+					cell_j_bbox.y = cell_pos[*j].1;
+					let (x1, y1) = cell_i_bbox.center();
+					let (x2, y2) = cell_j_bbox.center();
+					svg.add_animation_step_line(
+						id_map_connections[idx],
+						((x1 * scale) as i32, (y1 * scale) as i32),
+						((x2 * scale) as i32, (y2 * scale) as i32),
+					);
+				}
+			}
 		}
 		svg.save(filename)
 	}
 
 	pub(crate) fn step_cells(&mut self, force: Vec<(f32, f32)>, factor: f32) {
+		if self.animated {
+			self.cell_history.push(
+				self.cells
+					.iter()
+					.map(|c| (c.bbox.x, c.bbox.y))
+					.collect_vec(),
+			);
+		}
 		for id in 0..self.cells.len() {
 			if self.cells[id].fixed {
 				continue;

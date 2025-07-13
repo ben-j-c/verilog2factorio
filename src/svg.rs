@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
+use itertools::Itertools;
+
 pub type ShapeId = usize;
 
 pub struct SVG {
@@ -17,6 +19,7 @@ struct RectData {
 	colour: (u8, u8, u8, f32),
 	label: Option<String>,
 	hover: Option<String>,
+	animation_xy: Option<Vec<(i32, i32)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +34,6 @@ struct WireData {
 enum Shape {
 	Rect(RectData),
 	Wire(WireData),
-	// New variants for arbitrary lines and text
 	Line {
 		x1: i32,
 		y1: i32,
@@ -40,6 +42,8 @@ enum Shape {
 		colour: String,
 		stroke_width: i32,
 		stroke_dasharray: Option<String>,
+		animation_xy1: Option<Vec<(i32, i32)>>,
+		animation_xy2: Option<Vec<(i32, i32)>>,
 	},
 	Text {
 		x: i32,
@@ -118,7 +122,7 @@ impl SVG {
 		y2: i32,
 		colour: Option<String>,
 		width: Option<i32>,
-	) {
+	) -> ShapeId {
 		let x1 = x1 * (grid.cell_width + grid.margin) + grid.cell_width / 2;
 		let y1 = y1 * (grid.cell_height + grid.margin) + grid.cell_height / 2;
 		let x2 = x2 * (grid.cell_width + grid.margin) + grid.cell_width / 2;
@@ -144,6 +148,7 @@ impl SVG {
 			colour: (colour.0, colour.1, colour.2, 1.0),
 			label: label.map(|s| s.to_string()),
 			hover: hover.map(|s| s.to_string()),
+			animation_xy: None,
 		};
 		self.shapes.push(Shape::Rect(rect));
 		self.shapes.len() - 1
@@ -167,6 +172,7 @@ impl SVG {
 			colour,
 			label: label.map(|s| s.to_string()),
 			hover: hover.map(|s| s.to_string()),
+			animation_xy: None,
 		};
 		self.shapes.push(Shape::Rect(rect));
 		self.shapes.len() - 1
@@ -180,7 +186,7 @@ impl SVG {
 		y2: i32,
 		colour: Option<String>,
 		width: Option<i32>,
-	) {
+	) -> ShapeId {
 		let colour = colour.unwrap_or_else(|| "black".to_owned());
 		let stroke_width = width.unwrap_or(1).min(1);
 		self.shapes.push(Shape::Line {
@@ -191,7 +197,10 @@ impl SVG {
 			colour,
 			stroke_width,
 			stroke_dasharray: None,
+			animation_xy1: None,
+			animation_xy2: None,
 		});
+		self.shapes.len() - 1
 	}
 
 	pub fn add_line_stroke_dasharray(
@@ -214,6 +223,8 @@ impl SVG {
 			colour,
 			stroke_width,
 			stroke_dasharray,
+			animation_xy1: None,
+			animation_xy2: None,
 		});
 	}
 
@@ -292,6 +303,8 @@ impl SVG {
 			colour: "black".to_string(),
 			stroke_width: 1,
 			stroke_dasharray: None,
+			animation_xy1: None,
+			animation_xy2: None,
 		});
 		self.shapes.push(Shape::Line {
 			x1: left_margin,
@@ -301,6 +314,8 @@ impl SVG {
 			colour: "black".to_string(),
 			stroke_width: 1,
 			stroke_dasharray: None,
+			animation_xy1: None,
+			animation_xy2: None,
 		});
 
 		// Compute data point coordinates.
@@ -323,6 +338,8 @@ impl SVG {
 					colour: "blue".to_string(),
 					stroke_width: 2,
 					stroke_dasharray: None,
+					animation_xy1: None,
+					animation_xy2: None,
 				});
 			}
 		}
@@ -367,6 +384,29 @@ impl SVG {
 		});
 	}
 
+	pub fn add_animation_step_rect(&mut self, id: ShapeId, pos: (i32, i32)) {
+		match &mut self.shapes[id] {
+			Shape::Rect(rect) => {
+				rect.animation_xy.get_or_insert_default().push(pos);
+			},
+			_ => panic!("Tried to add animation frame to invalid shape."),
+		}
+	}
+
+	pub fn add_animation_step_line(&mut self, id: ShapeId, pos1: (i32, i32), pos2: (i32, i32)) {
+		match &mut self.shapes[id] {
+			Shape::Line {
+				animation_xy1,
+				animation_xy2,
+				..
+			} => {
+				animation_xy1.get_or_insert_default().push(pos1);
+				animation_xy2.get_or_insert_default().push(pos2);
+			},
+			_ => panic!("Tried to add animation frame to invalid shape."),
+		}
+	}
+
 	pub fn save<P>(&self, filename: P) -> io::Result<()>
 	where
 		P: Into<PathBuf>,
@@ -397,7 +437,7 @@ impl SVG {
 				_ => {},
 			}
 		}
-		// Add a small margin.
+		// Just for visual appeal
 		let (svg_w, svg_h) = (max_w + 20, max_h + 20);
 
 		let mut svg_data = format!(
@@ -425,15 +465,37 @@ impl SVG {
 					if let Some(txt) = &r.hover {
 						svg_data.push_str(&format!(r#"<title>{}</title>"#, txt));
 					}
+					if let Some(xy) = &r.animation_xy {
+						let xs = xy.iter().map(|xy| xy.0.to_string()).join(";");
+						let ys = xy.iter().map(|xy| xy.1.to_string()).join(";");
+						let animation = format!(
+							r#"
+							<animate attributeName="x" values="{}" dur="10s" repeatCount="indefinite"/>
+							<animate attributeName="y" values="{}" dur="10s" repeatCount="indefinite"/>"#,
+							xs, ys
+						);
+						svg_data.push_str(&animation.replace("\n", "").replace("\t", ""));
+					}
 					svg_data.push_str("</rect>");
-
 					if let Some(txt) = &r.label {
 						let cx = r.x + r.w / 2;
 						let cy = r.y + r.h / 2;
 						svg_data.push_str(&format!(
-							r#"<text x="{}" y="{}" text-anchor="middle" alignment-baseline="middle" fill="black">{}</text>"#,
-							cx, cy, txt.replace("<", "&lt;").replace(">", "&gt;")
+							r#"<text x="{cx}" y="{cy}" text-anchor="middle" alignment-baseline="middle" fill="black">{}"#,
+							txt.replace("<", "&lt;").replace(">", "&gt;")
 						));
+						if let Some(xy) = &r.animation_xy {
+							let xs = xy.iter().map(|xy| (xy.0 + r.w / 2).to_string()).join(";");
+							let ys = xy.iter().map(|xy| (xy.1 + r.h / 2).to_string()).join(";");
+							let animation = format!(
+								r#"
+								<animate attributeName="x" values="{}" dur="10s" repeatCount="indefinite"/>
+								<animate attributeName="y" values="{}" dur="10s" repeatCount="indefinite"/>"#,
+								xs, ys
+							);
+							svg_data.push_str(&animation.replace("\n", "").replace("\t", ""));
+						}
+						svg_data.push_str("</text>");
 					}
 				},
 				Shape::Wire(l) => {
@@ -471,18 +533,43 @@ impl SVG {
 					colour,
 					stroke_width,
 					stroke_dasharray,
+					animation_xy1,
+					animation_xy2,
 				} => {
 					if let Some(stroke_dasharray) = stroke_dasharray {
 						svg_data.push_str(&format!(
-							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}" />"#,
+							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-dasharray="{}">"#,
 							x1, y1, x2, y2, colour, stroke_width, stroke_dasharray
 						));
 					} else {
 						svg_data.push_str(&format!(
-							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" />"#,
+							r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}">"#,
 							x1, y1, x2, y2, colour, stroke_width
 						));
 					}
+					if let Some(xy) = &animation_xy1 {
+						let xs = xy.iter().map(|xy| xy.0.to_string()).join(";");
+						let ys = xy.iter().map(|xy| xy.1.to_string()).join(";");
+						let animation = format!(
+							r#"
+							<animate attributeName="x1" values="{}" dur="10s" repeatCount="indefinite"/>
+							<animate attributeName="y1" values="{}" dur="10s" repeatCount="indefinite"/>"#,
+							xs, ys
+						);
+						svg_data.push_str(&animation.replace("\n", "").replace("\t", ""));
+					}
+					if let Some(xy) = &animation_xy2 {
+						let xs = xy.iter().map(|xy| xy.0.to_string()).join(";");
+						let ys = xy.iter().map(|xy| xy.1.to_string()).join(";");
+						let animation = format!(
+							r#"
+							<animate attributeName="x2" values="{}" dur="10s" repeatCount="indefinite"/>
+							<animate attributeName="y2" values="{}" dur="10s" repeatCount="indefinite"/>"#,
+							xs, ys
+						);
+						svg_data.push_str(&animation.replace("\n", "").replace("\t", ""));
+					}
+					svg_data.push_str("</line>");
 				},
 				Shape::Text {
 					x,
@@ -495,17 +582,17 @@ impl SVG {
 				} => {
 					if let Some((angle, rx, ry)) = rotate {
 						svg_data.push_str(&format!(
-                            r#"<text x="{}" y="{}" fill="{}" font-size="{}" text-anchor="{}" transform="rotate({} {} {})">{}</text>"#,
-                            x,
-                            y,
-                            colour,
-                            font_size,
-                            anchor.clone().unwrap_or_else(|| "start".to_string()),
-                            angle,
-                            rx,
-                            ry,
-                            text.replace("<", "&lt;").replace(">", "&gt;")
-                        ));
+							r#"<text x="{}" y="{}" fill="{}" font-size="{}" text-anchor="{}" transform="rotate({} {} {})">{}</text>"#,
+							x,
+							y,
+							colour,
+							font_size,
+							anchor.clone().unwrap_or_else(|| "start".to_string()),
+							angle,
+							rx,
+							ry,
+							text.replace("<", "&lt;").replace(">", "&gt;")
+						));
 					} else {
 						svg_data.push_str(&format!(
 							r#"<text x="{}" y="{}" fill="{}" font-size="{}" text-anchor="{}">{}</text>"#,
