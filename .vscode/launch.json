@@ -63,9 +63,9 @@
 			"cargo": {
 				"args": [
 					"test",
-					"--norun",
 					"--example",
 					"alu_example",
+					"--no-run"
 				]
 			},
 			"args": [

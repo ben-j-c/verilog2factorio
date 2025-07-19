@@ -94,6 +94,8 @@ pub enum DeciderRowConjDisj {
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum Signal {
+	/// An unset signal. i.e., a blank spot on the left hand side of an expression in a combinator.
+	None,
 	/// Regular signal representing virtual or physical signals.
 	Id(i32),
 	/// The everything signal. Game specific meaning.
@@ -104,8 +106,6 @@ pub enum Signal {
 	Each,
 	/// A constant found on the right hand side of an expression in either a decider or arithmetic combinator.
 	Constant(i32),
-	/// An unset signal. i.e., a blank spot on the left hand side of an expression in a combinator.
-	None,
 }
 
 impl Signal {
@@ -142,6 +142,14 @@ impl Signal {
 			Signal::Everything => true,
 			_ => false,
 		}
+	}
+
+	pub fn is_some(&self) -> bool {
+		!self.is_none()
+	}
+
+	pub(crate) fn is_none(&self) -> bool {
+		matches!(self, Signal::None)
 	}
 }
 
