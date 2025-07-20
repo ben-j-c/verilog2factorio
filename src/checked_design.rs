@@ -122,8 +122,6 @@ pub struct CheckedDesign {
 	/// Nodes in connected_design -> nodes in this struct.
 	connected_id_map: Vec<NodeId>,
 	coarse_exprs: Vec<Option<CoarseExpr>>,
-	// For constant pruning
-	constants: Vec<Option<i32>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,7 +204,6 @@ impl CheckedDesign {
 			connected_design: ConnectedDesign::new(),
 			connected_id_map: vec![],
 			coarse_exprs: vec![],
-			constants: vec![],
 		}
 	}
 
@@ -958,7 +955,6 @@ impl CheckedDesign {
 	fn get_signal_choice_final(&self) -> Vec<Signal> {
 		let mut signal_choices = vec![Signal::None; self.nodes.len()];
 		let mut fallback_id = 0;
-		let mut id = 0;
 		for node in &self.nodes {
 			if node.node_type == NodeType::PortBody {
 				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap_or_else(|| {
@@ -982,7 +978,6 @@ impl CheckedDesign {
 					}
 				}
 			}
-			id += 1;
 		}
 		for nodeid in 0..self.nodes.len() {
 			if signal_choices[nodeid].is_some() {
