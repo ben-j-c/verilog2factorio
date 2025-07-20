@@ -1559,9 +1559,6 @@ impl CheckedDesign {
 				if !matches!(fanin_body.node_type, NodeType::CellBody { .. }) {
 					continue;
 				}
-				if input[idx] == 42 {
-					println!("XD");
-				}
 				if let BodyType::Constant { value } = fanin_body.node_type.get_cell_type() {
 					self.nodes[id].constants[idx] = Some(value);
 					self.disconnect(output[idx], input[idx]);
@@ -1569,9 +1566,6 @@ impl CheckedDesign {
 			}
 			// If the input constant has no other fanout, then prune it.
 			for idx in 0..body.len() {
-				if input[idx] == 42 {
-					println!("XD");
-				}
 				if self.nodes[id].constants[idx].is_none() {
 					continue;
 				}
