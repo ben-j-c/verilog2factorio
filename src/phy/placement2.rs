@@ -416,7 +416,7 @@ impl AnalyticalPlacement {
 			id_map_connections[idx] = shape_id;
 		}
 		if self.animated {
-			for frame in (0..self.cell_history.len()).step_by(4) {
+			for frame in (0..self.cell_history.len()).step_by(10) {
 				let cell_pos = &self.cell_history[frame];
 				for id in 0..self.cells.len() {
 					let pos = cell_pos[id];
