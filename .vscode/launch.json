@@ -62,9 +62,10 @@
 			"name": "debug alu_example",
 			"cargo": {
 				"args": [
-					"test",
+					"run",
 					"--example",
 					"alu_example",
+					"--",
 					"--no-run"
 				]
 			},
@@ -86,7 +87,7 @@
 				{
 					"text": "-enable-pretty-printing"
 				}
-			]
+			],
 		}
 	]
 }

@@ -178,7 +178,9 @@ struct Node {
 	mapped_id: String,
 	fanin: Vec<NodeId>,
 	fanout: Vec<NodeId>,
+	keep: bool,
 	constants: Vec<Option<i32>>,
+	folded_expressions: Vec<Option<(Signal, DeciderOperator, Signal)>>,
 }
 
 impl Node {
@@ -232,6 +234,8 @@ impl CheckedDesign {
 			fanin: vec![],
 			fanout: vec![],
 			constants: vec![],
+			folded_expressions: vec![],
+			keep: false,
 		});
 		if let Some(connected_id) = connected_id {
 			if connected_id != usize::MAX {
@@ -277,22 +281,23 @@ impl CheckedDesign {
 
 	fn initialize_nodes(&mut self, mapped_design: &MappedDesign) {
 		mapped_design.for_all_top_level_io(|_, name, _port| {
-			if lookup_id(name).is_some() {
-				self.new_node(name, NodeType::PortBody);
-			} else {
-				panic!(
-					"{:?} on top level design doesn't match a named game signal",
-					name
-				)
-			}
+			let id = self.new_node(name, NodeType::PortBody);
+			self.nodes[id].keep = true;
 		});
 		mapped_design.for_all_cells(|_, name, cell| {
-			self.new_node(
+			let id = self.new_node(
 				name,
 				NodeType::CellBody {
 					cell_type: cell.cell_type.get_body_type(),
 				},
 			);
+			self.nodes[id].keep = cell
+				.attributes
+				.get("keep")
+				.map(|value| value.from_bin_str())
+				.flatten()
+				.unwrap_or_default()
+				> 0;
 		});
 		let n_nodes = self.nodes.len();
 		for nodeid in 0..n_nodes {
@@ -1158,6 +1163,7 @@ impl CheckedDesign {
 						let (ids_in, ids_out) = self.apply_multipart_op(
 							nodeid,
 							logical_design,
+							mapped_design,
 							mapped_design
 								.get_cell_option(&node.mapped_id)
 								.map(|cell| cell.cell_type)
@@ -1230,6 +1236,7 @@ impl CheckedDesign {
 		&self,
 		nodeid: NodeId,
 		logical_design: &mut LogicalDesign,
+		mapped_design: &MappedDesign,
 		op: ImplementableOp,
 		mapped_cell: Option<&crate::mapped_design::Cell>,
 		sig_in: Vec<Signal>,
@@ -1424,11 +1431,22 @@ impl CheckedDesign {
 			ImplementableOp::PMux(full_case, s_width) => {
 				let b_start = !full_case as usize;
 				let s_start = b_start + s_width;
+				let abs_folded_expr = if self.nodes[nodeid].folded_expressions.is_empty() {
+					None
+				} else {
+					let exprs = &self.nodes[nodeid].folded_expressions;
+					Some((
+						&exprs[0..b_start],
+						&exprs[b_start..s_start],
+						&exprs[s_start..],
+					))
+				};
 				let (a, b, s, y) = logical_design.add_pmux(
 					if full_case { None } else { Some(sig_in[0]) },
 					&sig_in[b_start..s_start],
-					&sig_in[s_start..sig_in.len()],
+					&sig_in[s_start..],
 					sig_out[0],
+					abs_folded_expr,
 				);
 				(chain!(a, b, s).collect_vec(), vec![y])
 			},
@@ -1515,18 +1533,88 @@ impl CheckedDesign {
 		let mut input = Vec::with_capacity(node.fanin.len());
 		for cell_input_id in &node.fanin {
 			let cell_input = &self.nodes[*cell_input_id];
-			let x_output = &self.nodes[cell_input.fanin[0]];
-			let x_body_id = x_output.fanin[0];
+			let x_output_id = cell_input.fanin.get(0).copied().unwrap_or(NodeId::MAX);
+			let x_body_id = if x_output_id != NodeId::MAX {
+				let x_output = &self.nodes[x_output_id];
+				x_output.fanin.get(0).copied().unwrap_or(NodeId::MAX)
+			} else {
+				NodeId::MAX
+			};
+
 			body.push(x_body_id);
-			output.push(cell_input.fanin[0]);
-			input.push(*cell_input_id);
+			output.push(x_output_id);
+			input.push(cell_input.id);
 		}
 		(body, output, input)
 	}
 
+	fn try_prune(&mut self, id: NodeId) -> usize {
+		match self.nodes[id].node_type {
+			NodeType::CellInput { .. } => {
+				return self.try_prune(self.nodes[id].fanout[0]);
+			},
+			NodeType::CellOutput { .. } => {
+				return self.try_prune(self.nodes[id].fanin[0]);
+			},
+			NodeType::CellBody { .. } => {},
+			_ => return 0,
+		}
+		if self.nodes[id].keep {
+			return 0;
+		}
+		for foid in &self.nodes[id].fanout {
+			if !self.nodes[*foid].fanout.is_empty() {
+				return 0;
+			}
+		}
+		for fiid in &self.nodes[id].fanin {
+			if !self.nodes[*fiid].fanin.is_empty() {
+				return 0;
+			}
+		}
+		let mut n_pruned = 0;
+		for idx in 0..self.nodes[id].fanout.len() {
+			let foid = self.nodes[id].fanout[idx];
+			self.nodes[foid].node_type = NodeType::Pruned;
+			n_pruned += 1;
+		}
+		for idx in 0..self.nodes[id].fanin.len() {
+			let fiid = self.nodes[id].fanin[idx];
+			self.nodes[fiid].node_type = NodeType::Pruned;
+			n_pruned += 1;
+		}
+		self.nodes[id].node_type = NodeType::Pruned;
+		n_pruned += 1;
+		n_pruned
+	}
+
+	/// Return the number of CellOutput nodes attached to the CellInput nodes on this CellBody
+	fn count_connected_terminals(&self, id: NodeId) -> usize {
+		assert!(matches!(self.node_type(id), NodeType::CellBody { .. }));
+		self.nodes[id]
+			.fanin
+			.iter()
+			.flat_map(|fiid| self.nodes[*fiid].fanin.iter())
+			.count()
+	}
+
+	/** see [`count_connected_terminals`] */
+	fn get_sigular_output_input_pair(&self, id: NodeId) -> (usize, usize) {
+		assert_eq!(self.count_connected_terminals(id), 1);
+		assert!(matches!(self.node_type(id), NodeType::CellBody { .. }));
+		let cell_input = self.nodes[id].fanin[0];
+		let cell_output = self.nodes[cell_input].fanin[0];
+		(cell_output, cell_input)
+	}
+
+	/** I wish there was a better way to implement optimizations, instead of having an ad-hoc approach for each
+	 optimization there should a DB of sorts. An optimization class can be created with hooks into each needed pass.
+	 Thats too much work right now, and really how many more optimizations will I need? Some can be applied in the
+	 verilog techmaps. Will have to revisit this if I need to scale this.
+	*/
 	fn optimize_graph(&mut self, mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
-		// Merge constants into cells that can support it. Something like a decider thats checking
+		// Merge constants into cells that can support it.
 		for id in 0..self.nodes.len() {
 			let node = &self.nodes[id];
 			if !node.constants.is_empty() {
@@ -1542,7 +1630,8 @@ impl CheckedDesign {
 				continue;
 			};
 			let optimization_applies = mapped.cell_type.get_decider_op().is_some()
-				|| mapped.cell_type.get_arithmetic_op().is_some();
+				|| mapped.cell_type.get_arithmetic_op().is_some()
+				|| matches!(mapped.cell_type, ImplementableOp::PMux(_, _));
 			if !optimization_applies {
 				continue;
 			}
@@ -1561,16 +1650,91 @@ impl CheckedDesign {
 			}
 			// If the input constant has no other fanout, then prune it.
 			for idx in 0..body.len() {
-				if self.nodes[id].constants[idx].is_none() {
+				n_pruned += self.try_prune(body[idx]);
+			}
+		}
+		// Merge decider operations into cells that support expression folding.
+		for id in 0..self.nodes.len() {
+			let node = &self.nodes[id];
+			if !node.folded_expressions.is_empty() {
+				continue;
+			}
+			if let NodeType::CellBody { .. } = &node.node_type {
+			} else {
+				continue;
+			};
+			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
+				m
+			} else {
+				continue;
+			};
+			let optimization_applies = matches!(
+				mapped.cell_type,
+				ImplementableOp::PMux(_, _) | ImplementableOp::LUT(_)
+			);
+			if !optimization_applies {
+				continue;
+			}
+			let (body, output, input) = self.get_fanin_body_subgraphs(id);
+			self.nodes[id].folded_expressions = vec![None; body.len()];
+			for (idx, body_id) in body.iter().enumerate() {
+				if *body_id == NodeId::MAX {
 					continue;
 				}
-				if self.nodes[output[idx]].fanout.len() == 0 {
-					n_pruned += 1;
-					self.nodes[body[idx]].node_type = NodeType::Pruned;
-					self.nodes[output[idx]].node_type = NodeType::Pruned;
+				let fanin_body = &self.nodes[*body_id];
+				if !matches!(fanin_body.node_type, NodeType::CellBody { .. }) {
+					continue;
+				}
+				let fanin_body_mapped =
+					if let Some(m) = mapped_design.get_cell_option(&fanin_body.mapped_id) {
+						m
+					} else {
+						continue;
+					};
+				// Finally, retain the body node for future reference when building the next
+				if fanin_body_mapped.cell_type.get_decider_op().is_some()
+					&& self.count_connected_terminals(*body_id) == 1
+				{
+					assert!(
+						!fanin_body.constants.is_empty(),
+						"Decider needs at least 1 constant to be folded in."
+					);
+					// Here I precompute what the expression for the folded expression should be. In the PMux/LUT
+					// implementation I'll check this first and use it instead of s[i] == 1.
+					let expr = (
+						fanin_body.constants[0] // Recall, terminals are order sensitive, so 0 is left.
+							.map(|v| Signal::Constant(v))
+							.unwrap_or(Signal::None),
+						fanin_body_mapped.cell_type.get_decider_op().unwrap(),
+						fanin_body.constants[1]
+							.map(|v| Signal::Constant(v))
+							.unwrap_or(Signal::None),
+					);
+					assert_ne!(expr.0, expr.2);
+					self.nodes[id].folded_expressions[idx] = Some(expr);
+					// We need to wire around the expression being folded in.
+					//                        1                 2              3                 4                 5
+					// third_party_output (O) -> body_input (I) -> body_id (B) -> output[idx] (O) -> input[idx] (I) -> id
+					//        |                   ^ the cell being pruned                               ^
+					//        +-------------------------------------------------------------------------+
+					//        6 This wire is being added by the connect call.
+					let (third_party_output, body_input) =
+						self.get_sigular_output_input_pair(*body_id);
+					self.disconnect(output[idx], input[idx]); // 4
+					self.connect(third_party_output, input[idx]); // 6
+					if self.nodes[output[idx]].fanout.is_empty() {
+						// Can only remove this iff the decider being wired around is no longer needed by anything.
+						self.disconnect(third_party_output, body_input); // 1
+					}
 				}
 			}
-			continue;
+			// If the input constant has no other fanout, then prune it.
+			for idx in 0..body.len() {
+				if body[idx] == NodeId::MAX {
+					continue;
+				}
+				n_pruned += self.try_prune(body[idx]);
+			}
 		}
 		n_pruned
 	}

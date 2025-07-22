@@ -72,6 +72,31 @@ pub enum DeciderOperator {
 	GreaterThanEqual,
 	LessThanEqual,
 }
+impl DeciderOperator {
+	/// Operator to use if swapping order of operands. Useful for constants that appear on the LHS.
+	fn swap_operands(&self) -> DeciderOperator {
+		match self {
+			DeciderOperator::LessThan => Self::GreaterThanEqual,
+			DeciderOperator::GreaterThan => Self::LessThanEqual,
+			DeciderOperator::Equal => Self::Equal,
+			DeciderOperator::NotEqual => Self::NotEqual,
+			DeciderOperator::GreaterThanEqual => Self::LessThan,
+			DeciderOperator::LessThanEqual => Self::GreaterThan,
+		}
+	}
+
+	/// Logical complement of this operator.
+	fn complement(&self) -> DeciderOperator {
+		match self {
+			DeciderOperator::LessThan => Self::GreaterThanEqual,
+			DeciderOperator::GreaterThan => Self::LessThanEqual,
+			DeciderOperator::Equal => Self::NotEqual,
+			DeciderOperator::NotEqual => Self::Equal,
+			DeciderOperator::GreaterThanEqual => Self::LessThan,
+			DeciderOperator::LessThanEqual => Self::GreaterThan,
+		}
+	}
+}
 
 /// Each Decider condition must have one of these enums. The first row must have `FirstRow`
 /// Subsequent rows can have either `And` (conjunction) or `Or` (disjunction).
@@ -848,6 +873,11 @@ impl LogicalDesign {
 		b: &[Signal],
 		s: &[Signal],
 		y: Signal,
+		abs_folded_expr: Option<(
+			&[Option<(Signal, DeciderOperator, Signal)>],
+			&[Option<(Signal, DeciderOperator, Signal)>],
+			&[Option<(Signal, DeciderOperator, Signal)>],
+		)>,
 	) -> (Option<NodeId>, Vec<NodeId>, Vec<NodeId>, NodeId) {
 		let n = b.len();
 		assert!(n > 1);
@@ -861,21 +891,29 @@ impl LogicalDesign {
 		);
 		for i in 0..n {
 			assert!(
-				!matches!(
-					b[i],
-					Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
-				),
+				!matches!(b[i], Signal::Each | Signal::Everything | Signal::Anything),
 				"PMux not designed for each/everything."
 			);
 			assert!(
-				!matches!(
-					s[i],
-					Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
-				),
+				!matches!(s[i], Signal::Each | Signal::Everything | Signal::Anything),
 				"PMux not designed for each/everything."
 			);
 		}
 
+		let get_ith_s_expr = |i: usize| {
+			if let Some((_a_expr_opt, _b_expr_opt, s_expr_opt)) = abs_folded_expr {
+				match s_expr_opt[i] {
+					Some((Signal::None, op, rhs)) => (s[i], op, rhs),
+					Some((lhs, op, Signal::None)) => (s[i], op.swap_operands(), lhs),
+					Some(_) => unreachable!(),
+					None => (s[i], DeciderOperator::NotEqual, Signal::Constant(0)),
+				}
+			} else {
+				(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
+			}
+		};
+
+		// Build the one-hot encoded mux switch.
 		let mut mux_wires = Vec::with_capacity(n);
 		let mut b_muxes = Vec::with_capacity(n);
 		for i in 0..n {
@@ -883,7 +921,7 @@ impl LogicalDesign {
 			b_muxes.push(inp);
 			self.add_decider_input(
 				inp,
-				(s[i], DeciderOperator::NotEqual, Signal::Constant(0)),
+				get_ith_s_expr(i),
 				DeciderRowConjDisj::FirstRow,
 				NET_RED,
 				NET_NONE,
@@ -895,12 +933,15 @@ impl LogicalDesign {
 				self.add_wire_red(vec![], vec![inp, b_muxes[i - 1]]);
 			}
 		}
+		// Build the fallback case.
 		let a_mux = if let Some(a_signal) = a {
 			let a_case = self.add_decider();
 			for i in 0..n {
+				let expr = get_ith_s_expr(i);
+				let expr = (expr.0, expr.1.complement(), expr.2);
 				self.add_decider_input(
 					a_case,
-					(s[i], DeciderOperator::Equal, Signal::Constant(0)),
+					expr,
 					if i == 0 {
 						DeciderRowConjDisj::FirstRow
 					} else {
