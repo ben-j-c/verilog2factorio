@@ -2,7 +2,7 @@
 mod test {
 	#[test]
 	fn alu_example() {
-		main()
+		super::main()
 	}
 }
 
