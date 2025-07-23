@@ -2,7 +2,8 @@
 mod test {
 	#[test]
 	fn alu_example() {
-		super::main()
+		super::main();
+		assert!(PathBuf::from("alu.svg").is_file());
 	}
 }
 
@@ -24,5 +25,4 @@ fn main() {
 			assert!(false);
 		},
 	}
-	assert!(PathBuf::from("alu.svg").is_file());
 }
