@@ -958,7 +958,7 @@ impl LogicalDesign {
 			None
 		};
 
-		let y = self.add_nop(Signal::Anything, y);
+		let y = self.add_nop(Signal::Each, y);
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
 		(a_mux, mux_wires.clone(), mux_wires, y)
 	}
@@ -1827,10 +1827,23 @@ impl LogicalDesign {
 		self.description = description
 	}
 
-	pub(crate) fn set_constants_output(&mut self, nodeid: NodeId) {
+	pub fn set_constants_output(&mut self, nodeid: NodeId, sigs: Vec<Signal>, vals: Vec<i32>) {
 		let node = &mut self.nodes[nodeid.0];
 		match &mut node.function {
-			NodeFunction::Constant { enabled, constants } => todo!(),
+			NodeFunction::Constant { constants, .. } => {
+				node.output = sigs;
+				*constants = vals;
+			},
+			_ => panic!("Tried to read node {:?} as a constant. {:?}", nodeid, node),
+		}
+	}
+
+	pub fn set_constant_enabled(&mut self, nodeid: NodeId, enabled_state: bool) {
+		let node = &mut self.nodes[nodeid.0];
+		match &mut node.function {
+			NodeFunction::Constant { enabled, .. } => {
+				*enabled = enabled_state;
+			},
 			_ => panic!("Tried to read node {:?} as a constant. {:?}", nodeid, node),
 		}
 	}
@@ -2176,6 +2189,26 @@ impl LogicalDesign {
 		self.ports
 			.iter()
 			.find(|v| v.name == name.as_ref())
+			.map(|v| v.id)
+	}
+
+	pub fn get_out_port_node<S>(&self, name: S) -> Option<NodeId>
+	where
+		S: AsRef<str>,
+	{
+		self.ports
+			.iter()
+			.find(|v| v.name == name.as_ref() && v.direction == Direction::Output)
+			.map(|v| v.id)
+	}
+
+	pub fn get_in_port_node<S>(&self, name: S) -> Option<NodeId>
+	where
+		S: AsRef<str>,
+	{
+		self.ports
+			.iter()
+			.find(|v| v.name == name.as_ref() && v.direction == Direction::Input)
 			.map(|v| v.id)
 	}
 

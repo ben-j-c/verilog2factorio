@@ -488,6 +488,38 @@ impl UserData for Constant {
 			Ok(TerminalSide::Output(this.id, this.logd.clone()))
 		});
 	}
+
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method(
+			"set_ith_output_count",
+			|_, this, (idx, count): (usize, i32)| {
+				let binding = this.logd.clone();
+				let mut logd = binding.borrow_mut();
+				if logd.get_node(this.id).output.len() >= idx {
+					return Err(Error::runtime("idx too large"));
+				}
+				logd.set_ith_output_count(this.id, idx, count);
+				Ok(())
+			},
+		);
+
+		methods.add_method(
+			"set_outputs",
+			|_, this, (sigs, vals): (Vec<Signal>, Vec<i32>)| {
+				let binding = this.logd.clone();
+				let mut logd = binding.borrow_mut();
+				logd.set_constants_output(this.id, sigs, vals);
+				Ok(())
+			},
+		);
+
+		methods.add_method("set_enabled", |_, this, status: bool| {
+			let binding = this.logd.clone();
+			let mut logd = binding.borrow_mut();
+			logd.set_constant_enabled(this.id, status);
+			Ok(())
+		});
+	}
 }
 
 impl UserData for Lamp {
@@ -570,6 +602,22 @@ impl UserData for LogicalDesignAPI {
 				logd: this.logd.clone(),
 				sim: Rc::new(RefCell::new(SimState::new(this.logd.clone()))),
 			})
+		});
+		methods.add_method("find_out_port", |_, this, name: String| {
+			Ok(this.logd.borrow().get_out_port_node(name).map(|id| Lamp {
+				id,
+				logd: this.logd.clone(),
+			}))
+		});
+		methods.add_method("find_in_port", |_, this, name: String| {
+			Ok(this
+				.logd
+				.borrow()
+				.get_in_port_node(name)
+				.map(|id| Constant {
+					id,
+					logd: this.logd.clone(),
+				}))
 		});
 	}
 }

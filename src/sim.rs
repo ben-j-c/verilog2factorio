@@ -1,6 +1,6 @@
 use std::{
 	cell::RefCell,
-	ops::{Index, IndexMut},
+	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shr},
 	rc::Rc,
 	usize,
 };
@@ -305,17 +305,17 @@ impl SimState {
 
 	fn execute_arith_op(left: i32, op: ArithmeticOperator, right: i32) -> i32 {
 		match op {
-			ArithmeticOperator::Mult => left * right,
-			ArithmeticOperator::Div => left / right,
-			ArithmeticOperator::Add => left + right,
-			ArithmeticOperator::Sub => left - right,
-			ArithmeticOperator::Mod => left % right,
+			ArithmeticOperator::Mult => left.wrapping_mul(right),
+			ArithmeticOperator::Div => left.checked_div(right).unwrap_or(0),
+			ArithmeticOperator::Add => left.wrapping_add(right),
+			ArithmeticOperator::Sub => left.wrapping_sub(right),
+			ArithmeticOperator::Mod => left.checked_rem(right).unwrap_or(0),
 			ArithmeticOperator::Exp => left.checked_pow(right as u32).unwrap_or(0),
-			ArithmeticOperator::Sll => left << right,
-			ArithmeticOperator::Srl => left >> right,
-			ArithmeticOperator::And => left & right,
-			ArithmeticOperator::Or => left | right,
-			ArithmeticOperator::Xor => left ^ right,
+			ArithmeticOperator::Sll => left.rotate_left(right as u32),
+			ArithmeticOperator::Srl => left.shr(right as u32),
+			ArithmeticOperator::And => left.bitand(right),
+			ArithmeticOperator::Or => left.bitor(right),
+			ArithmeticOperator::Xor => left.bitxor(right),
 		}
 	}
 

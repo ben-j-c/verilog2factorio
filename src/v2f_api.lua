@@ -8,9 +8,11 @@
 ---@field print fun(self: LogicalDesignAPI)
 ---@field make_svg fun(self: LogicalDesignAPI)
 ---@field new_simulation fun(self: LogicalDesignAPI): SimStateAPI
+---@field find_out_port fun(self: LogicalDesignAPI, name: string): Lamp|nil
+---@field find_in_port fun(self: LogicalDesignAPI, name: string): Constant|nil
 
 ---@class SimStateAPI
----@field step fun(self: SimStateAPI, integer)
+---@field step fun(self: SimStateAPI, n: integer)
 ---@field print fun(self: SimStateAPI)
 ---@field save_svg fun(self: SimStateAPI, filename: string)
 ---@field probe fun(self: SimStateAPI, loc: TerminalSide|Terminal): table[Signal, i32]
@@ -44,6 +46,9 @@
 
 ---@class Constant
 ---@field output TerminalSide
+---@field set_outputs fun(self: Constant, sigs: Signal[], values: integer[])
+---@field set_ith_output_count fun(self: Constant, idx: integer, value: integer)
+---@field set_enabled fun(self: Constant, status: boolean)
 
 ---@class Terminal
 ---@field connect fun(self: Terminal, other: TerminalSide)

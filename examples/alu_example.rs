@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test {
+	use std::path::PathBuf;
 	#[test]
 	fn alu_example() {
 		super::main();
