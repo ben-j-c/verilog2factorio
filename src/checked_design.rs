@@ -56,7 +56,7 @@ impl ImplementableOp {
 			ImplementableOp::AndBitwise => BodyType::ABY,
 			ImplementableOp::OrBitwise => BodyType::ABY,
 			ImplementableOp::XorBitwise => BodyType::ABY,
-			ImplementableOp::Shl => BodyType::ABY,
+			ImplementableOp::Shl => BodyType::MultiPart,
 			ImplementableOp::Shr => BodyType::ABY,
 			ImplementableOp::Mul => BodyType::ABY,
 			ImplementableOp::Div => BodyType::ABY,
@@ -1260,6 +1260,26 @@ impl CheckedDesign {
 			})
 			.collect_vec();
 		let (input_wires, outputs) = match op {
+			ImplementableOp::Shl => {
+				let mult = logical_design.add_arithmetic(
+					(Signal::Id(0), ArithmeticOperator::Mult, Signal::Id(1)),
+					sig_out[0],
+				);
+				let pow = logical_design.add_arithmetic(
+					(Signal::Constant(2), ArithmeticOperator::Exp, sig_in[1]),
+					Signal::Id(1),
+				);
+				let nop = logical_design.add_nop(sig_in[0], Signal::Id(0));
+				logical_design.add_wire_red_simple(nop, mult);
+				logical_design.add_wire_red_simple(pow, mult);
+				(
+					vec![
+						logical_design.add_wire_red(vec![], vec![nop]),
+						logical_design.add_wire_red(vec![], vec![pow]),
+					],
+					vec![mult],
+				)
+			},
 			ImplementableOp::DFF => {
 				let (input_wire, clk_wire, output_comb) =
 					logical_design.add_dff(sig_in[0], sig_in[1], sig_out[0]);

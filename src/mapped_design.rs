@@ -221,6 +221,7 @@ impl Cell {
 			BodyType::ABY => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
 			BodyType::AY => vec!["A".to_owned(), "Y".to_owned()],
 			BodyType::MultiPart => match &self.cell_type {
+				ImplementableOp::Shl => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
 				ImplementableOp::DFF => vec!["D".to_owned(), "CLK".to_owned(), "Q".to_owned()],
 				ImplementableOp::Swizzle => {
 					unreachable!("Imaginary cell encountered before it should be created.")
