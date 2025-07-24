@@ -16,6 +16,8 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: apt update
+      run: sudo apt update && sudo apt upgrade
     - name: Install dependencies
       run: sudo apt install metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config gperf build-essential bison flex libreadline-dev gawk tcl-dev libffi-dev git graphviz xdot pkg-config python3 libboost-system-dev libboost-python-dev libboost-filesystem-dev zlib1g-dev
     - name: Build
