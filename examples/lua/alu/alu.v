@@ -1,17 +1,17 @@
 module alu(
-	input signed [31:0] signal_A,
-	input signed [31:0] signal_B,
-	input [31:0] signal_S_op_select,
-	output signed [31:0] signal_Y,
+	input signed [31:0] data_a,
+	input signed [31:0] data_b,
+	input [31:0] select,
+	output signed [31:0] result_y,
 );
 	wire signed [31:0] A;
 	wire signed [31:0] B;
 	reg signed [31:0] Y;
-	assign signal_Y = Y;
-	assign A = signal_A;
-	assign B = signal_B;
+	assign result_y = Y;
+	assign A = data_a;
+	assign B = data_b;
 	always @(*) begin
-		case (signal_S_op_select[3:0])
+		case (select[3:0])
 			4'b0000: begin
 				Y <= A + B;
 			end

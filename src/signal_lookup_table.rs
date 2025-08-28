@@ -374,9 +374,9 @@ pub fn lookup_str(id: i32) -> (&'static str, Option<&'static str>) {
 }
 
 pub fn lookup_id(mapped_name: &str) -> Option<i32> {
-	let id_name = mapped_name.replace("_", "-");
+	let id_name = mapped_name.replace("_", "-").to_lowercase();
 	for (key, value) in &SIGNAL_MAP.1 {
-		if id_name.starts_with(*key) {
+		if id_name.starts_with(&key.to_lowercase()) {
 			return Some(value.0);
 		}
 	}

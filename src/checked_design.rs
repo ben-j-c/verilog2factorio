@@ -927,9 +927,15 @@ impl CheckedDesign {
 
 	fn get_signal_choices(&self) -> Vec<Vec<i32>> {
 		let mut signal_choices = vec![vec![]; self.nodes.len()];
+		let mut fallback_id = 0;
 		for node in &self.nodes {
 			if node.node_type == NodeType::PortBody {
-				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap();
+				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap_or_else(|| {
+					let ret = fallback_id;
+					fallback_id += 1;
+					fallback_id %= signal_lookup_table::n_ids();
+					ret
+				});
 				signal_choices[node.id] = vec![choice];
 				if let Some(fiid) = node.fanin.first() {
 					signal_choices[*fiid] = vec![choice];
