@@ -15,9 +15,10 @@
 ---@field step fun(self: SimStateAPI, n: integer)
 ---@field print fun(self: SimStateAPI)
 ---@field save_svg fun(self: SimStateAPI, filename: string)
----@field probe fun(self: SimStateAPI, loc: TerminalSide|Terminal): table[Signal, i32]
+---@field probe fun(self: SimStateAPI, loc: TerminalSide|Terminal): SignalTable
 ---@field probe_lamp_state fun(self: SimStateAPI, lamp: Lamp): boolean
----@field add_trace fun(self: SimStateAPI, )
+---@field add_trace fun(self: SimStateAPI)
+---@field inspect fun(self: SimStateAPI)
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
@@ -30,25 +31,30 @@
 ---@field __band fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
 ---@field __bor fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
 ---@field __bxor fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
+---@field __eq fun(self: Signal, other: Signal): boolean
 
 ---@class Decider
 ---@field input TerminalSide
 ---@field output TerminalSide
 ---@field add_condition fun(self: Decider, row: DeciderRowConjDisj, expr: DeciderExpr, network_left: Network, network_right: Network)
 ---@field add_output fun(self: Decider, sig: Signal|string, constant_or_use_input_count: integer|nil, network: Network)
+---@field signals fun(self: Decider): Signal[]
 
 ---@class Arithmetic
 ---@field input TerminalSide
 ---@field output TerminalSide
+---@field signals fun(self: Arithmetic): Signal[]
 
 ---@class Lamp
 ---@field input TerminalSide
+---@field signals fun(self: Lamp): Signal[]
 
 ---@class Constant
 ---@field output TerminalSide
 ---@field set_outputs fun(self: Constant, sigs: Signal[], values: integer[])
 ---@field set_ith_output_count fun(self: Constant, idx: integer, value: integer)
 ---@field set_enabled fun(self: Constant, status: boolean)
+---@field signals fun(self: Constant): Signal[]
 
 ---@class Terminal
 ---@field connect fun(self: Terminal, other: TerminalSide)
@@ -72,6 +78,10 @@ function connect(self, other) end
 ---@param op string
 ---@param rhs Signal|string|integer
 function Expr(lhs, op, rhs) end
+
+---@class SignalTable
+---@field __eq fun(self: SignalTable, other: SignalTable|table): boolean
+---@field __index fun(self: SignalTable, idx: Signal): integer
 
 Each = Signal("Each") ---@type Signal
 Anything = Signal("Anything") ---@type Signal

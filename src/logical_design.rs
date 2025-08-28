@@ -24,7 +24,7 @@
 
 use std::{
 	collections::{BTreeSet, HashSet},
-	fmt::Display,
+	fmt::{Debug, Display},
 	hash::Hash,
 	panic::UnwindSafe,
 	slice::Iter,
@@ -37,6 +37,7 @@ use crate::{
 	checked_design::CheckedDesign,
 	connected_design::CoarseExpr,
 	mapped_design::{BitSliceOps, Direction, MappedDesign},
+	signal_lookup_table,
 	util::{hash_set, HashS},
 };
 
@@ -117,7 +118,7 @@ pub enum DeciderRowConjDisj {
 ///
 /// See [crate::signal_lookup_table] for exact mapping between ids and names in game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Signal {
 	/// An unset signal. i.e., a blank spot on the left hand side of an expression in a combinator.
 	None,
@@ -296,7 +297,7 @@ impl NodeFunction {
 }
 
 /// An id that is unique in a design. Can be used to uniquely identify a node in a design. Use this id to make connections.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
 impl NodeId {
@@ -434,10 +435,11 @@ pub struct MemoryPortWriteFilled {
 	pub en_wire: Option<NodeId>,
 }
 
-struct LogicalPort {
+pub(crate) struct LogicalPort {
 	id: NodeId,
 	direction: Direction,
 	name: String,
+	signal: Signal,
 }
 
 /// A design you want to build up and save.
@@ -932,6 +934,17 @@ impl LogicalDesign {
 				self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]);
 				self.add_wire_red(vec![], vec![inp, b_muxes[i - 1]]);
 			}
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(
+					inp,
+					format!(
+						"{n}-pmux one-hot, i = {i}, s = {:?}, b = {:?}",
+						get_ith_s_expr(i),
+						b[i],
+					),
+				);
+			}
 		}
 		// Build the fallback case.
 		let a_mux = if let Some(a_signal) = a {
@@ -959,6 +972,10 @@ impl LogicalDesign {
 		};
 
 		let y = self.add_nop(Signal::Each, y);
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(y, format!("{n}-pmux output y"))
+		}
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
 		(a_mux, mux_wires.clone(), mux_wires, y)
 	}
@@ -1691,6 +1708,10 @@ impl LogicalDesign {
 		}
 	}
 
+	pub fn get_output_signals(&self, id: NodeId) -> &[Signal] {
+		&self.nodes[id.0].output
+	}
+
 	/// Add a lamp entity to this design, configured to light up based on the provided condition tuple (Signal, DeciderOperator, Signal).
 	/// When the condition is satisfied, the lamp will glow in-game.
 	pub fn add_lamp(&mut self, expr: (Signal, DeciderOperator, Signal)) -> NodeId {
@@ -1717,6 +1738,10 @@ impl LogicalDesign {
 		for node_out in fanout {
 			self.connect_red(id, node_out);
 		}
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(id, "wire_red");
+		}
 		id
 	}
 
@@ -1739,6 +1764,10 @@ impl LogicalDesign {
 		}
 		for node_out in fanout {
 			self.connect_green(id, node_out);
+		}
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(id, "wire_green");
 		}
 		id
 	}
@@ -2151,8 +2180,8 @@ impl LogicalDesign {
 		retval
 	}
 
-	pub fn set_description_node(&mut self, id: NodeId, desc: String) {
-		self.nodes[id.0].description = Some(desc);
+	pub fn set_description_node<S: Into<String>>(&mut self, id: NodeId, desc: S) {
+		self.nodes[id.0].description = Some(desc.into());
 	}
 
 	fn get_fanout_red(&self, id: NodeId) -> &[NodeId] {
@@ -2174,11 +2203,12 @@ impl LogicalDesign {
 		self.nodes[id.0].fanin_green.as_slice()
 	}
 
-	pub fn mark_as_port(&mut self, id: NodeId, direction: Direction, name: String) {
+	pub fn mark_as_port(&mut self, id: NodeId, direction: Direction, name: String, signal: Signal) {
 		self.ports.push(LogicalPort {
 			id,
 			direction,
 			name,
+			signal,
 		});
 	}
 
@@ -2225,18 +2255,136 @@ impl LogicalDesign {
 	pub fn is_port(&self, id: NodeId) -> Option<Direction> {
 		self.ports.iter().find(|v| v.id == id).map(|v| v.direction)
 	}
+
+	pub fn get_port_signal(&self, id: NodeId) -> Option<Signal> {
+		self.ports.iter().find(|v| v.id == id).map(|v| v.signal)
+	}
+}
+
+impl Display for LogicalPort {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"Port \"{}\" {:?} {:?} {}",
+			self.name, self.direction, self.id, self.signal
+		)
+	}
+}
+
+impl Display for Node {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let func = match &self.function {
+			NodeFunction::Arithmetic {
+				op,
+				input_1,
+				input_2,
+				input_left_network,
+				input_right_network,
+			} => {
+				let net = |rg: (bool, bool)| match rg {
+					(true, true) => "RG",
+					(true, false) => "R_",
+					(false, true) => "_G",
+					(false, false) => "__",
+				};
+				format!(
+					"A {}({}) {} {}({}) => {}",
+					input_1,
+					net(*input_left_network),
+					op.resolve_string(),
+					input_2,
+					net(*input_right_network),
+					self.output[0],
+				)
+			},
+			NodeFunction::Decider {
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				output_network,
+				use_input_count,
+				constants,
+			} => {
+				format!("D {:?}", self.output)
+			},
+			NodeFunction::Constant { enabled, constants } => {
+				format!(
+					"C {enabled} {:?}",
+					izip!(&self.output, constants)
+						.map(|(sig, v)| format!("({sig}: {v})"))
+						.collect_vec()
+				)
+			},
+			NodeFunction::Lamp { expression } => {
+				format!(
+					"L {} {} {}",
+					expression.0,
+					expression.1.resolve_string(),
+					expression.2
+				)
+			},
+			NodeFunction::WireSum(wire_colour) => {
+				format!("W {:?}", wire_colour)
+			},
+		};
+		let mut descr = self
+			.description
+			.clone()
+			.unwrap_or("_".to_owned())
+			.replace("\n", "\\n");
+		if descr.len() > 13 {
+			descr = descr[0..10].to_owned() + &"...";
+		}
+		write!(f, "{} \"{}\" {}", self.id, descr, func,)?;
+		if !self.fanin_red.is_empty() || !self.fanout_red.is_empty() {
+			write!(f, " | R: {:?} -> {:?}", self.fanin_red, self.fanout_red)?;
+		}
+		if !self.fanin_green.is_empty() || !self.fanout_green.is_empty() {
+			write!(f, " | G: {:?} -> {:?}", self.fanin_green, self.fanout_green)?;
+		}
+		Ok(())
+	}
 }
 
 impl Display for LogicalDesign {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str("LogicalDesign begin\n")?;
-		for x in &self.nodes {
-			let disp = format!("{:?}", x);
-			f.write_str(" ")?;
-			f.write_str(disp.as_str())?;
-			f.write_str("\n")?;
+		writeln!(f, "  Description: {}", self.description)?;
+		writeln!(f, "  Ports:")?;
+		for p in &self.ports {
+			writeln!(f, "    {:#}", p)?;
+		}
+		writeln!(f, "  Nodes:")?;
+		for node in &self.nodes {
+			writeln!(f, "    {}", node)?;
 		}
 		f.write_str("END")?;
 		Ok(())
+	}
+}
+
+impl Debug for NodeId {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+impl Display for NodeId {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+impl Display for Signal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Signal::None => write!(f, "_"),
+			Signal::Id(id) => write!(f, "{}({})", signal_lookup_table::lookup_str(*id).0, id),
+			Signal::Everything => write!(f, "Everything"),
+			Signal::Anything => write!(f, "Anything"),
+			Signal::Each => write!(f, "Each"),
+			Signal::Constant(c) => write!(f, "{}", c),
+		}
 	}
 }

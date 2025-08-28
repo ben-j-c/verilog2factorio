@@ -664,18 +664,18 @@ impl CheckedDesign {
 	fn elaborate_signal_choices(&self, signal_choices: &mut Vec<Signal>) {
 		// Check that we now only have 0 or 1 option for a signal
 		let topo_order = self.get_topo_order();
-		topo_order
-			.iter()
-			.map(|x| {
-				(
-					*x,
-					self.node_type(*x).clone(),
-					signal_choices[*x],
-					self.nodes[*x].fanin.clone(),
-					self.nodes[*x].fanout.clone(),
-				)
-			})
-			.for_each(|tpl| println!("{:?}", tpl));
+		//topo_order
+		//	.iter()
+		//	.map(|x| {
+		//		(
+		//			*x,
+		//			self.node_type(*x).clone(),
+		//			signal_choices[*x],
+		//			self.nodes[*x].fanin.clone(),
+		//			self.nodes[*x].fanout.clone(),
+		//		)
+		//	})
+		//	.for_each(|tpl| println!("{:?}", tpl));
 		// Final signal resolve
 		for nodeid in topo_order {
 			if signal_choices[nodeid].is_some() {
@@ -727,20 +727,20 @@ impl CheckedDesign {
 				sig += 1;
 			}
 		}
-		println!("\n\n");
-		let topo_order = self.get_topo_order();
-		topo_order
-			.iter()
-			.map(|x| {
-				(
-					*x,
-					self.node_type(*x).clone(),
-					signal_choices[*x],
-					self.nodes[*x].fanin.clone(),
-					self.nodes[*x].fanout.clone(),
-				)
-			})
-			.for_each(|tpl| println!("{:?}", tpl));
+		//println!("\n\n");
+		//let topo_order = self.get_topo_order();
+		//topo_order
+		//	.iter()
+		//	.map(|x| {
+		//		(
+		//			*x,
+		//			self.node_type(*x).clone(),
+		//			signal_choices[*x],
+		//			self.nodes[*x].fanin.clone(),
+		//			self.nodes[*x].fanout.clone(),
+		//		)
+		//	})
+		//	.for_each(|tpl| println!("{:?}", tpl));
 	}
 
 	fn signals_correctness_check(&self, signal_choices: &[Signal]) {
@@ -1086,6 +1086,7 @@ impl CheckedDesign {
 							new_id,
 							Direction::Input,
 							node.mapped_id.clone(),
+							self.signals[nodeid],
 						);
 					} else if !node.fanin.is_empty() {
 						let new_id = logical_design.add_lamp((
@@ -1098,6 +1099,7 @@ impl CheckedDesign {
 							new_id,
 							Direction::Output,
 							node.mapped_id.clone(),
+							self.signals[nodeid],
 						);
 					}
 				},
@@ -1230,6 +1232,7 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => {},
 			}
 		}
+		println!("{:#}", logical_design);
 	}
 
 	fn apply_multipart_op(

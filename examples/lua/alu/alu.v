@@ -28,7 +28,7 @@ module alu(
 				Y <= A % B;
 			end
 			4'b0101: begin
-				Y <= A % B;
+				Y <= B;
 			end
 			4'b0110: begin
 				Y <= A ** B;

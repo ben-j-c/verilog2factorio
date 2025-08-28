@@ -550,7 +550,7 @@ mod test {
 	#[test]
 	fn nop_to_lamp() {
 		let mut d = LogicalDesign::new();
-		let nop = d.add_nop(Sig::Id(0), Sig::Id(0));
+		let nop = d.add_nop(signal_lookup_table::lookup_sig("signal-Y"), Sig::Id(0));
 		let lamp = d.add_lamp((Sig::None, DeciderOperator::Equal, Sig::None));
 		d.add_wire_red_simple(nop, lamp);
 		let mut p = PhysicalDesign::new();

@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use mlua::{
 	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, UserData, UserDataFields,
 	UserDataMethods, Value,
@@ -6,6 +7,7 @@ use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
+	fmt::format,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
@@ -24,6 +26,7 @@ use crate::{
 	phy::PhysicalDesign,
 	signal_lookup_table,
 	sim::SimState,
+	util::HashM,
 };
 
 impl From<crate::Error> for mlua::Error {
@@ -45,6 +48,45 @@ pub(crate) struct PhysicalDesignAPI {
 pub(crate) struct SimStateAPI {
 	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
 	pub(crate) sim: Rc<RefCell<SimState>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SignalTable {
+	pub(crate) signals: HashM<Signal, i32>,
+}
+
+impl PartialEq for SignalTable {
+	fn eq(&self, other: &SignalTable) -> bool {
+		for (sig, count) in &self.signals {
+			match other.signals.get(sig) {
+				Some(count2) => {
+					if *count != *count2 {
+						return false;
+					}
+				},
+				None => {
+					if *count != 0 {
+						return false;
+					}
+				},
+			}
+		}
+		for (sig, count) in &other.signals {
+			match self.signals.get(sig) {
+				Some(count2) => {
+					if *count != *count2 {
+						return false;
+					}
+				},
+				None => {
+					if *count != 0 {
+						return false;
+					}
+				},
+			}
+		}
+		true
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -163,6 +205,7 @@ impl UserData for Signal {
 		methods.add_meta_method(MetaMethod::BXor, |_, lhs, rhs: Signal| {
 			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Xor, rhs))
 		});
+		methods.add_meta_method(MetaMethod::Eq, |_, lhs, rhs: Signal| Ok(*lhs == rhs));
 	}
 }
 
@@ -468,6 +511,15 @@ impl UserData for Decider {
 				Ok(())
 			}
 		});
+		methods.add_method("signals", |_, this, _: ()| {
+			let binding = this.logd.clone();
+			let logd = binding.borrow();
+			Ok(logd
+				.get_output_signals(this.id)
+				.iter()
+				.copied()
+				.collect_vec())
+		});
 	}
 }
 
@@ -478,6 +530,17 @@ impl UserData for Arithmetic {
 		});
 		fields.add_field_method_get("output", |_, this| {
 			Ok(TerminalSide::Output(this.id, this.logd.clone()))
+		});
+	}
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("signals", |_, this, _: ()| {
+			let binding = this.logd.clone();
+			let logd = binding.borrow();
+			Ok(logd
+				.get_output_signals(this.id)
+				.iter()
+				.copied()
+				.collect_vec())
 		});
 	}
 }
@@ -495,7 +558,8 @@ impl UserData for Constant {
 			|_, this, (idx, count): (usize, i32)| {
 				let binding = this.logd.clone();
 				let mut logd = binding.borrow_mut();
-				if logd.get_node(this.id).output.len() >= idx {
+				let node = logd.get_node(this.id);
+				if node.output.len() <= idx {
 					return Err(Error::runtime("idx too large"));
 				}
 				logd.set_ith_output_count(this.id, idx, count);
@@ -519,6 +583,16 @@ impl UserData for Constant {
 			logd.set_constant_enabled(this.id, status);
 			Ok(())
 		});
+
+		methods.add_method("signals", |_, this, _: ()| {
+			let binding = this.logd.clone();
+			let logd = binding.borrow();
+			Ok(logd
+				.get_output_signals(this.id)
+				.iter()
+				.copied()
+				.collect_vec())
+		});
 	}
 }
 
@@ -526,6 +600,17 @@ impl UserData for Lamp {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("input", |_, this| {
 			Ok(TerminalSide::Input(this.id, this.logd.clone()))
+		});
+	}
+
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("signals", |_, this, _: ()| {
+			let binding = this.logd.clone();
+			let logd = binding.borrow();
+			if logd.is_port(this.id).is_some() {
+				return Ok(logd.get_port_signal(this.id).into_iter().collect_vec());
+			}
+			Ok(vec![])
 		});
 	}
 }
@@ -619,6 +704,9 @@ impl UserData for LogicalDesignAPI {
 					logd: this.logd.clone(),
 				}))
 		});
+		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+			Ok(format!("{}", this.logd.borrow()))
+		});
 	}
 }
 
@@ -650,7 +738,7 @@ impl UserData for SimStateAPI {
 			this.sim.borrow_mut().step(steps);
 			Ok(())
 		});
-		methods.add_method("probe", |lua, this, data: AnyUserData| {
+		methods.add_method("probe", |_, this, data: AnyUserData| {
 			let signals: Vec<(i32, i32)> = if let Ok(term) = data.borrow::<Terminal>() {
 				let (nodeid, logd, colour) = term.get();
 				if logd.as_ptr() != this.logd.as_ptr() {
@@ -668,6 +756,7 @@ impl UserData for SimStateAPI {
 				}
 			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
 				let (nodeid, logd) = term_side.clone().get();
+				println!("{}", logd.borrow().get_node(nodeid));
 				if logd.as_ptr() != this.logd.as_ptr() {
 					return Err(Error::runtime(
 						"Supplied a combinator that doesn't belong to this design.",
@@ -682,9 +771,9 @@ impl UserData for SimStateAPI {
 			} else {
 				return Err(Error::runtime("Passed an invalid type into probe."));
 			};
-			let ret = lua.create_table()?;
+			let mut ret = SignalTable::default();
 			for s in signals {
-				ret.set(Signal::Id(s.0), s.1)?;
+				ret.signals.insert(Signal::Id(s.0), s.1);
 			}
 			Ok(ret)
 		});
@@ -709,6 +798,47 @@ impl UserData for SimStateAPI {
 			this.sim.borrow().print();
 			Ok(())
 		});
+		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+			Ok(format!("{}", this.sim.borrow()))
+		});
+		methods.add_method("inspect", |_, this, _: ()| {
+			println!("Valid commands:");
+			println!("\tlogic <id> // basic print logical node");
+			println!("\tlogd <id> // detailed print logical node");
+			println!("\tsim <id> // print sim row");
+			let mut rl = rustyline::DefaultEditor::new().unwrap();
+			for readline in rl.iter("> ") {
+				match readline {
+					Ok(line) => {
+						if line.starts_with("log") {
+							let detailed = line.starts_with("logd");
+							let logd = this.logd.borrow();
+							for v in line.split(" ").skip(1) {
+								if let Ok(v) = v.parse::<usize>() {
+									if detailed {
+										println!("{:#?}", logd.get_node(NodeId(v)))
+									} else {
+										println!("{}", logd.get_node(NodeId(v)))
+									}
+								}
+							}
+						} else if line.starts_with("s") {
+							let sim = this.sim.borrow();
+							for v in line.split(" ").skip(1) {
+								if let Ok(v) = v.parse::<usize>() {
+									sim.print_row(v);
+								}
+							}
+						}
+					},
+					Err(err) => {
+						println!("Error: {:?}", err);
+						break;
+					},
+				}
+			}
+			Ok(())
+		});
 	}
 }
 
@@ -730,6 +860,45 @@ impl FromLua for RTL {
 			_ => Err(Error::FromLuaConversionError {
 				from: value.type_name(),
 				to: "RTL".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
+impl UserData for SignalTable {
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_meta_method(MetaMethod::Eq, |_, this, other: Value| match other {
+			Value::UserData(data) => {
+				if let Ok(data) = data.borrow::<SignalTable>() {
+					Ok(*this == *data)
+				} else {
+					Ok(false)
+				}
+			},
+			_ => Ok(false),
+		});
+		methods.add_meta_method(MetaMethod::Index, |_, this, idx: Signal| {
+			Ok(this.signals.get(&idx).copied().unwrap_or_default())
+		});
+	}
+}
+
+impl FromLua for SignalTable {
+	fn from_lua(value: Value, _: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::Table(table) => {
+				let mut ret = SignalTable::default();
+				for pair in table.pairs() {
+					let (key, value): (Signal, i32) = pair?;
+					ret.signals.insert(key, value);
+				}
+				Ok(ret)
+			},
+			Value::UserData(data) => data.borrow::<Self>().map(|v| v.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: format!("SignalTable"),
 				message: None,
 			}),
 		}

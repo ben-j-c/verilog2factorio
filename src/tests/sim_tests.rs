@@ -5,6 +5,7 @@ use std::{
 	rc::Rc,
 };
 
+use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{
@@ -453,5 +454,138 @@ fn test10_multiport_rom() {
 			sim.probe_input(out_2, NET_RED_GREEN),
 			vec![(signal_2, data[idx2])]
 		);
+	}
+}
+
+#[test]
+fn pmux() {
+	let mut logd = LogicalDesign::new();
+	let a = signal_lookup_table::lookup_sig("signal_A");
+	let b0 = signal_lookup_table::lookup_sig("signal_0");
+	let b1 = signal_lookup_table::lookup_sig("signal_1");
+	let s0 = signal_lookup_table::lookup_sig("signal_S");
+	let s1 = signal_lookup_table::lookup_sig("signal_T");
+	let y = signal_lookup_table::lookup_sig("signal_Y");
+	let input_a = logd.add_constant(vec![a], vec![777]);
+	let input_b0 = logd.add_constant(vec![b0], vec![888]);
+	let input_b1 = logd.add_constant(vec![b1], vec![999]);
+	let input_s0 = logd.add_constant(vec![s0], vec![1]);
+	let input_s1 = logd.add_constant(vec![s1], vec![1]);
+	let output_y = logd.add_lamp((y, DeciderOperator::NotEqual, Signal::Constant(0)));
+	logd.set_constant_enabled(input_s0, true);
+	logd.set_constant_enabled(input_s1, false);
+
+	{
+		let (wire_a_opt, wires_b, wires_s, comb_y) =
+			logd.add_pmux(Some(a), &[b0, b1], &[s0, s1], y, None);
+		logd.connect_red(input_a, wire_a_opt.unwrap());
+		logd.connect_red(input_b0, wires_b[0]);
+		logd.connect_red(input_b1, wires_b[1]);
+		logd.connect_red(input_s0, wires_s[0]);
+		logd.connect_red(input_s1, wires_s[1]);
+		logd.add_wire_red(vec![comb_y], vec![output_y]);
+	}
+
+	let logd = Rc::new(RefCell::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(3);
+	assert_eq!(
+		sim.probe_input(output_y, NET_RED_GREEN),
+		vec![(y.id(), 888)]
+	);
+
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_constant_enabled(input_s0, false);
+		logd.set_constant_enabled(input_s1, true);
+	}
+	sim.step(3);
+	assert_eq!(
+		sim.probe_input(output_y, NET_RED_GREEN),
+		vec![(y.id(), 999)]
+	);
+
+	{
+		let mut logd = logd.borrow_mut();
+		logd.set_constant_enabled(input_s0, false);
+		logd.set_constant_enabled(input_s1, false);
+	}
+	sim.step(3);
+	assert_eq!(
+		sim.probe_input(output_y, NET_RED_GREEN),
+		vec![(y.id(), 777)]
+	);
+}
+
+#[test]
+fn pmux_n() {
+	let n = 16;
+	let mut logd = LogicalDesign::new();
+	let a = signal_lookup_table::lookup_sig("signal_A");
+	let y = signal_lookup_table::lookup_sig("signal_Y");
+	let input_a = logd.add_constant(vec![a], vec![777]);
+	logd.set_description_node(input_a, format!("input_a"));
+	let b_sigs = (0..n).map(|i| Signal::Id(i)).collect_vec();
+	let s_sigs = (0..n).map(|i| Signal::Id(i + 100)).collect_vec();
+	let mut input_b = vec![];
+	let mut input_s = vec![];
+	for i in 0..n {
+		let b = logd.add_constant(vec![Signal::Id(i)], vec![i + 500]);
+		logd.set_description_node(b, format!("b{i}"));
+		input_b.push(b);
+	}
+	for i in 0..n {
+		let s = logd.add_constant(vec![Signal::Id(i + 100)], vec![1]);
+		input_s.push(s);
+		logd.set_description_node(s, format!("s{i}"));
+		logd.set_constant_enabled(*input_s.last().unwrap(), false);
+	}
+	let output_y = logd.add_lamp((y, DeciderOperator::NotEqual, Signal::Constant(0)));
+	logd.set_description_node(output_y, "output_y");
+
+	{
+		let (wire_a_opt, wires_b, wires_s, comb_y) =
+			logd.add_pmux(Some(a), &b_sigs, &s_sigs, y, None);
+		logd.connect_red(input_a, wire_a_opt.unwrap());
+		for i in 0..n as usize {
+			logd.connect_red(input_b[i], wires_b[i]);
+			logd.connect_red(input_s[i], wires_s[i]);
+		}
+		logd.add_wire_red(vec![comb_y], vec![output_y]);
+	}
+
+	{
+		let mut pd = PhysicalDesign::new();
+		pd.build_from(&logd);
+		let mut sd = SerializableDesign::new();
+		sd.build_from(&pd, &logd);
+		let blueprint_json = serde_json::to_string(&sd).unwrap();
+		println!("{}", blueprint_json);
+	}
+
+	let logd = Rc::new(RefCell::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(3);
+	assert_eq!(
+		sim.probe_input(output_y, NET_RED_GREEN),
+		vec![(y.id(), 777)]
+	);
+
+	for i in 0..n as usize {
+		let count = i as i32 + 500;
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_constant_enabled(input_s[i], true);
+		}
+
+		sim.step(3);
+		assert_eq!(
+			sim.probe_input(output_y, NET_RED_GREEN),
+			vec![(y.id(), count)]
+		);
+		{
+			let mut logd = logd.borrow_mut();
+			logd.set_constant_enabled(input_s[i], false);
+		}
 	}
 }

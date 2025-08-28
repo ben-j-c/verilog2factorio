@@ -17,11 +17,13 @@ fn main() {
 		input_file: PathBuf::from("alu.lua"),
 	};
 	match lua_flow(args) {
-		Ok(_) => {},
+		Ok(json) => {
+			println!("{json}");
+		},
 		Err(e) => {
 			match e {
-				Error::LuaError(error) => println!("{:?}", error),
-				_ => println!("{:?}", e),
+				Error::LuaError(error) => println!("{}", error),
+				_ => println!("{:#?}", e),
 			};
 			assert!(false);
 		},

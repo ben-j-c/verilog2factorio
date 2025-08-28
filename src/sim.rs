@@ -1,5 +1,6 @@
 use std::{
 	cell::RefCell,
+	fmt::Display,
 	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shr},
 	rc::Rc,
 	usize,
@@ -585,7 +586,6 @@ impl SimState {
 		}
 	}
 
-	#[allow(dead_code)]
 	pub fn print(&self) {
 		let logd = self.logd.borrow();
 		println!("--------------");
@@ -797,6 +797,10 @@ impl SimState {
 		}
 		svg
 	}
+
+	pub fn print_row(&self, idx: usize) {
+		println!("{idx} {}", self.state[idx]);
+	}
 }
 
 fn draw_transition_edge(
@@ -918,10 +922,11 @@ fn draw_trace_tick(
 	}
 }
 
+static ZERO: i32 = 0;
+
 #[derive(Debug, Default, Clone)]
 pub struct OutputState {
 	data: HashM<i32, i32>,
-	zero: i32,
 }
 
 impl Index<i32> for OutputState {
@@ -929,7 +934,7 @@ impl Index<i32> for OutputState {
 
 	fn index(&self, index: i32) -> &Self::Output {
 		if !self.data.contains_key(&index) {
-			return &self.zero;
+			return &ZERO;
 		}
 		self.data.get(&index).unwrap()
 	}
@@ -938,5 +943,42 @@ impl Index<i32> for OutputState {
 impl IndexMut<i32> for OutputState {
 	fn index_mut(&mut self, index: i32) -> &mut Self::Output {
 		self.data.entry(index).or_default()
+	}
+}
+
+impl Display for SimState {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		for (id, state) in self.state.iter().enumerate() {
+			writeln!(f, "{id} {state}")?;
+		}
+		Ok(())
+	}
+}
+
+impl Display for SimStateRow {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if !self.red.data.is_empty() {
+			let mut data = self.red.data.iter().collect_vec();
+			data.sort_by(|(id1, _), (id2, _)| id1.cmp(id2));
+			write!(
+				f,
+				"R[{}]",
+				data.iter()
+					.map(|(id, count)| format!("({}: {})", Signal::Id(**id), count))
+					.join(", ")
+			)?;
+		}
+		if !self.green.data.is_empty() {
+			let mut data = self.green.data.iter().collect_vec();
+			data.sort_by(|(id1, _), (id2, _)| id1.cmp(id2));
+			write!(
+				f,
+				"G[{}]",
+				data.iter()
+					.map(|(id, count)| format!("({}: {})", Signal::Id(**id), count))
+					.join(", ")
+			)?;
+		}
+		Ok(())
 	}
 }
