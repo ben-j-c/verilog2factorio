@@ -9,5 +9,6 @@
 	"Lua.runtime.version": "Lua 5.4",
 	"Lua.diagnostics.disable": [
 		"lowercase-global"
-	]
+	],
+	"terminal.integrated.scrollback": 10000
 }

@@ -360,7 +360,9 @@ fn method_map_rtl<P>(filename: P, top_mod: &String) -> Result<LogicalDesignAPI, 
 where
 	P: AsRef<Path>,
 {
+	println!("xx1");
 	let filename_out = get_derivative_file_name(&filename, "_map.json")?;
+	println!("xx2");
 	method_check_yosys()?;
 	let filename: &Path = filename.as_ref();
 	if !filename.is_file() {
@@ -412,6 +414,7 @@ where
 	checked_design.build_from(&mapped_design);
 	let mut logd = LogicalDesign::new();
 	logd.build_from(&checked_design, &mapped_design);
+	checked_design.save_dot();
 	Ok(LogicalDesignAPI {
 		logd: Rc::new(RefCell::new(logd)),
 		make_svg: false,
@@ -570,6 +573,7 @@ impl UserData for Constant {
 		methods.add_method(
 			"set_outputs",
 			|_, this, (sigs, vals): (Vec<Signal>, Vec<i32>)| {
+				assert_eq!(sigs.len(), vals.len());
 				let binding = this.logd.clone();
 				let mut logd = binding.borrow_mut();
 				logd.set_constants_output(this.id, sigs, vals);
@@ -806,6 +810,8 @@ impl UserData for SimStateAPI {
 			println!("\tlogic <id> // basic print logical node");
 			println!("\tlogd <id> // detailed print logical node");
 			println!("\tsim <id> // print sim row");
+			println!("\tstep <n> // step the simulation n times");
+			println!("\tregex <id> // print sim row");
 			let mut rl = rustyline::DefaultEditor::new().unwrap();
 			for readline in rl.iter("> ") {
 				match readline {
@@ -822,13 +828,53 @@ impl UserData for SimStateAPI {
 									}
 								}
 							}
-						} else if line.starts_with("s") {
+						} else if line.starts_with("sim") {
 							let sim = this.sim.borrow();
 							for v in line.split(" ").skip(1) {
 								if let Ok(v) = v.parse::<usize>() {
 									sim.print_row(v);
 								}
 							}
+						} else if line.starts_with("regex") {
+							let logd = this.logd.borrow();
+							let pattern = &line[6..];
+							let pattern = match regex::Regex::new(pattern) {
+								Ok(v) => v,
+								Err(e) => {
+									println!("{e}");
+									continue;
+								},
+							};
+							let mut found = false;
+							logd.for_all(|_, node| {
+								let description = if let Some(descr) = &node.description {
+									descr
+								} else {
+									return;
+								};
+
+								if pattern.is_match(description) {
+									println!("{}: {}", node.id, description);
+									found = true;
+								}
+							});
+							if !found {
+								println!("<no matches>");
+							}
+						} else if line.starts_with("step") {
+							let mut sim = this.sim.borrow_mut();
+
+							for v in line.split(" ").skip(1).take(1) {
+								if let Ok(v) = v.parse::<usize>() {
+									println!("Doing {v} step(s).");
+									sim.step(v);
+								} else {
+									println!("Invalid step count.")
+								}
+								continue;
+							}
+							println!("Doing 1 step.");
+							sim.step(1);
 						}
 					},
 					Err(err) => {
@@ -880,6 +926,9 @@ impl UserData for SignalTable {
 		});
 		methods.add_meta_method(MetaMethod::Index, |_, this, idx: Signal| {
 			Ok(this.signals.get(&idx).copied().unwrap_or_default())
+		});
+		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+			Ok(format!("{:?}", this))
 		});
 	}
 }
@@ -980,13 +1029,17 @@ pub fn get_lua() -> Result<Lua, Error> {
 	lua.globals().set(
 		"yosys_load_rtl",
 		lua.create_function(|_, (filename, top_mod): (String, String)| {
+			println!("xx0");
 			method_load_rtl(filename, top_mod)
 		})?,
 	)?;
 
 	lua.globals().set(
 		"yosys_map_rtl",
-		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename, &rtl.top_mod))?,
+		lua.create_function(|_, rtl: RTL| {
+			println!("xx1");
+			method_map_rtl(rtl.filename, &rtl.top_mod)
+		})?,
 	)?;
 
 	lua.globals().set(

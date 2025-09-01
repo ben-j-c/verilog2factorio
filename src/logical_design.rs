@@ -938,11 +938,7 @@ impl LogicalDesign {
 			{
 				self.set_description_node(
 					inp,
-					format!(
-						"{n}-pmux one-hot, i = {i}, s = {:?}, b = {:?}",
-						get_ith_s_expr(i),
-						b[i],
-					),
+					format!("{n}-pmux|i={i},s={:?},b={:?}", get_ith_s_expr(i), b[i],),
 				);
 			}
 		}
@@ -2333,8 +2329,8 @@ impl Display for Node {
 			.clone()
 			.unwrap_or("_".to_owned())
 			.replace("\n", "\\n");
-		if descr.len() > 13 {
-			descr = descr[0..10].to_owned() + &"...";
+		if descr.len() > 16 {
+			descr = descr[0..13].to_owned() + &"...";
 		}
 		write!(f, "{} \"{}\" {}", self.id, descr, func,)?;
 		if !self.fanin_red.is_empty() || !self.fanout_red.is_empty() {

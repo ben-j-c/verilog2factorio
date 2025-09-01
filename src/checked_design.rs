@@ -1,4 +1,5 @@
 use std::{
+	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
 	usize, vec,
 };
@@ -13,11 +14,11 @@ use crate::{
 		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
 		ResetSpec, Signal,
 	},
-	mapped_design::{BitSliceOps, CellType, Direction, FromBinStr, IntoBoolVec},
+	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::index_of,
+	util::{hash_set, index_of},
 };
-use crate::{mapped_design::MappedDesign, signal_lookup_table::lookup_id};
+use crate::{mapped_design::MappedDesign, util::HashS};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ImplementableOp {
@@ -122,6 +123,7 @@ pub struct CheckedDesign {
 	/// Nodes in connected_design -> nodes in this struct.
 	connected_id_map: Vec<NodeId>,
 	coarse_exprs: Vec<Option<CoarseExpr>>,
+	associated_logic: RefCell<Vec<Option<logical_design::NodeId>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,6 +160,18 @@ impl NodeType {
 			_ => {
 				unreachable!()
 			},
+		}
+	}
+
+	fn simple_name(&self) -> &'static str {
+		match self {
+			NodeType::CellInput { .. } => "CellInput",
+			NodeType::CellOutput { .. } => "CellOutput",
+			NodeType::PortInput { .. } => "PortInput",
+			NodeType::PortOutput { .. } => "PortOutput",
+			NodeType::PortBody => "PortBody",
+			NodeType::CellBody { .. } => "CellBody",
+			NodeType::Pruned => "Pruned",
 		}
 	}
 }
@@ -206,6 +220,7 @@ impl CheckedDesign {
 			connected_design: ConnectedDesign::new(),
 			connected_id_map: vec![],
 			coarse_exprs: vec![],
+			associated_logic: RefCell::new(vec![]),
 		}
 	}
 
@@ -564,6 +579,107 @@ impl CheckedDesign {
 		}
 	}
 
+	pub fn enforce_network_requirements(&mut self) {
+		let (_, _, _, localio_group_nodes) = self.get_groupings();
+		let mut fallback_id = 0;
+		let mut signal_choices = vec![Signal::None; self.nodes.len()];
+		for local_group in &localio_group_nodes {
+			let mut required_signals = hash_set::<i32>();
+			for nodeid in local_group {
+				if !matches!(
+					self.node_type(*nodeid),
+					NodeType::PortInput { .. } | NodeType::PortOutput { .. }
+				) {
+					continue;
+				}
+				let choice = signal_lookup_table::lookup_id(&self.nodes[*nodeid].mapped_id)
+					.unwrap_or_else(|| {
+						let mut counter = 0;
+						while required_signals.contains(&fallback_id) {
+							fallback_id += 1;
+							counter += 1;
+							fallback_id %= signal_lookup_table::n_ids();
+							if counter > signal_lookup_table::n_ids() {
+								panic!("Need to add a nop after at least one port.")
+							}
+						}
+						let ret = fallback_id;
+						ret
+					});
+				if !required_signals.contains(&choice) {
+					required_signals.insert(choice);
+					signal_choices[*nodeid] = Signal::Id(choice);
+					continue;
+				}
+				// This port cant use this signal internally, so we must rename it with a nop.
+				if !matches!(self.node_type(*nodeid), NodeType::PortOutput { .. }) {
+					let mut nop = usize::MAX;
+					for foid in self.nodes[*nodeid].fanout.clone() {
+						self.disconnect(*nodeid, foid);
+						let a = self.new_node(
+							"$nop",
+							NodeType::CellInput {
+								port: "A".to_string(),
+								connected_id: usize::MAX,
+							},
+						);
+						if nop == usize::MAX {
+							nop = self.new_node(
+								"$nop",
+								NodeType::CellBody {
+									cell_type: BodyType::Nop,
+								},
+							);
+						}
+						let y = self.new_node(
+							"$nop",
+							NodeType::CellOutput {
+								port: "Y".to_owned(),
+								connected_id: usize::MAX,
+							},
+						);
+						self.connect(*nodeid, a);
+						self.connect(a, nop);
+						self.connect(nop, y);
+						self.connect(y, foid);
+					}
+				}
+				if !matches!(self.node_type(*nodeid), NodeType::PortInput { .. }) {
+					let mut nop = usize::MAX;
+					for fiid in self.nodes[*nodeid].fanout.clone() {
+						self.disconnect(fiid, *nodeid);
+						let a = self.new_node(
+							"$nop",
+							NodeType::CellInput {
+								port: "A".to_string(),
+								connected_id: usize::MAX,
+							},
+						);
+						if nop == usize::MAX {
+							nop = self.new_node(
+								"$nop",
+								NodeType::CellBody {
+									cell_type: BodyType::Nop,
+								},
+							);
+						}
+						let y = self.new_node(
+							"$nop",
+							NodeType::CellOutput {
+								port: "Y".to_owned(),
+								connected_id: usize::MAX,
+							},
+						);
+						self.connect(fiid, a);
+						self.connect(a, nop);
+						self.connect(nop, y);
+						self.connect(y, *nodeid);
+					}
+				}
+			}
+		}
+	}
+
 	pub fn insert_nop_to_sanitize_ports(&mut self) {
 		let topo_order = self.get_topo_order();
 		// Insert Nop to partition signal networks
@@ -787,7 +903,9 @@ impl CheckedDesign {
 		self.initialize_nodes(mapped_design);
 		self.make_preliminary_connections();
 		self.resolve_coarse_exprs();
-		self.insert_nop_to_sanitize_ports();
+		self.enforce_network_requirements();
+		//self.insert_nop_to_sanitize_ports();
+		//#[cfg(false)]
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {
@@ -833,12 +951,27 @@ impl CheckedDesign {
 	}
 
 	fn get_other_input_nodes(&self, nodeid: NodeId) -> Vec<NodeId> {
-		match self.node_type(nodeid) {
-			NodeType::CellInput { .. } => assert!(true),
-			_ => assert!(false),
-		};
-		self.nodes[self.nodes[nodeid].fanout[0]]
+		assert!(matches!(
+			self.node_type(nodeid),
+			NodeType::CellInput { .. } | NodeType::PortInput { .. }
+		));
+		let body_id = self.nodes[nodeid].fanout[0];
+		self.nodes[body_id]
 			.fanin
+			.iter()
+			.filter(|id| **id != nodeid)
+			.copied()
+			.collect()
+	}
+
+	fn get_other_output_nodes(&self, nodeid: NodeId) -> Vec<NodeId> {
+		assert!(matches!(
+			self.node_type(nodeid),
+			NodeType::CellOutput { .. } | NodeType::PortOutput { .. }
+		));
+		let body_id = self.nodes[nodeid].fanin[0];
+		self.nodes[body_id]
+			.fanout
 			.iter()
 			.filter(|id| **id != nodeid)
 			.copied()
@@ -862,15 +995,16 @@ impl CheckedDesign {
 				continue;
 			}
 			match &self.node_type(curid) {
-				NodeType::PortInput { .. } => {
-					retval.push(curid);
-				},
-				NodeType::CellInput { .. } => {
+				NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
 					retval.push(curid);
 					queue.extend(self.get_other_input_nodes(curid));
+					for fiid in &self.nodes[curid].fanin {
+						queue.insert(*fiid);
+					}
 				},
 				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 					retval.push(curid);
+					queue.extend(self.get_other_output_nodes(curid));
 					for foid in &self.nodes[curid].fanout {
 						queue.insert(*foid);
 					}
@@ -925,6 +1059,43 @@ impl CheckedDesign {
 		retval
 	}
 
+	fn get_groupings(&self) -> (Vec<i32>, Vec<i32>, Vec<Vec<NodeId>>, Vec<Vec<NodeId>>) {
+		let mut localio_group_num = 0;
+		let mut attached_group_num = 0;
+		let mut attached_groups = vec![0; self.nodes.len()];
+		let mut attached_group_nodes = vec![vec![]];
+		let mut localio_groups = vec![0; self.nodes.len()];
+		let mut localio_group_nodes = vec![vec![]];
+		for nodeid in 0..self.nodes.len() {
+			if localio_groups[nodeid] != 0 {
+				continue;
+			}
+			let localio = self.get_local_cell_io_network(nodeid);
+			if localio.is_empty() {
+				continue;
+			}
+			let attached = self.get_attached_nodes(nodeid);
+			localio_group_num += 1;
+			attached_group_num += 1;
+			let l_group = localio_group_num;
+			let a_group = attached_group_num;
+			for attached_id in &attached {
+				attached_groups[*attached_id] = a_group;
+			}
+			for localio_id in &localio {
+				localio_groups[*localio_id] = l_group;
+			}
+			attached_group_nodes.push(attached);
+			localio_group_nodes.push(localio);
+		}
+		(
+			attached_groups,
+			localio_groups,
+			attached_group_nodes,
+			localio_group_nodes,
+		)
+	}
+
 	fn get_signal_choices(&self) -> Vec<Vec<i32>> {
 		let mut signal_choices = vec![vec![]; self.nodes.len()];
 		let mut fallback_id = 0;
@@ -937,16 +1108,16 @@ impl CheckedDesign {
 					ret
 				});
 				signal_choices[node.id] = vec![choice];
-				if let Some(fiid) = node.fanin.first() {
-					signal_choices[*fiid] = vec![choice];
+				if let Some(port_in_id) = node.fanin.first() {
+					signal_choices[*port_in_id] = vec![choice];
 				}
-				if let Some(foid) = node.fanout.first() {
-					signal_choices[*foid] = vec![choice];
+				if let Some(port_out_id) = node.fanout.first() {
+					signal_choices[*port_out_id] = vec![choice];
 				}
 			}
 		}
 		for nodeid in 0..self.nodes.len() {
-			if !signal_choices[nodeid].is_empty() {
+			if signal_choices[nodeid].len() > 0 {
 				continue;
 			}
 			let localio = self.get_local_cell_io_network(nodeid);
@@ -1238,7 +1409,7 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => {},
 			}
 		}
-		println!("{:#}", logical_design);
+		self.associated_logic.replace(logic_map);
 	}
 
 	fn apply_multipart_op(
@@ -1766,5 +1937,80 @@ impl CheckedDesign {
 			}
 		}
 		n_pruned
+	}
+
+	pub fn save_dot(&self) {
+		graph_viz::save_dot(&self, "checked_design.dot").unwrap()
+	}
+}
+
+mod graph_viz {
+	use crate::checked_design::CheckedDesign;
+	use crate::checked_design::NodeType;
+	use crate::logical_design::Signal;
+	use graphviz_rust::attributes::EdgeAttributes;
+	use graphviz_rust::attributes::NodeAttributes;
+	use graphviz_rust::dot_generator::*;
+	use graphviz_rust::dot_structures::*;
+	use graphviz_rust::printer::DotPrinter;
+	use graphviz_rust::printer::PrinterContext;
+
+	pub fn save_dot(design: &CheckedDesign, filepath: &str) -> std::io::Result<()> {
+		let mut g = graph!(di id!("CheckedDesign"));
+		g.add_stmt(stmt!(attr!("rankdir", "LR")));
+
+		for node in design
+			.nodes
+			.iter()
+			.filter(|n| !matches!(design.node_type(n.id), NodeType::Pruned))
+		{
+			let nid = format!("n{}", node.id);
+
+			let mut node_label = format!("\"{}: {}", node.mapped_id, node.node_type.simple_name());
+			if let Some(lid) = design.associated_logic.borrow()[node.id] {
+				node_label += &format!("\n{}", lid);
+			}
+			node_label += "\"";
+
+			let graph_node = node!(nid;
+				attr!("shape","box"),
+				NodeAttributes::label(node_label)
+			);
+			g.add_stmt(stmt!(graph_node));
+		}
+
+		for src_node in &design.nodes {
+			if matches!(design.node_type(src_node.id), NodeType::Pruned) {
+				continue;
+			}
+			for dst_id in &src_node.fanout {
+				if matches!(design.node_type(*dst_id), NodeType::Pruned) {
+					continue;
+				}
+
+				let src_id_str = format!("n{}", src_node.id);
+				let dst_id_str = format!("n{}", dst_id);
+
+				let mut attrs = Vec::new();
+
+				let signal = design.signals[src_node.id];
+				if !matches!(signal, Signal::None) {
+					attrs.push(EdgeAttributes::label(format!("\"{}\"", signal)));
+				}
+
+				let edge = if design.is_driver(*dst_id, src_node.id) {
+					attrs.push(attr!("syle", "bold"));
+					attrs.push(attr!("color", "blue"));
+					edge!(node_id!(src_id_str) => node_id!(dst_id_str), attrs)
+				} else {
+					edge!(node_id!(src_id_str) => node_id!(dst_id_str))
+				};
+
+				g.add_stmt(stmt!(edge));
+			}
+		}
+
+		let dot = g.print(&mut PrinterContext::default());
+		std::fs::write(filepath, dot)
 	}
 }

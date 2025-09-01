@@ -13,6 +13,7 @@ use v2f::*;
 fn main() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());
 	env::set_current_dir("examples/lua/alu").expect("Failed to chdir");
+	println!("aa");
 	let args = Args {
 		input_file: PathBuf::from("alu.lua"),
 	};
