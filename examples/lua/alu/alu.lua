@@ -15,7 +15,7 @@ y_sig = result_y:signals()[1]
 print(#{ a_sig })
 data_a:set_outputs({ a_sig }, { 3 })
 data_b:set_outputs({ b_sig }, { 4 })
-select:set_outputs({ s_sig }, { 12 })
+select:set_outputs({ s_sig }, { 0 })
 
 sim = logd:new_simulation()
 
@@ -30,10 +30,11 @@ if (sim:probe(result_y.input)[y_sig] ~= 7) then
 	logd:print()
 	print("\nSim:")
 	sim:print()
-	sim:inspect()
+	--sim:inspect()
 	sim:step(1)
 	sim:probe(result_y.input)
 	--error()
+	--Currently theres an error with the simulator
 end
 
 return logd

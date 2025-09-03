@@ -962,6 +962,10 @@ impl LogicalDesign {
 			}
 			self.add_decider_out_input_count(a_case, a_signal, NET_RED_GREEN);
 			self.add_wire_red(vec![b_muxes[0], a_case], vec![]);
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(a_case, format!("{n}-pmux fallback"));
+			}
 			Some(self.add_wire_red(vec![], vec![b_muxes[0], a_case]))
 		} else {
 			None

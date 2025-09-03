@@ -12,7 +12,7 @@ use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
 	logical_design::{
 		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
-		ResetSpec, Signal,
+		ResetSpec, Signal, NET_RED_GREEN,
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
@@ -346,9 +346,10 @@ impl CheckedDesign {
 				},
 				NodeType::CellBody { .. } => {
 					let cell = mapped_design.get_cell(&mapped_id);
+
 					for (connected_id, direction, terminal_name) in cell
-						.connections
-						.keys()
+						.get_terminal_names()
+						.iter()
 						.map(|terminal_name| {
 							(
 								self.connected_design.get_node_id(&mapped_id, terminal_name),
@@ -905,7 +906,7 @@ impl CheckedDesign {
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements();
 		//self.insert_nop_to_sanitize_ports();
-		//#[cfg(false)]
+		#[cfg(false)]
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {
@@ -1721,6 +1722,7 @@ impl CheckedDesign {
 				(true, true),
 				(true, true),
 			);
+			logical_design.add_decider_out_constant(id, sig_out, 1, NET_RED_GREEN);
 			return (id, id);
 		}
 		unreachable!()
@@ -1939,8 +1941,8 @@ impl CheckedDesign {
 		n_pruned
 	}
 
-	pub fn save_dot(&self) {
-		graph_viz::save_dot(&self, "checked_design.dot").unwrap()
+	pub fn save_dot(&self, mapped_design: &MappedDesign) {
+		graph_viz::save_dot(&self, mapped_design, "checked_design.dot").unwrap()
 	}
 }
 
@@ -1948,6 +1950,7 @@ mod graph_viz {
 	use crate::checked_design::CheckedDesign;
 	use crate::checked_design::NodeType;
 	use crate::logical_design::Signal;
+	use crate::mapped_design::MappedDesign;
 	use graphviz_rust::attributes::EdgeAttributes;
 	use graphviz_rust::attributes::NodeAttributes;
 	use graphviz_rust::dot_generator::*;
@@ -1955,7 +1958,11 @@ mod graph_viz {
 	use graphviz_rust::printer::DotPrinter;
 	use graphviz_rust::printer::PrinterContext;
 
-	pub fn save_dot(design: &CheckedDesign, filepath: &str) -> std::io::Result<()> {
+	pub fn save_dot(
+		design: &CheckedDesign,
+		mapped: &MappedDesign,
+		filepath: &str,
+	) -> std::io::Result<()> {
 		let mut g = graph!(di id!("CheckedDesign"));
 		g.add_stmt(stmt!(attr!("rankdir", "LR")));
 
@@ -1966,14 +1973,35 @@ mod graph_viz {
 		{
 			let nid = format!("n{}", node.id);
 
-			let mut node_label = format!("\"{}: {}", node.mapped_id, node.node_type.simple_name());
+			let mut node_label = {
+				let idx = node.mapped_id.rfind("$").unwrap_or_default();
+				format!("\"{}", &node.mapped_id[idx..],)
+			};
+			if let Some(mapped_cell) = mapped.get_cell_option(&node.mapped_id) {
+				node_label += &format!("\n{}", mapped_cell.cell_type);
+			}
 			if let Some(lid) = design.associated_logic.borrow()[node.id] {
 				node_label += &format!("\n{}", lid);
 			}
+			match &node.node_type {
+				NodeType::CellInput { port, .. } => node_label += &format!("\n{}", port),
+				NodeType::CellOutput { port, .. } => node_label += &format!("\n{}", port),
+				_ => {},
+			}
 			node_label += "\"";
 
+			let shape = match node.node_type {
+				NodeType::CellInput { .. } => "larrow",
+				NodeType::CellOutput { .. } => "rarrow",
+				NodeType::PortInput { .. } => "larrow",
+				NodeType::PortOutput { .. } => "rarrow",
+				NodeType::PortBody => "box",
+				NodeType::CellBody { .. } => "box",
+				NodeType::Pruned => "point",
+			};
+
 			let graph_node = node!(nid;
-				attr!("shape","box"),
+				attr!("shape", shape),
 				NodeAttributes::label(node_label)
 			);
 			g.add_stmt(stmt!(graph_node));

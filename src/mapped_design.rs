@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use itertools::{chain, izip, Itertools};
 use rayon::collections::hash_map;
 use serde::{
@@ -289,6 +291,15 @@ impl Cell {
 			BodyType::Nop => vec!["A".to_owned(), "Y".to_owned()],
 		}
 	}
+
+	pub fn get_yosys_display_name(&self, name: &str) -> String {
+		if self.attributes.get("hide_name") == Some(&"1".to_owned()) {
+			let idx = name.rfind("$").unwrap_or_default();
+			format!("{}\n{}", &name[idx..], self.cell_type)
+		} else {
+			name.to_owned()
+		}
+	}
 }
 
 pub(crate) trait FromBinStr {
@@ -482,6 +493,40 @@ impl<'de> Deserialize<'de> for Bit {
 	}
 }
 
+impl Display for ImplementableOp {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let data = match self {
+			ImplementableOp::AndBitwise => "v2f_and",
+			ImplementableOp::OrBitwise => "v2f_or",
+			ImplementableOp::XorBitwise => "v2f_xor",
+			ImplementableOp::Shl => "v2f_shl",
+			ImplementableOp::Shr => "v2f_shr",
+			ImplementableOp::Mul => "v2f_mul",
+			ImplementableOp::Div => "v2f_div",
+			ImplementableOp::Mod => "v2f_mod",
+			ImplementableOp::Pow => "v2f_pow",
+			ImplementableOp::Add => "v2f_add",
+			ImplementableOp::Sub => "v2f_sub",
+			ImplementableOp::GreaterThan => "v2f_gt",
+			ImplementableOp::LessThan => "v2f_lt",
+			ImplementableOp::Equal => "v2f_eq",
+			ImplementableOp::NotEqual => "v2f_ne",
+			ImplementableOp::GreaterThanEqual => "v2f_ge",
+			ImplementableOp::LessThanEqual => "v2f_le",
+			ImplementableOp::ReduceOr => "v2f_reduce_or",
+			ImplementableOp::ReduceAnd => "v2f_reduce_and",
+			ImplementableOp::V2FRollingAccumulate => "v2f_rolling_accumulate",
+			ImplementableOp::Neg => "v2f_neg",
+			ImplementableOp::PMux(_, _) => "v2f_pmux",
+			ImplementableOp::DFF => "$dff",
+			ImplementableOp::Swizzle => "$swizzle",
+			ImplementableOp::LUT(_) => "$lut",
+			ImplementableOp::Memory => "$mem_v2",
+		};
+		f.write_str(data)
+	}
+}
+
 impl<'de> Deserialize<'de> for Cell {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -507,8 +552,8 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_ne" => ImplementableOp::NotEqual,
 			"v2f_ge" => ImplementableOp::GreaterThanEqual,
 			"v2f_le" => ImplementableOp::LessThanEqual,
-			"v2f_reduce_or" => ImplementableOp::Add,
-			"v2f_reduce_and" => ImplementableOp::Add,
+			"v2f_reduce_or" => ImplementableOp::ReduceOr,
+			"v2f_reduce_and" => ImplementableOp::ReduceAnd,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
 			"v2f_neg" => ImplementableOp::Neg,
 			"v2f_pmux" => ImplementableOp::PMux(false, 0),
@@ -739,7 +784,10 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 	let full_case = pre_mapped
 		.attributes
 		.get("full_case")
-		.map(|full_case| full_case.from_bin_str() == Some(1))
+		.map(|full_case| {
+			let val = full_case.from_bin_str();
+			val.unwrap_or_default() > 0
+		})
 		.unwrap_or_default();
 	let s_width = pre_mapped.parameters["S_WIDTH"].unwrap_bin_str();
 	if !full_case {

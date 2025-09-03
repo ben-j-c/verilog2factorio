@@ -360,9 +360,7 @@ fn method_map_rtl<P>(filename: P, top_mod: &String) -> Result<LogicalDesignAPI, 
 where
 	P: AsRef<Path>,
 {
-	println!("xx1");
 	let filename_out = get_derivative_file_name(&filename, "_map.json")?;
-	println!("xx2");
 	method_check_yosys()?;
 	let filename: &Path = filename.as_ref();
 	if !filename.is_file() {
@@ -414,7 +412,7 @@ where
 	checked_design.build_from(&mapped_design);
 	let mut logd = LogicalDesign::new();
 	logd.build_from(&checked_design, &mapped_design);
-	checked_design.save_dot();
+	checked_design.save_dot(&mapped_design);
 	Ok(LogicalDesignAPI {
 		logd: Rc::new(RefCell::new(logd)),
 		make_svg: false,
