@@ -159,9 +159,6 @@ impl ConnectedDesign {
 		let mut io_map = vec![];
 		mapped_design.for_all_cells(|_, mapped_id, cell| {
 			for terminal_name in cell.get_terminal_names() {
-				if matches!(cell.cell_type, ImplementableOp::PMux(_, _)) {
-					println!("yy");
-				}
 				let (terminal_number, _) = self.terminal_name2typeid[&terminal_name];
 				let ioid: NodeId = io_map.len();
 				io_map.push(NodeIo::Cell {

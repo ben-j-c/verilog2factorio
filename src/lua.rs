@@ -1027,17 +1027,13 @@ pub fn get_lua() -> Result<Lua, Error> {
 	lua.globals().set(
 		"yosys_load_rtl",
 		lua.create_function(|_, (filename, top_mod): (String, String)| {
-			println!("xx0");
 			method_load_rtl(filename, top_mod)
 		})?,
 	)?;
 
 	lua.globals().set(
 		"yosys_map_rtl",
-		lua.create_function(|_, rtl: RTL| {
-			println!("xx1");
-			method_map_rtl(rtl.filename, &rtl.top_mod)
-		})?,
+		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename, &rtl.top_mod))?,
 	)?;
 
 	lua.globals().set(
