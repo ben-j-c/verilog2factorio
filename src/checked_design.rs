@@ -1718,7 +1718,7 @@ impl CheckedDesign {
 			logical_design.add_decider_input(
 				id,
 				(sig_left, op, sig_right),
-				logical_design::DeciderRowConjDisj::Or,
+				logical_design::DeciderRowConjDisj::FirstRow,
 				(true, true),
 				(true, true),
 			);

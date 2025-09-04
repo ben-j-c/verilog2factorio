@@ -158,7 +158,7 @@ impl SimState {
 				each_right,
 			);
 			sat_and &= sat;
-			if expression_conj_disj[idx] == DeciderRowConjDisj::Or {
+			if expression_conj_disj[idx] == DeciderRowConjDisj::Or && idx != 0 {
 				sat_or |= sat_and;
 				sat_and = true;
 			}

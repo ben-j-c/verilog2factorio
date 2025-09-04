@@ -801,6 +801,15 @@ impl SimState {
 	pub fn print_row(&self, idx: usize) {
 		println!("{idx} {}", self.state[idx]);
 	}
+
+	pub fn get_attached(&self, idx: usize) -> (Vec<NodeId>, Vec<NodeId>) {
+		for net in &self.network {
+			if net.wires.contains(&NodeId(idx)) {
+				return (net.fanin.clone(), net.fanout.clone());
+			}
+		}
+		(vec![], vec![])
+	}
 }
 
 fn draw_transition_edge(

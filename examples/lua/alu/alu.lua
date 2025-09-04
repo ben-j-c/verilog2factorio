@@ -30,11 +30,10 @@ if (sim:probe(result_y.input)[y_sig] ~= 7) then
 	logd:print()
 	print("\nSim:")
 	sim:print()
-	--sim:inspect()
+	sim:inspect()
 	sim:step(1)
 	sim:probe(result_y.input)
-	--error()
-	--Currently theres an error with the simulator
+	error()
 end
 
 return logd

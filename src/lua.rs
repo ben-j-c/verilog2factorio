@@ -810,10 +810,12 @@ impl UserData for SimStateAPI {
 			println!("\tsim <id> // print sim row");
 			println!("\tstep <n> // step the simulation n times");
 			println!("\tregex <id> // print sim row");
+			println!("\twire_net <id> // prints nodes attached to network");
 			let mut rl = rustyline::DefaultEditor::new().unwrap();
 			for readline in rl.iter("> ") {
 				match readline {
 					Ok(line) => {
+						let line = line.trim().to_owned();
 						if line.starts_with("log") {
 							let detailed = line.starts_with("logd");
 							let logd = this.logd.borrow();
@@ -862,17 +864,37 @@ impl UserData for SimStateAPI {
 						} else if line.starts_with("step") {
 							let mut sim = this.sim.borrow_mut();
 
+							let mut found = false;
 							for v in line.split(" ").skip(1).take(1) {
+								found = true;
 								if let Ok(v) = v.parse::<usize>() {
 									println!("Doing {v} step(s).");
 									sim.step(v);
 								} else {
 									println!("Invalid step count.")
 								}
+							}
+							if found {
 								continue;
 							}
 							println!("Doing 1 step.");
 							sim.step(1);
+						} else if line.starts_with("wire_net") {
+							let sim = this.sim.borrow();
+							let logd = this.logd.borrow();
+							for v in line.split(" ").skip(1) {
+								if let Ok(v) = v.parse::<usize>() {
+									let (fanin, fanout) = sim.get_attached(v);
+									println!("fanin of wire {v}");
+									for id in fanin {
+										println!("\t{}", logd.get_node(id));
+									}
+									println!("fanout of wire {v}");
+									for id in fanout {
+										println!("\t{}", logd.get_node(id));
+									}
+								}
+							}
 						}
 					},
 					Err(err) => {
