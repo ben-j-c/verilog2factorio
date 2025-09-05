@@ -267,6 +267,19 @@ impl CheckedDesign {
 	}
 
 	fn connect(&mut self, send: NodeId, recv: NodeId) {
+		let t1 = self.node_type(send);
+		let t2 = self.node_type(recv);
+		match (t1, t2) {
+			(NodeType::CellInput { .. }, NodeType::CellBody { .. }) => {},
+			(NodeType::CellOutput { .. }, NodeType::CellInput { .. }) => {},
+			(NodeType::CellOutput { .. }, NodeType::PortInput { .. }) => {},
+			(NodeType::PortInput { .. }, NodeType::PortBody) => {},
+			(NodeType::PortOutput { .. }, NodeType::CellInput { .. }) => {},
+			(NodeType::PortOutput { .. }, NodeType::PortInput { .. }) => {},
+			(NodeType::PortBody, NodeType::PortOutput { .. }) => {},
+			(NodeType::CellBody { .. }, NodeType::CellOutput { .. }) => {},
+			_ => assert!(false),
+		};
 		if !self.nodes[send].fanout.contains(&recv) {
 			self.nodes[send].fanout.push(recv);
 			self.nodes[recv].fanin.push(send);
@@ -613,17 +626,10 @@ impl CheckedDesign {
 					continue;
 				}
 				// This port cant use this signal internally, so we must rename it with a nop.
-				if !matches!(self.node_type(*nodeid), NodeType::PortOutput { .. }) {
+				if matches!(self.node_type(*nodeid), NodeType::PortOutput { .. }) {
 					let mut nop = usize::MAX;
 					for foid in self.nodes[*nodeid].fanout.clone() {
 						self.disconnect(*nodeid, foid);
-						let a = self.new_node(
-							"$nop",
-							NodeType::CellInput {
-								port: "A".to_string(),
-								connected_id: usize::MAX,
-							},
-						);
 						if nop == usize::MAX {
 							nop = self.new_node(
 								"$nop",
@@ -632,6 +638,13 @@ impl CheckedDesign {
 								},
 							);
 						}
+						let a = self.new_node(
+							"$nop",
+							NodeType::CellInput {
+								port: "A".to_string(),
+								connected_id: usize::MAX,
+							},
+						);
 						let y = self.new_node(
 							"$nop",
 							NodeType::CellOutput {
@@ -645,17 +658,10 @@ impl CheckedDesign {
 						self.connect(y, foid);
 					}
 				}
-				if !matches!(self.node_type(*nodeid), NodeType::PortInput { .. }) {
+				if matches!(self.node_type(*nodeid), NodeType::PortInput { .. }) {
 					let mut nop = usize::MAX;
-					for fiid in self.nodes[*nodeid].fanout.clone() {
+					for fiid in self.nodes[*nodeid].fanin.clone() {
 						self.disconnect(fiid, *nodeid);
-						let a = self.new_node(
-							"$nop",
-							NodeType::CellInput {
-								port: "A".to_string(),
-								connected_id: usize::MAX,
-							},
-						);
 						if nop == usize::MAX {
 							nop = self.new_node(
 								"$nop",
@@ -664,6 +670,13 @@ impl CheckedDesign {
 								},
 							);
 						}
+						let a = self.new_node(
+							"$nop",
+							NodeType::CellInput {
+								port: "A".to_string(),
+								connected_id: usize::MAX,
+							},
+						);
 						let y = self.new_node(
 							"$nop",
 							NodeType::CellOutput {
@@ -676,99 +689,6 @@ impl CheckedDesign {
 						self.connect(nop, y);
 						self.connect(y, *nodeid);
 					}
-				}
-			}
-		}
-	}
-
-	pub fn insert_nop_to_sanitize_ports(&mut self) {
-		let topo_order = self.get_topo_order();
-		// Insert Nop to partition signal networks
-		let signal_choices = self.get_signal_choices();
-		for nodeid in &topo_order {
-			let node = &self.nodes[*nodeid];
-			if node.is_port_input() {
-				if signal_choices[node.id].len() < 2 {
-					continue;
-				}
-				for fiid in node.fanin.clone() {
-					self.disconnect(fiid, *nodeid);
-					let a = self.new_node(
-						"$nop",
-						NodeType::CellInput {
-							port: "A".to_string(),
-							connected_id: usize::MAX,
-						},
-					);
-					let nop = self.new_node(
-						"$nop",
-						NodeType::CellBody {
-							cell_type: BodyType::Nop,
-						},
-					);
-					let y = self.new_node(
-						"$nop",
-						NodeType::CellOutput {
-							port: "Y".to_owned(),
-							connected_id: usize::MAX,
-						},
-					);
-					self.connect(fiid, a);
-					self.connect(a, nop);
-					self.connect(nop, y);
-					self.connect(y, *nodeid);
-				}
-			}
-		}
-		let topo_order = self.get_topo_order();
-		// Recalculate and insert Nop to partition signal networks
-		let signal_choices = self.get_signal_choices();
-		for nodeid in topo_order.iter().rev() {
-			let node = &self.nodes[*nodeid];
-			if let NodeType::CellBody { .. } = node.node_type {
-				for cell_input in node.fanin.clone() {
-					let mut signals = signal_choices[cell_input].clone();
-					signals.sort();
-					let mut found = false;
-					if !signals.is_empty() {
-						for i in 0..signals.len() - 1 {
-							if signals[i] == signals[i + 1] {
-								found = true;
-								break;
-							}
-						}
-					}
-					if !found {
-						continue;
-					}
-
-					let node = &self.nodes[cell_input];
-					let fiid = node.fanin[0];
-					self.disconnect(fiid, cell_input);
-					let a = self.new_node(
-						"$nop",
-						NodeType::CellInput {
-							port: "A".to_string(),
-							connected_id: usize::MAX,
-						},
-					);
-					let nop = self.new_node(
-						"$nop",
-						NodeType::CellBody {
-							cell_type: BodyType::Nop,
-						},
-					);
-					let y = self.new_node(
-						"$nop",
-						NodeType::CellOutput {
-							port: "Y".to_owned(),
-							connected_id: usize::MAX,
-						},
-					);
-					self.connect(fiid, a);
-					self.connect(a, nop);
-					self.connect(nop, y);
-					self.connect(y, cell_input);
 				}
 			}
 		}

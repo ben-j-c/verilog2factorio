@@ -1,0 +1,145 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n0[shape=box,label="iron_plate_0
+0"]
+  n1[shape=box,label="iron_plate_1
+1"]
+  n2[shape=box,label="signal_A
+2"]
+  n3[shape=box,label="signal_B
+3"]
+  n4[shape=box,label="$2
+v2f_add
+4"]
+  n5[shape=box,label="iron0
+v2f_rolling_accumulate
+6"]
+  n6[shape=box,label="$4
+v2f_add
+9"]
+  n7[shape=box,label="$5
+v2f_gt
+10"]
+  n8[shape=box,label="iron1
+v2f_rolling_accumulate
+12"]
+  n9[shape=box,label="$3
+v2f_gt
+15"]
+  n10[shape=rarrow,label="iron_plate_0
+0"]
+  n11[shape=rarrow,label="iron_plate_1
+1"]
+  n12[shape=larrow,label="signal_A
+16"]
+  n13[shape=larrow,label="signal_B
+17"]
+  n14[shape=larrow,label="$2
+v2f_add
+18
+A"]
+  n15[shape=larrow,label="$2
+v2f_add
+19
+B"]
+  n16[shape=rarrow,label="$2
+v2f_add
+4
+Y"]
+  n17[shape=larrow,label="iron0
+v2f_rolling_accumulate
+20
+A"]
+  n18[shape=rarrow,label="iron0
+v2f_rolling_accumulate
+7
+Y"]
+  n19[shape=larrow,label="$4
+v2f_add
+21
+A"]
+  n20[shape=larrow,label="$4
+v2f_add
+22
+B"]
+  n21[shape=rarrow,label="$4
+v2f_add
+9
+Y"]
+  n22[shape=larrow,label="$5
+v2f_gt
+23
+A"]
+  n23[shape=larrow,label="$5
+v2f_gt
+24
+B"]
+  n24[shape=rarrow,label="$5
+v2f_gt
+10
+Y"]
+  n25[shape=larrow,label="iron1
+v2f_rolling_accumulate
+25
+A"]
+  n26[shape=rarrow,label="iron1
+v2f_rolling_accumulate
+13
+Y"]
+  n27[shape=larrow,label="$3
+v2f_gt
+26
+A"]
+  n28[shape=larrow,label="$3
+v2f_gt
+27
+B"]
+  n29[shape=rarrow,label="$3
+v2f_gt
+15
+Y"]
+  n30[shape=box,label="$constant
+28"]
+  n31[shape=rarrow,label="$constant
+28
+Y"]
+  n32[shape=box,label="$constant
+29"]
+  n33[shape=rarrow,label="$constant
+29
+Y"]
+  n0 -> n10
+  n1 -> n11
+  n4 -> n16
+  n5 -> n18
+  n6 -> n21
+  n7 -> n24
+  n8 -> n26
+  n9 -> n29
+  n10 -> n17 [label="iron-plate(106)",syle=bold,color=blue]
+  n11 -> n25 [label="iron-plate(106)",syle=bold,color=blue]
+  n12 -> n2
+  n13 -> n3
+  n14 -> n4
+  n15 -> n4
+  n16 -> n28 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n17 -> n5
+  n18 -> n19 [label="steel-chest(2)",syle=bold,color=blue]
+  n18 -> n27 [label="steel-chest(2)",syle=bold,color=blue]
+  n19 -> n6
+  n20 -> n6
+  n21 -> n23 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n22 -> n7
+  n23 -> n7
+  n24 -> n13 [label="signal-B(218)",syle=bold,color=blue]
+  n25 -> n8
+  n26 -> n14 [label="steel-chest(2)",syle=bold,color=blue]
+  n26 -> n22 [label="steel-chest(2)",syle=bold,color=blue]
+  n27 -> n9
+  n28 -> n9
+  n29 -> n12 [label="signal-A(217)",syle=bold,color=blue]
+  n30 -> n31
+  n31 -> n15 [label="wooden-chest(0)",syle=bold,color=blue]
+  n32 -> n33
+  n33 -> n20 [label="wooden-chest(0)",syle=bold,color=blue]
+}

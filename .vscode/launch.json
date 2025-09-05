@@ -40,7 +40,7 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "pmux_n",
+			"name": "testcase",
 			"cargo": {
 				"args": [
 					"test",
@@ -52,7 +52,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::sim_tests::pmux_n",
+				"tests::logical_design_tests::test10",
 			],
 			"cwd": "${workspaceFolder}"
 		},
