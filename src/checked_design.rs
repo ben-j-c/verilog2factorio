@@ -826,7 +826,7 @@ impl CheckedDesign {
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements();
 		//self.insert_nop_to_sanitize_ports();
-		#[cfg(false)]
+		//#[cfg(false)]
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {

@@ -25,14 +25,6 @@ if (sim:probe(result_y.input)[y_sig] ~= 7) then
 	print("ERROR")
 	print("Expected: 7")
 	print("Got: " .. sim:probe(result_y.input)[y_sig])
-	print(sim:probe(result_y.input))
-	print("\nLogical design:")
-	logd:print()
-	print("\nSim:")
-	sim:print()
-	sim:inspect()
-	sim:step(1)
-	sim:probe(result_y.input)
 	error()
 end
 
