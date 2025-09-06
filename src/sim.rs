@@ -503,6 +503,8 @@ impl SimState {
 				assert!(!output_each, "Invalid output");
 				let left = if let Signal::Id(id) = input_1 {
 					self.get_seen_signal_count(node.id, id, input_left_network)
+				} else if let Signal::Constant(c) = input_1 {
+					c
 				} else {
 					0
 				};

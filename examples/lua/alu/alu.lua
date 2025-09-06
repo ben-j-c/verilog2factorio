@@ -19,12 +19,99 @@ select:set_outputs({ s_sig }, { 0 })
 
 sim = logd:new_simulation()
 
-sim:step(10)
-
+sim:step(4)
 if (sim:probe(result_y.input)[y_sig] ~= 7) then
-	print("ERROR")
-	print("Expected: 7")
-	print("Got: " .. sim:probe(result_y.input)[y_sig])
+	error()
+end
+
+select:set_outputs({ s_sig }, { 1 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= -1) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 2 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 12) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 3 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 0) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 4 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 3) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 5 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 4) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 6 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 81) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 7 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= -3) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 8 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 7) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 9 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 0) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 10 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 7) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 11 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 0) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 12 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 0) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 13 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 48) then
+	sim:inspect()
+	error()
+end
+
+select:set_outputs({ s_sig }, { 14 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 0) then
+	error()
+end
+
+select:set_outputs({ s_sig }, { 15 })
+sim:step(4)
+if (sim:probe(result_y.input)[y_sig] ~= 3) then
 	error()
 end
 
