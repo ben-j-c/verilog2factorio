@@ -307,22 +307,37 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 	}
 }
 
-fn method_load_rtl<P>(filename: P, top_mod: String) -> Result<RTL, mlua::Error>
+fn method_load_rtl<P>(filenames: &[P], top_mod: String) -> Result<RTL, mlua::Error>
 where
 	P: AsRef<Path>,
 {
-	let filename: &Path = filename.as_ref();
-	let filename_out = get_derivative_file_name(filename, "_rtl.json")?;
+	if filenames.is_empty() {
+		return Err(Error::runtime("No files provided."));
+	}
+	let filename_primary: &Path = filenames[0].as_ref();
+	let filename_out = get_derivative_file_name(filename_primary, "_rtl.json")?;
 	method_check_yosys()?;
 	let exe_dir = get_v2f_root()?;
 	if !exe_dir.is_dir() {
 		return Err(Error::RuntimeError("Can't locate V2F_ROOT".to_string()));
 	}
-	if !filename.is_file() {
-		return Err(Error::RuntimeError(format!(
-			"{:?} is not a file.",
-			filename
-		)));
+	for file in filenames {
+		let file = file.as_ref();
+		if !file.is_file() {
+			return Err(Error::RuntimeError(format!("{:?} is not a file.", file)));
+		}
+	}
+
+	let filenames = filenames
+		.iter()
+		.map(|file| (file.as_ref(), file.as_ref().to_str()));
+	let mut source_read = String::new();
+	for (path, file) in filenames {
+		if file.is_none() {
+			return Err(Error::runtime(format!("{path:?} has non-utf8 character.")));
+		}
+		let file = file.unwrap();
+		source_read += &format!("read_verilog {file}\n");
 	}
 
 	{
@@ -331,7 +346,7 @@ where
 		rtl_script.read_to_end(&mut buf)?;
 		let rtl_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
 		let rtl_script_text = rtl_script_text
-			.replace("{filename}", filename.to_str().unwrap())
+			.replace("{source_read}", &source_read)
 			.replace("{filename_out}", filename_out.as_os_str().to_str().unwrap())
 			.replace("{exe_dir}", exe_dir.to_str().unwrap())
 			.replace("{top_mod}", &top_mod);
@@ -919,8 +934,16 @@ impl UserData for RTL {
 impl FromLua for RTL {
 	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match &value {
+			Value::Table(t) => {
+				let mut filenames = vec![];
+				for pair in t.pairs::<u32, String>() {
+					let (_idx, file) = pair?;
+					filenames.push(file);
+				}
+				method_load_rtl(&filenames, "top".to_owned())
+			},
 			Value::String(filename) => {
-				method_load_rtl(filename.to_string_lossy(), "top".to_owned())
+				method_load_rtl(&[filename.to_string_lossy()], "top".to_owned())
 			},
 			Value::UserData(data) => Ok(data.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1048,8 +1071,19 @@ pub fn get_lua() -> Result<Lua, Error> {
 
 	lua.globals().set(
 		"yosys_load_rtl",
-		lua.create_function(|_, (filename, top_mod): (String, String)| {
-			method_load_rtl(filename, top_mod)
+		lua.create_function(|_, (files, top_mod): (Value, String)| match files {
+			Value::String(filename) => method_load_rtl(&[filename.to_string_lossy()], top_mod),
+			Value::Table(table) => {
+				let mut filenames = vec![];
+				for pair in table.pairs::<u32, String>() {
+					let (_idx, file) = pair?;
+					filenames.push(file);
+				}
+				method_load_rtl(&filenames, top_mod)
+			},
+			_ => Err(Error::runtime(
+				"Must be a single filename or a list of filenames.",
+			)),
 		})?,
 	)?;
 
