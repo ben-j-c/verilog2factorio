@@ -9,6 +9,7 @@ use std::{
 use itertools::Itertools;
 
 mod decider_model;
+pub mod vcd;
 
 use crate::{
 	logical_design::{
