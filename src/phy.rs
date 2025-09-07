@@ -1,3 +1,4 @@
+mod config;
 mod design;
 mod partition;
 mod placement;
