@@ -1,11 +1,11 @@
 use std::{collections::BTreeMap, io};
 
+use itertools::Itertools;
+use vcd::{Value, Vector};
+
 use crate::util::{hash_map, HashM};
 
-pub enum Waveform {
-	Value(BTreeMap<u64, vcd::Value>),
-	Vector(BTreeMap<u64, vcd::Vector>),
-}
+type Waveform = BTreeMap<u64, vcd::Vector>;
 
 pub struct VCD {
 	header: vcd::Header,
@@ -23,26 +23,12 @@ impl VCD {
 			use vcd::Command::*;
 			match command {
 				ChangeScalar(id_code, value) => {
-					let waveform = values
-						.entry(id_code)
-						.or_insert(Waveform::Value(BTreeMap::new()));
-					match waveform {
-						Waveform::Value(values) => {
-							values.insert(time, value);
-						},
-						Waveform::Vector(_) => panic!("Inconsistent waveform."),
-					}
+					let waveform = values.entry(id_code).or_insert(Waveform::new());
+					waveform.insert(time, Vector::from([value]));
 				},
 				ChangeVector(id_code, vector) => {
-					let waveform = values
-						.entry(id_code)
-						.or_insert(Waveform::Vector(BTreeMap::new()));
-					match waveform {
-						Waveform::Vector(values) => {
-							values.insert(time, vector);
-						},
-						Waveform::Value(_) => panic!("Inconsistent waveform."),
-					}
+					let waveform = values.entry(id_code).or_insert(Waveform::new());
+					waveform.insert(time, vector);
 				},
 				Timestamp(t) => {
 					time = t;
@@ -51,5 +37,15 @@ impl VCD {
 			}
 		}
 		VCD { header, values }
+	}
+
+	pub fn get_value(&self, var: String, time: u64) -> Option<Vec<Value>> {
+		let var = self.header.find_var(&var.split(".").collect_vec())?;
+		let id = var.code;
+		let waveform = self.values.get(&id)?;
+		waveform
+			.range(0..=time)
+			.last()
+			.map(|(_k, v)| v.clone().into())
 	}
 }

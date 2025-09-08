@@ -7,7 +7,6 @@ use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
-	fmt::format,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
