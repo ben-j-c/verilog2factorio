@@ -8,12 +8,13 @@ use crate::util::{hash_map, HashM};
 type Waveform = BTreeMap<u64, vcd::Vector>;
 
 pub struct VCD {
+	last_time: u64,
 	header: vcd::Header,
 	values: HashM<vcd::IdCode, Waveform>,
 }
 
 impl VCD {
-	fn import<R: io::BufRead>(buf_reader: R) -> VCD {
+	pub fn import<R: io::BufRead>(buf_reader: R) -> VCD {
 		let mut parser = vcd::Parser::new(buf_reader);
 		let header = parser.parse_header().unwrap();
 		let mut values = hash_map();
@@ -36,16 +37,32 @@ impl VCD {
 				_ => {},
 			}
 		}
-		VCD { header, values }
+		VCD {
+			header,
+			values,
+			last_time: time,
+		}
 	}
 
-	pub fn get_value(&self, var: String, time: u64) -> Option<Vec<Value>> {
-		let var = self.header.find_var(&var.split(".").collect_vec())?;
+	pub fn has_var<S: AsRef<str>>(&self, var: S) -> bool {
+		self.header
+			.find_var(&var.as_ref().split(".").collect_vec())
+			.is_some()
+	}
+
+	pub fn get_value<S: AsRef<str>>(&self, var: S, time: u64) -> Option<Vec<Value>> {
+		let var = self
+			.header
+			.find_var(&var.as_ref().split(".").collect_vec())?;
 		let id = var.code;
 		let waveform = self.values.get(&id)?;
 		waveform
 			.range(0..=time)
 			.last()
 			.map(|(_k, v)| v.clone().into())
+	}
+
+	pub fn last_time(&self) -> u64 {
+		self.last_time
 	}
 }

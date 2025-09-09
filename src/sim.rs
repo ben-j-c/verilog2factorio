@@ -6,6 +6,7 @@ use std::{
 	usize,
 };
 
+use ::vcd::Value;
 use itertools::Itertools;
 
 mod decider_model;
@@ -17,6 +18,7 @@ use crate::{
 		NET_RED_GREEN,
 	},
 	signal_lookup_table::{self},
+	sim::{self, vcd::VCD},
 	svg::SVG,
 	util::{hash_map, hash_set, HashM},
 };
@@ -286,7 +288,7 @@ impl SimState {
 		}
 	}
 
-	pub fn step(&mut self, steps: usize) {
+	pub fn step(&mut self, steps: u32) {
 		self.update_logical_design();
 		let n_nodes = self.logd.borrow().nodes.len();
 		for _ in 0..steps {
@@ -813,6 +815,52 @@ impl SimState {
 		}
 		(vec![], vec![])
 	}
+
+	pub fn play_vcd(
+		&mut self,
+		vcd: &VCD,
+		inputs: HashM<String, NodeId>,
+		outputs: HashM<String, (Signal, NodeId)>,
+		propagation_delay: u32,
+		reset: bool,
+	) {
+		if reset {
+			self.reset();
+		}
+		for vcd_time in 0..vcd.last_time() {
+			{
+				let mut logd = self.logd.borrow_mut();
+				for (wire_name, id) in &inputs {
+					let val = vcd.get_value(wire_name, vcd_time);
+					let count: i32 = convert_to_signal_count(&val);
+					logd.set_ith_output_count(*id, 0, count);
+				}
+			}
+			self.step(propagation_delay);
+			{
+				for (wire_name, (signal, id)) in &outputs {
+					let val = vcd.get_value(wire_name, vcd_time);
+					let expected_count: i32 = convert_to_signal_count(&val);
+					let seen_signals = self.probe_input(*id, NET_RED_GREEN);
+					for (sig, actual_count) in seen_signals {
+						if sig == signal.id() {
+							assert_eq!(actual_count, expected_count);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	pub fn reset(&mut self) {
+		self.step_number = 0;
+		for row in self.state.iter_mut() {
+			row.red = OutputState::default();
+			row.green = OutputState::default();
+		}
+		self.traces.clear();
+		self.trace_set.clear();
+	}
 }
 
 fn draw_transition_edge(
@@ -993,4 +1041,21 @@ impl Display for SimStateRow {
 		}
 		Ok(())
 	}
+}
+
+pub fn convert_to_signal_count(var: &Option<Vec<Value>>) -> i32 {
+	let v = if let Some(v) = var {
+		v
+	} else {
+		return 0;
+	};
+	let mut retval = 0;
+	assert!(v.len() <= 32);
+	for bit in v {
+		retval <<= 1;
+		if matches!(bit, Value::V1) {
+			retval += 1;
+		}
+	}
+	retval
 }

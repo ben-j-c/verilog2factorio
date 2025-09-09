@@ -563,7 +563,7 @@ mod test {
 
 	#[test]
 	fn sim_dff() {
-		const STEPS: usize = 5;
+		const STEPS: u32 = 5;
 		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 
 		let sig_data = signal_lookup_table::lookup_sig("signal-D");
@@ -636,7 +636,7 @@ mod test {
 
 	#[test]
 	fn sim_dffe() {
-		const STEPS: usize = 6;
+		const STEPS: u32 = 6;
 		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 
 		let sig_data = signal_lookup_table::lookup_sig("signal-D");
@@ -763,7 +763,7 @@ mod test {
 #[test]
 fn sim_dffe() {
 	const NO_SIGNAL: Vec<(i32, i32)> = vec![];
-	const STEPS: usize = 10;
+	const STEPS: u32 = 10;
 	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
 
 	let sig_data = signal_lookup_table::lookup_sig("signal-D");

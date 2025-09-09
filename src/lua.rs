@@ -1,12 +1,13 @@
 use itertools::Itertools;
 use mlua::{
-	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, UserData, UserDataFields,
+	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, Table, UserData, UserDataFields,
 	UserDataMethods, Value,
 };
 use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
 	cell::RefCell,
+	fmt::Display,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
@@ -24,8 +25,8 @@ use crate::{
 	mapped_design::MappedDesign,
 	phy::PhysicalDesign,
 	signal_lookup_table,
-	sim::SimState,
-	util::HashM,
+	sim::{self, vcd::VCD, SimState},
+	util::{hash_map, HashM},
 };
 
 impl From<crate::Error> for mlua::Error {
@@ -52,6 +53,10 @@ pub(crate) struct SimStateAPI {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SignalTable {
 	pub(crate) signals: HashM<Signal, i32>,
+}
+
+fn runtime_err<T, S: Display>(err: S) -> mlua::Result<T> {
+	Err(Error::runtime(err))
 }
 
 impl PartialEq for SignalTable {
@@ -441,21 +446,25 @@ impl UserData for Terminal {
 	}
 }
 
+#[derive(Debug, Clone)]
 struct Decider {
 	id: NodeId,
 	logd: Rc<RefCell<LogicalDesign>>,
 }
 
+#[derive(Debug, Clone)]
 struct Arithmetic {
 	id: NodeId,
 	logd: Rc<RefCell<LogicalDesign>>,
 }
 
+#[derive(Debug, Clone)]
 struct Lamp {
 	id: NodeId,
 	logd: Rc<RefCell<LogicalDesign>>,
 }
 
+#[derive(Debug, Clone)]
 struct Constant {
 	id: NodeId,
 	logd: Rc<RefCell<LogicalDesign>>,
@@ -750,7 +759,7 @@ fn verify_is_combinator(this: &SimStateAPI, data: &AnyUserData) -> Result<NodeId
 
 impl UserData for SimStateAPI {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method("step", |_, this, steps: usize| {
+		methods.add_method("step", |_, this, steps: u32| {
 			this.sim.borrow_mut().step(steps);
 			Ok(())
 		});
@@ -881,7 +890,7 @@ impl UserData for SimStateAPI {
 							let mut found = false;
 							for v in line.split(" ").skip(1).take(1) {
 								found = true;
-								if let Ok(v) = v.parse::<usize>() {
+								if let Ok(v) = v.parse::<u32>() {
 									println!("Doing {v} step(s).");
 									sim.step(v);
 								} else {
@@ -919,6 +928,121 @@ impl UserData for SimStateAPI {
 			}
 			Ok(())
 		});
+
+		methods.add_method_mut(
+			"apply_vcd",
+			|_,
+			 this,
+			 (filename, inputs_lua, outputs_lua, propagation_delay, reset): (
+				String,
+				Table,
+				Table,
+				u32,
+				bool,
+			)| {
+				let file = File::open(filename)?;
+				let reader = BufReader::new(file);
+				let vcd = VCD::import(reader);
+
+				let inputs = {
+					let mut inputs = hash_map();
+					for pair in inputs_lua.pairs::<String, Constant>() {
+						let (net, comb) = pair?;
+						if !vcd.has_var(&net) {
+							return runtime_err(format!("{net} is not a known variable."));
+						}
+						if comb.logd.as_ptr() != this.logd.as_ptr() {
+							return runtime_err(format!(
+								"Input combinator for net {net} is not owned by this design."
+							));
+						}
+						inputs.insert(net, comb.id);
+					}
+					inputs
+				};
+				let outputs = {
+					let mut outputs = hash_map();
+					let logd = this.logd.borrow();
+					for pair in outputs_lua.pairs::<String, Constant>() {
+						let (net, comb) = pair?;
+						if !vcd.has_var(&net) {
+							return runtime_err(format!("{net} is not a known variable."));
+						}
+						if comb.logd.as_ptr() != this.logd.as_ptr() {
+							return runtime_err(format!(
+								"Output lamp for net {net} is not owned by this design."
+							));
+						}
+						let lamp = logd.get_node(comb.id);
+						let signal = match lamp.function {
+							crate::logical_design::NodeFunction::Lamp { expression } => {
+								expression.0
+							},
+							_ => return runtime_err("internal error"),
+						};
+						outputs.insert(net, (signal, comb.id));
+					}
+					outputs
+				};
+
+				this.sim
+					.borrow_mut()
+					.play_vcd(&vcd, inputs, outputs, propagation_delay, reset);
+				Ok(())
+			},
+		);
+	}
+}
+
+impl FromLua for Constant {
+	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "Constant".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
+impl FromLua for Lamp {
+	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "Lamp".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
+impl FromLua for Arithmetic {
+	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "Arithmetic".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
+impl FromLua for Decider {
+	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "Decider".to_owned(),
+				message: None,
+			}),
+		}
 	}
 }
 
@@ -993,6 +1117,14 @@ impl FromLua for SignalTable {
 				message: None,
 			}),
 		}
+	}
+}
+
+impl UserData for VCD {
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_meta_method("get_value", |_, this, (var, time): (String, u64)| {
+			Ok(sim::convert_to_signal_count(&this.get_value(var, time)))
+		});
 	}
 }
 
