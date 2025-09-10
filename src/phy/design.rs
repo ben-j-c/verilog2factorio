@@ -16,7 +16,7 @@ use std::{
 	vec,
 };
 
-use crate::logical_design::{NodeFunction, NodeId, NET_GREEN, NET_RED};
+use crate::logical_design::{NodeId, NET_GREEN, NET_RED};
 use crate::mapped_design::Direction;
 use crate::ndarr::Arr2;
 use crate::phy::placement::*;
@@ -732,7 +732,7 @@ impl PhysicalDesign {
 			const METHODS: &[METHOD] = &[
 				mthd!(650, false, false, ripup_replace_method),
 				mthd!(200, true, false, swap_local_method),
-				//(15, false, false, swap_random_method,),
+				//(15, false, false, swap_random_method),
 				mthd!(25, false, false, ripup_range_method),
 				mthd!(200, false, false, crack_in_two_method),
 				mthd!(50, true, false, slide_puzzle_method),
