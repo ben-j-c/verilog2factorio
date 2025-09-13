@@ -791,6 +791,7 @@ impl Placement {
 		self.place(id_b, assignment_a);
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn swap_loc(&mut self, assignment_a: (Num, Num), assignment_b: (Num, Num)) {
 		let mut tmp = util::hash_set();
 		swap(&mut self.pos_map[assignment_a], &mut tmp);
@@ -1126,6 +1127,7 @@ pub mod global {
 			self.place(id_b, assignment_a);
 		}
 
+		#[allow(dead_code)]
 		pub(crate) fn swap_loc(&mut self, assignment_a: (Num, Num), assignment_b: (Num, Num)) {
 			let mut tmp = util::hash_set();
 			swap(&mut self.pos_map[assignment_a], &mut tmp);
@@ -1449,6 +1451,7 @@ pub mod global {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn swap_random_method(
 		rng: &mut StdRng,
 		_curr: &GlobalPlacement,
@@ -1788,7 +1791,7 @@ pub mod global {
 					for cell2 in new.id_at(check_pos) {
 						if connections_per_node[cell1]
 							.iter()
-							.map(|(a, b)| a)
+							.map(|(a, _b)| a)
 							.contains(cell2)
 						{
 							continue;

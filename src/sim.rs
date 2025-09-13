@@ -18,7 +18,7 @@ use crate::{
 		NET_RED_GREEN,
 	},
 	signal_lookup_table::{self},
-	sim::{self, vcd::VCD},
+	sim::vcd::VCD,
 	svg::SVG,
 	util::{hash_map, hash_set, HashM},
 };

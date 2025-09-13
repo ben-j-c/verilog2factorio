@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use itertools::{chain, izip, Itertools};
-use rayon::collections::hash_map;
 use serde::{
 	de::{self, Visitor},
 	Deserialize, Deserializer,

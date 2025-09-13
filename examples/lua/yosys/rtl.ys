@@ -1,4 +1,5 @@
 read_verilog balancer.v
+
 read_verilog -lib /home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v
 hierarchy -libdir /home/ben/repo/verilog2factorio/v2flib -check -top balancer
 

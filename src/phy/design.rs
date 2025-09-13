@@ -6,7 +6,6 @@ use core::{f64, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::f32::consts::PI;
 use std::ops::Rem;
 use std::usize;
 
@@ -522,7 +521,8 @@ impl PhysicalDesign {
 			let access = placement.calculate_accessibility_force(global_connectivity);
 			let radial = placement.calculate_radial_force();
 
-			let t = round as f32 / 1_000.0;
+			let cfg = &CFG.placement2;
+			let t = round as f32 / cfg.round_to_time_divisor;
 
 			//let spring_c = 4.0 / ((t * 3.0).powi(2) + 1.0);
 			//let legalization_c =
@@ -530,13 +530,16 @@ impl PhysicalDesign {
 			//let overlap_c = 500.0 * ((t * f64::consts::PI * 40.0).sin() + 1.0);
 			//let buckle_c = 100.0 * ((-t * f64::consts::PI * 16.0).sin() + 1.0) + 10.0;
 			//let access_c = 2.0;
-			let spring_c = 15.0 / (t * 0.5 + 1.0);
-			let legalization_c = t / 2.0 + (t + PI * 20.0).sin() * 8.0;
+			let spring_c = cfg.spring_k0 / (t * cfg.spring_k1 + cfg.spring_k2);
+			let legalization_c =
+				t / cfg.legalization_k0 + (t + cfg.legalization_k1).sin() * cfg.legalization_k2;
 			//let elec_c = 10.0;
-			let overlap_c = 1800.0 + (t + PI * 20.0).sin() * 100.0;
-			let buckle_c = 200.0;
-			let access_c = 1000.0;
-			let radial_c = 100.0 * side_length as f32 / 20.0 * (1.0 - (t * t / 1.0 + 1.0).recip());
+			let overlap_c = cfg.overlap_k0 + (t + cfg.overlap_k1).sin() * cfg.overlap_k2;
+			let buckle_c = cfg.buckle_k0;
+			let access_c = cfg.access_k0;
+			let radial_c = cfg.radial_k0
+				* side_length as f32
+				* (1.0 - (t * t / cfg.radial_k1 + cfg.radial_k2).recip());
 
 			let mut force = vec![(0.0, 0.0); spring.len()];
 			for i in 0..num_cells {
@@ -556,7 +559,7 @@ impl PhysicalDesign {
 					+ radial_c * radial[i].1;
 			}
 
-			placement.step_cells(force, 0.00004);
+			placement.step_cells(force, cfg.step_size);
 			cost = placement.compute_cost(&edges);
 			round += 1;
 		}
@@ -571,7 +574,7 @@ impl PhysicalDesign {
 
 	fn solve_as_mcmc_dense(
 		connections_per_node: &Vec<Vec<usize>>,
-		global_connectivity: &Vec<Vec<(i32, usize, usize)>>,
+		_global_connectivity: &Vec<Vec<(i32, usize, usize)>>,
 		initializations: &Vec<Vec<(usize, usize)>>,
 		init_temp: Option<f64>,
 		side_length: usize,
@@ -642,7 +645,7 @@ impl PhysicalDesign {
 		let check_invariant_unique_position = |plc: &Placement| {
 			let mut seen = HashMap::new();
 			for (idx, (x, y)) in plc.assignments.iter().enumerate() {
-				if let Some(idx_prior) = seen.insert((x, y), idx) {
+				if let Some(_idx_prior) = seen.insert((x, y), idx) {
 					assert!(false);
 				}
 				assert!(x % 2 == 0);
@@ -779,7 +782,7 @@ impl PhysicalDesign {
 
 				let pick = rng.random_range(0..total_weight);
 				let mut cumulative = 0;
-				for (weight, can_run_if_final, _, func, method_name) in METHODS {
+				for (weight, can_run_if_final, _, func, _method_name) in METHODS {
 					if final_stage && !can_run_if_final {
 						continue;
 					}
@@ -971,10 +974,10 @@ impl PhysicalDesign {
 				}
 			}
 		};
-		let check_invariant_unique_position = |plc: &GlobalPlacement| {
+		let _check_invariant_unique_position = |plc: &GlobalPlacement| {
 			let mut seen = HashMap::new();
 			for (idx, (x, y)) in plc.assignments.iter().enumerate() {
-				if let Some(idx_prior) = seen.insert((x, y), idx) {
+				if let Some(_idx_prior) = seen.insert((x, y), idx) {
 					assert!(false);
 				}
 			}
@@ -991,7 +994,7 @@ impl PhysicalDesign {
 				}
 			}
 		};
-		let check_invariants = |plc: &GlobalPlacement, max_density: i32| {
+		let _check_invariants = |plc: &GlobalPlacement, max_density: i32| {
 			check_invariant_density(plc, max_density);
 			check_invariant_blocks_assignments_congruent(plc);
 		};
@@ -1698,8 +1701,9 @@ impl PhysicalDesign {
 		self.save_svg_full(None, ld, filename)
 	}
 
-	fn validate_against(&self, ld: &LogicalDesign) {
+	fn validate_against(&self, _ld: &LogicalDesign) {
 		return;
+		/*
 		unreachable!();
 		for c in &self.nodes {
 			let ld_comb = ld.get_node(c.logic);
@@ -1752,6 +1756,7 @@ impl PhysicalDesign {
 				assert_eq!(n2, n4);
 			}
 		}
+		 */
 	}
 
 	pub(crate) fn get_network(
@@ -2109,7 +2114,7 @@ impl PhysicalDesign {
 		logical: &LogicalDesign,
 		partition_global_connectivity: &Vec<Vec<Vec<(i32, usize, usize)>>>,
 		local_to_global: &Vec<Vec<usize>>,
-		global_to_local: &Vec<HashM<usize, usize>>,
+		_global_to_local: &Vec<HashM<usize, usize>>,
 	) -> bool {
 		let partition_dims = calculate_minimum_partition_dim(&self.local_assignments);
 		println!(
@@ -2500,6 +2505,7 @@ fn remove_non_unique<T: Eq + std::hash::Hash + Clone>(vec: Vec<T>) -> Vec<T> {
 }
 
 impl WireHopType {
+	#[allow(dead_code)]
 	pub fn is_comb(&self) -> bool {
 		matches!(self, Self::Combinator | Self::Lamp)
 	}
@@ -2579,7 +2585,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design(100);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(2000);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg")
 			.expect("Failed to save");
@@ -2588,7 +2594,7 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(10);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(30);
 		p.user_partition_size = Some(200);
 		let res = p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg")

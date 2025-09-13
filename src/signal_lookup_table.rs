@@ -9,16 +9,16 @@ pub static SIGNAL_MAP: Lazy<(
 	HashMap<i32, (&'static str, Option<&'static str>)>,
 	HashMap<&'static str, (i32, Option<&'static str>)>,
 )> = Lazy::new(|| {
-	let mut id = 0;
+	let mut _id = 0;
 	let mut m = HashMap::new();
 	let mut m2 = HashMap::new();
 	#[allow(unused_assignments)]
 	let mut signal_type = Some("virtual");
 	macro_rules! sig_def {
 		($name:expr) => {{
-			m.insert(id, ($name, signal_type));
-			m2.insert($name, (id, signal_type));
-			id += 1;
+			m.insert(_id, ($name, signal_type));
+			m2.insert($name, (_id, signal_type));
+			_id += 1;
 		}};
 	}
 	signal_type = None;

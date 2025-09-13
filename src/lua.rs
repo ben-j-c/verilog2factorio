@@ -995,7 +995,7 @@ impl UserData for SimStateAPI {
 }
 
 impl FromLua for Constant {
-	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1008,7 +1008,7 @@ impl FromLua for Constant {
 }
 
 impl FromLua for Lamp {
-	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1021,7 +1021,7 @@ impl FromLua for Lamp {
 }
 
 impl FromLua for Arithmetic {
-	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1034,7 +1034,7 @@ impl FromLua for Arithmetic {
 }
 
 impl FromLua for Decider {
-	fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(d) => Ok(d.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1113,7 +1113,7 @@ impl FromLua for SignalTable {
 			Value::UserData(data) => data.borrow::<Self>().map(|v| v.clone()),
 			_ => Err(Error::FromLuaConversionError {
 				from: value.type_name(),
-				to: format!("SignalTable"),
+				to: "SignalTable".to_string(),
 				message: None,
 			}),
 		}

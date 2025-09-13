@@ -332,7 +332,7 @@ pub struct Node {
 
 impl Node {
 	/// Iterate the fanin of a specific colour.
-	pub(crate) fn iter_fanin(&self, colour: WireColour) -> Iter<NodeId> {
+	pub(crate) fn iter_fanin<'this>(&'this self, colour: WireColour) -> Iter<'this, NodeId> {
 		match colour {
 			WireColour::Red => self.fanin_red.iter(),
 			WireColour::Green => self.fanin_green.iter(),
@@ -340,7 +340,7 @@ impl Node {
 	}
 
 	/// Iterate the fanout of a specific colour.
-	pub(crate) fn iter_fanout(&self, colour: WireColour) -> Iter<NodeId> {
+	pub(crate) fn iter_fanout<'this>(&'this self, colour: WireColour) -> Iter<'this, NodeId> {
 		match colour {
 			WireColour::Red => self.fanout_red.iter(),
 			WireColour::Green => self.fanout_green.iter(),
@@ -373,6 +373,7 @@ impl Node {
 		self.fanout_green.is_empty() && self.fanout_red.is_empty()
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn is_constant(&self) -> bool {
 		match &self.function {
 			NodeFunction::Constant { .. } => true,
@@ -380,6 +381,7 @@ impl Node {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn is_decider(&self) -> bool {
 		match &self.function {
 			NodeFunction::Decider { .. } => true,
@@ -387,6 +389,7 @@ impl Node {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn is_arithmetic(&self) -> bool {
 		match &self.function {
 			NodeFunction::Arithmetic { .. } => true,
@@ -780,8 +783,11 @@ impl LogicalDesign {
 		let muxab = self.add_mux_internal::<2>(input, en);
 		self.add_wire_green(vec![], vec![]);
 
+		#[allow(unused)]
 		let en_buf = self.add_nop(en, en);
+		#[allow(unused)]
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
+		#[allow(unused)]
 		let select = self.add_wire_green_simple(en_buf, muxab[0]);
 
 		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
@@ -839,7 +845,9 @@ impl LogicalDesign {
 		self.add_wire_green(vec![], vec![]);
 
 		let en_buf = self.add_nop(en, en);
+		#[allow(unused)]
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
+		#[allow(unused)]
 		let select = self.add_wire_green_simple(en_buf, muxab[0]);
 
 		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
@@ -848,6 +856,7 @@ impl LogicalDesign {
 
 		let rst_gate =
 			self.add_arithmetic((srst, ArithmeticOperator::Mult, Signal::Constant(2)), en);
+		#[allow(unused)]
 		let rst_wire_internal = self.add_wire_green_simple(rst_gate, muxab[0]);
 		let rst_wire = self.add_wire_red(vec![], vec![rst_gate]);
 		#[cfg(debug_assertions)]
@@ -2089,7 +2098,7 @@ impl LogicalDesign {
 		ret.into_iter().collect_vec()
 	}
 
-	pub(crate) fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
+	pub fn get_fanin_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
@@ -2100,7 +2109,7 @@ impl LogicalDesign {
 		retval
 	}
 
-	pub(crate) fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
+	pub fn get_fanout_network(&self, ldid: NodeId, colour: WireColour) -> HashS<NodeId> {
 		let node = &self.nodes[ldid.0];
 		let mut retval = hash_set();
 		self.assert_is_not_wire_sum(ldid);
@@ -2297,15 +2306,7 @@ impl Display for Node {
 					self.output[0],
 				)
 			},
-			NodeFunction::Decider {
-				expressions,
-				expression_conj_disj,
-				input_left_networks,
-				input_right_networks,
-				output_network,
-				use_input_count,
-				constants,
-			} => {
+			NodeFunction::Decider { .. } => {
 				format!("D {:?}", self.output)
 			},
 			NodeFunction::Constant { enabled, constants } => {
@@ -2334,7 +2335,7 @@ impl Display for Node {
 			.unwrap_or("_".to_owned())
 			.replace("\n", "\\n");
 		if descr.len() > 16 {
-			descr = descr[0..13].to_owned() + &"...";
+			descr = descr[0..13].to_owned() + "...";
 		}
 		write!(f, "{} \"{}\" {}", self.id, descr, func,)?;
 		if !self.fanin_red.is_empty() || !self.fanout_red.is_empty() {

@@ -68,6 +68,7 @@ where
 {
 }
 
+#[allow(dead_code)]
 pub fn a_star<'a, T: Topology<'a, N, X>, N, X: TopologyIndex>(
 	topology: &'a T,
 	a: &X,

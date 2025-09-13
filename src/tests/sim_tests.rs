@@ -1,12 +1,11 @@
 use std::{
 	cell::RefCell,
 	fs::File,
-	io::{BufRead, BufReader, Read},
+	io::{BufRead, BufReader},
 	rc::Rc,
 };
 
 use itertools::Itertools;
-use serde::Serialize;
 
 use crate::{
 	checked_design::CheckedDesign,
@@ -95,7 +94,7 @@ fn constant_through_nop() {
 	};
 	let mut sim = SimState::new(logd.clone());
 	sim.print();
-	for (id, count) in sim.probe_red_out(c1) {
+	for (id, _count) in sim.probe_red_out(c1) {
 		assert_eq!(id, 0);
 	}
 	for x in sim.probe_red_out(nop) {

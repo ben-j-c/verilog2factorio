@@ -69,12 +69,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[command(version, about, long_about = None)]
 pub struct Args {
 	/// Input technology-mapped file, .json, or lua script, .lua.
+	#[arg(short, long, required_unless_present = "dump_phy_cfg")]
+	pub input_file: Option<PathBuf>,
+
+	/// Dump a template cfg/phy_template.toml. Rename to cfg/phy.toml to use for real.
 	#[arg(short, long)]
-	pub input_file: PathBuf,
+	pub dump_phy_cfg: bool,
 }
 
 pub fn mapped_flow(args: Args) -> Result<String> {
-	let file = File::open(args.input_file)?;
+	let input_file = args.input_file.unwrap();
+	let file = File::open(input_file)?;
 	let reader = BufReader::new(file);
 	let mapped_design: MappedDesign = serde_json::from_reader(reader)?;
 	let mut checked_design = CheckedDesign::new();
@@ -90,15 +95,16 @@ pub fn mapped_flow(args: Args) -> Result<String> {
 }
 
 pub fn lua_flow(args: Args) -> Result<String> {
+	let input_file = args.input_file.unwrap();
 	let lua = get_lua()?;
-	let chunk = lua.load(args.input_file.clone());
+	let chunk = lua.load(input_file.clone());
 	let eval = chunk.eval::<AnyUserData>()?;
 	if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		let mut phyd = PhysicalDesign::new();
 		phyd.build_from(&logd.logd.borrow());
 		if logd.make_svg {
-			let svg_name = get_derivative_file_name(&args.input_file, ".svg")?;
+			let svg_name = get_derivative_file_name(input_file.clone(), ".svg")?;
 			phyd.save_svg(&logd.logd.borrow(), svg_name)?;
 		}
 		serd.build_from(&phyd, &logd.logd.borrow());
@@ -108,9 +114,9 @@ pub fn lua_flow(args: Args) -> Result<String> {
 		let mut serd = SerializableDesign::new();
 		serd.build_from(&phyd.phyd.borrow(), &phyd.logd.borrow());
 		let blueprint_json = serde_json::to_string(&serd)?;
-		return Ok(blueprint_json);
+		Ok(blueprint_json)
 	} else {
-		return Err(Error::LuaErrorNoReturnedDesign);
+		Err(Error::LuaErrorNoReturnedDesign)
 	}
 }
 
@@ -167,6 +173,10 @@ pub fn get_yosys_exe() -> Result<PathBuf> {
 		return Ok(PathBuf::from("yosys"));
 	}
 	Err(Error::YosysExeNotFound)
+}
+
+pub fn dump_phy_cfg() {
+	phy::dump_phy_cfg();
 }
 
 #[cfg(test)]

@@ -8,7 +8,8 @@ fn yosys_example() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());
 	env::set_current_dir("examples/lua/yosys").expect("Failed to chdir");
 	let args = Args {
-		input_file: PathBuf::from("yosys.lua"),
+		input_file: Some(PathBuf::from("yosys.lua")),
+		dump_phy_cfg: true,
 	};
 	match lua_flow(args) {
 		Ok(bp) => {

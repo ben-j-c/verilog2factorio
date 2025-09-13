@@ -327,15 +327,15 @@ impl SimState {
 	) {
 		let (
 			expressions,
-			expression_conj_disj,
-			input_left_networks,
-			input_right_networks,
+			_expression_conj_disj,
+			_input_left_networks,
+			_input_right_networks,
 			output_network,
 			use_input_count,
 			constants,
 		) = node.function.unwrap_decider();
 		let mut state_out = OutputState::default();
-		let has_each_output = node.output.iter().any(|sig| *sig == Signal::Each);
+		let has_each_output = node.output.contains(&Signal::Each);
 
 		for (sig, network, use_input_count, constant) in izip!(
 			node.output.iter(),

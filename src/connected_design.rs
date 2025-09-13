@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 use std::vec;
 
 use itertools::Itertools;
 
-use crate::checked_design::ImplementableOp;
 use crate::mapped_design::{Bit, Direction, Integer};
 use crate::mapped_design::{BitSliceOps, MappedDesign};
 

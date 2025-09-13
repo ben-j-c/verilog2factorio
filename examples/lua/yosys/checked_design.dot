@@ -98,16 +98,6 @@ B"]
 v2f_gt
 15
 Y"]
-  n30[shape=box,label="$constant
-28"]
-  n31[shape=rarrow,label="$constant
-28
-Y"]
-  n32[shape=box,label="$constant
-29"]
-  n33[shape=rarrow,label="$constant
-29
-Y"]
   n0 -> n10
   n1 -> n11
   n4 -> n16
@@ -122,24 +112,20 @@ Y"]
   n13 -> n3
   n14 -> n4
   n15 -> n4
-  n16 -> n28 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n16 -> n28 [label="transport-belt(4)",syle=bold,color=blue]
   n17 -> n5
-  n18 -> n19 [label="steel-chest(2)",syle=bold,color=blue]
-  n18 -> n27 [label="steel-chest(2)",syle=bold,color=blue]
+  n18 -> n19 [label="wooden-chest(0)",syle=bold,color=blue]
+  n18 -> n27 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n6
   n20 -> n6
-  n21 -> n23 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n21 -> n23 [label="transport-belt(4)",syle=bold,color=blue]
   n22 -> n7
   n23 -> n7
   n24 -> n13 [label="signal-B(218)",syle=bold,color=blue]
   n25 -> n8
-  n26 -> n14 [label="steel-chest(2)",syle=bold,color=blue]
-  n26 -> n22 [label="steel-chest(2)",syle=bold,color=blue]
+  n26 -> n14 [label="wooden-chest(0)",syle=bold,color=blue]
+  n26 -> n22 [label="wooden-chest(0)",syle=bold,color=blue]
   n27 -> n9
   n28 -> n9
   n29 -> n12 [label="signal-A(217)",syle=bold,color=blue]
-  n30 -> n31
-  n31 -> n15 [label="wooden-chest(0)",syle=bold,color=blue]
-  n32 -> n33
-  n33 -> n20 [label="wooden-chest(0)",syle=bold,color=blue]
 }

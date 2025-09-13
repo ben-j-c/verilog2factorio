@@ -17,6 +17,7 @@ pub(crate) fn hash_map<K, V>() -> HashMap<K, V, BuildHasherDefault<FNV1aHasher64
 pub(crate) type HashM<K, V> = HashMap<K, V, BuildHasherDefault<FNV1aHasher64>>;
 pub(crate) type HashS<K> = HashSet<K, BuildHasherDefault<FNV1aHasher64>>;
 
+#[allow(dead_code)]
 pub(crate) fn construct_bidirectional_join<S1, S2>(
 	lhs: &[S1],
 	rhs: &[S2],

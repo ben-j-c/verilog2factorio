@@ -1,0 +1,6 @@
+#!/bin/bash
+
+hyperparam_dir=`dirname $0`
+source $hyperparam_dir/.venv/bin/activate
+python3 $hyperparam_dir/main.py
+

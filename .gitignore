@@ -3,3 +3,4 @@ rust.log
 yosys.log
 svg/global_*
 svg/partition*
+cfg

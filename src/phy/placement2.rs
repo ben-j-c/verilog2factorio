@@ -35,6 +35,7 @@ impl BBox {
 		dx * dy
 	}
 
+	#[allow(dead_code)]
 	const fn area(self) -> f32 {
 		self.w * self.h
 	}
@@ -110,6 +111,7 @@ impl AnalyticalPlacement {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn num_cells(&self) -> usize {
 		self.cells.len()
 	}
@@ -219,6 +221,7 @@ impl AnalyticalPlacement {
 		ret
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn calculate_electrostatic_force(&self) -> Vec<(f32, f32)> {
 		let mut ret = vec![(0.0, 0.0); self.cells.len()];
 		for id1 in 0..self.cells.len() {

@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use nalgebra::{DMatrix, SymmetricEigen};
 
+#[allow(dead_code)]
 pub(crate) fn kernighan_lin(
 	nodes: &Vec<usize>,
 	connectivity: &Vec<Vec<usize>>,
@@ -70,6 +71,7 @@ fn compute_gain(
 	(ext_a - int_a) + (ext_b - int_b) - 2 * connection
 }
 
+#[allow(dead_code)]
 pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>) {
 	let num_nodes = connectivity.len();
 	let mut laplacian: DMatrix<f64> = DMatrix::zeros(num_nodes, num_nodes);

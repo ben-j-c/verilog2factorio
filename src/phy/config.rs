@@ -3,13 +3,13 @@ use core::f32;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConfigPartition {
+pub(crate) struct ConfigPartition {
 	target_size: i32,
 	side_length_single_partition_scale_factor: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConfigPlacementGlobal {
+pub(crate) struct ConfigPlacementGlobal {
 	temperature_factor_constant: f64,
 	temperature_factor_linear: f64,
 	temperature_floor: f64,
@@ -44,7 +44,7 @@ struct ConfigPlacementGlobal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConfigPlacement1 {
+pub(crate) struct ConfigPlacement1 {
 	temperature_factor_constant: f64,
 	temperature_factor_linear: f64,
 	temperature_floor: f64,
@@ -96,37 +96,38 @@ struct ConfigPlacement1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConfigPlacement2 {
-	round_to_time_divisor: f32,
+pub(crate) struct ConfigPlacement2 {
+	pub(crate) round_to_time_divisor: f32,
+	pub(crate) step_size: f32,
 
-	spring_k0: f32,
-	spring_k1: f32,
-	spring_k2: f32,
-	legalization_k0: f32,
-	legalization_k1: f32,
-	legalization_k2: f32,
-	overlap_k0: f32,
-	overlap_k1: f32,
-	overlap_k2: f32,
-	buckle_k0: f32,
-	access_k0: f32,
-	radial_k0: f32,
-	radial_k1: f32,
-	radial_k2: f32,
+	pub(crate) spring_k0: f32,
+	pub(crate) spring_k1: f32,
+	pub(crate) spring_k2: f32,
+	pub(crate) legalization_k0: f32,
+	pub(crate) legalization_k1: f32,
+	pub(crate) legalization_k2: f32,
+	pub(crate) overlap_k0: f32,
+	pub(crate) overlap_k1: f32,
+	pub(crate) overlap_k2: f32,
+	pub(crate) buckle_k0: f32,
+	pub(crate) access_k0: f32,
+	pub(crate) radial_k0: f32,
+	pub(crate) radial_k1: f32,
+	pub(crate) radial_k2: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConfigRouting {
+pub(crate) struct ConfigRouting {
 	max_margin: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Config {
-	parition: ConfigPartition,
-	placement_global: ConfigPlacementGlobal,
-	placement1: ConfigPlacement1,
-	placement2: ConfigPlacement2,
-	routing: ConfigRouting,
+pub(crate) struct Config {
+	pub(crate) parition: ConfigPartition,
+	pub(crate) placement_global: ConfigPlacementGlobal,
+	pub(crate) placement1: ConfigPlacement1,
+	pub(crate) placement2: ConfigPlacement2,
+	pub(crate) routing: ConfigRouting,
 }
 
 impl Default for Config {
@@ -212,21 +213,22 @@ impl Default for Config {
 				final_phase_swap_local_energy_method: true,
 			},
 			placement2: ConfigPlacement2 {
-				round_to_time_divisor: 1_000.0,
-				spring_k0: 15.0,
-				spring_k1: 0.5,
-				spring_k2: 1.0,
-				legalization_k0: 2.0,
-				legalization_k1: f32::consts::PI * 20.0,
-				legalization_k2: 8.0,
-				overlap_k0: 1800.0,
-				overlap_k1: f32::consts::PI * 20.0,
-				overlap_k2: 100.0,
-				buckle_k0: 200.0,
-				access_k0: 1000.0,
-				radial_k0: 5.0,
-				radial_k1: 1.0,
-				radial_k2: 1.0,
+				round_to_time_divisor: 9692.925711700094,
+				step_size: 1.8895782552923694e-5,
+				spring_k0: 1.760459528125031,
+				spring_k1: 1.0199812161641584,
+				spring_k2: 4.809123571607338,
+				legalization_k0: 2.476878757125287,
+				legalization_k1: 63.039915667199736,
+				legalization_k2: 1.645851220532867,
+				overlap_k0: 14568.151491695002,
+				overlap_k1: 9.797351504772115,
+				overlap_k2: 76.12704246044315,
+				buckle_k0: 1489.476352568493,
+				access_k0: 246.10398852203522,
+				radial_k0: 11.147331195490318,
+				radial_k1: 1.8977834154732327,
+				radial_k2: 7.270569452658551,
 			},
 			parition: ConfigPartition {
 				target_size: 64,

@@ -8,7 +8,8 @@ fn basics_example() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());
 	env::set_current_dir("examples/lua/basics").expect("Failed to chdir");
 	let args = Args {
-		input_file: PathBuf::from("basics.lua"),
+		input_file: Some(PathBuf::from("basics.lua")),
+		dump_phy_cfg: true,
 	};
 	match lua_flow(args) {
 		Ok(_) => {},

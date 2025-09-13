@@ -54,6 +54,7 @@ where
 		(self.dims[0], self.dims[1])
 	}
 
+	#[allow(dead_code)]
 	pub fn extend_dim0(&mut self, extension: usize) {
 		self.dims[0] += extension;
 		self.data.resize(self.dims[0] * self.dims[1], T::default());

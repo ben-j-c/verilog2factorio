@@ -8,6 +8,7 @@ type NodeId = usize;
 
 use itertools::{chain, izip, Itertools};
 
+use crate::mapped_design::MappedDesign;
 use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
 	logical_design::{
@@ -18,7 +19,6 @@ use crate::{
 	signal_lookup_table,
 	util::{hash_set, index_of},
 };
-use crate::{mapped_design::MappedDesign, util::HashS};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ImplementableOp {
@@ -163,7 +163,8 @@ impl NodeType {
 		}
 	}
 
-	fn simple_name(&self) -> &'static str {
+	#[allow(dead_code)]
+	pub fn simple_name(&self) -> &'static str {
 		match self {
 			NodeType::CellInput { .. } => "CellInput",
 			NodeType::CellOutput { .. } => "CellOutput",
@@ -198,6 +199,7 @@ struct Node {
 }
 
 impl Node {
+	#[allow(dead_code)]
 	fn is_port_input(&self) -> bool {
 		match self.node_type {
 			NodeType::PortInput { .. } => true,
@@ -322,8 +324,7 @@ impl CheckedDesign {
 			self.nodes[id].keep = cell
 				.attributes
 				.get("keep")
-				.map(|value| value.from_bin_str())
-				.flatten()
+				.and_then(|value| value.from_bin_str())
 				.unwrap_or_default()
 				> 0;
 		});
@@ -617,8 +618,8 @@ impl CheckedDesign {
 								panic!("Need to add a nop after at least one port.")
 							}
 						}
-						let ret = fallback_id;
-						ret
+
+						fallback_id
 					});
 				if !required_signals.contains(&choice) {
 					required_signals.insert(choice);
@@ -1017,6 +1018,7 @@ impl CheckedDesign {
 		)
 	}
 
+	#[allow(dead_code)]
 	fn get_signal_choices(&self) -> Vec<Vec<i32>> {
 		let mut signal_choices = vec![vec![]; self.nodes.len()];
 		let mut fallback_id = 0;
@@ -1038,7 +1040,7 @@ impl CheckedDesign {
 			}
 		}
 		for nodeid in 0..self.nodes.len() {
-			if signal_choices[nodeid].len() > 0 {
+			if !signal_choices[nodeid].is_empty() {
 				continue;
 			}
 			let localio = self.get_local_cell_io_network(nodeid);
@@ -1337,7 +1339,7 @@ impl CheckedDesign {
 		&self,
 		nodeid: NodeId,
 		logical_design: &mut LogicalDesign,
-		mapped_design: &MappedDesign,
+		_mapped_design: &MappedDesign,
 		op: ImplementableOp,
 		mapped_cell: Option<&crate::mapped_design::Cell>,
 		sig_in: Vec<Signal>,
@@ -1655,10 +1657,10 @@ impl CheckedDesign {
 		let mut input = Vec::with_capacity(node.fanin.len());
 		for cell_input_id in &node.fanin {
 			let cell_input = &self.nodes[*cell_input_id];
-			let x_output_id = cell_input.fanin.get(0).copied().unwrap_or(NodeId::MAX);
+			let x_output_id = cell_input.fanin.first().copied().unwrap_or(NodeId::MAX);
 			let x_body_id = if x_output_id != NodeId::MAX {
 				let x_output = &self.nodes[x_output_id];
-				x_output.fanin.get(0).copied().unwrap_or(NodeId::MAX)
+				x_output.fanin.first().copied().unwrap_or(NodeId::MAX)
 			} else {
 				NodeId::MAX
 			};
@@ -1825,11 +1827,11 @@ impl CheckedDesign {
 					// implementation I'll check this first and use it instead of s[i] == 1.
 					let expr = (
 						fanin_body.constants[0] // Recall, terminals are order sensitive, so 0 is left.
-							.map(|v| Signal::Constant(v))
+							.map(Signal::Constant)
 							.unwrap_or(Signal::None),
 						fanin_body_mapped.cell_type.get_decider_op().unwrap(),
 						fanin_body.constants[1]
-							.map(|v| Signal::Constant(v))
+							.map(Signal::Constant)
 							.unwrap_or(Signal::None),
 					);
 					assert_ne!(expr.0, expr.2);
@@ -1862,7 +1864,7 @@ impl CheckedDesign {
 	}
 
 	pub fn save_dot(&self, mapped_design: &MappedDesign) {
-		graph_viz::save_dot(&self, mapped_design, "checked_design.dot").unwrap()
+		graph_viz::save_dot(self, mapped_design, "checked_design.dot").unwrap()
 	}
 }
 
