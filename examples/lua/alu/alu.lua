@@ -12,7 +12,6 @@ a_sig = data_a:signals()[1]
 b_sig = data_b:signals()[1]
 s_sig = select:signals()[1]
 y_sig = result_y:signals()[1]
-print(#{ a_sig })
 data_a:set_outputs({ a_sig }, { 3 })
 data_b:set_outputs({ b_sig }, { 4 })
 select:set_outputs({ s_sig }, { 0 })
@@ -122,6 +121,7 @@ inputs["tb.data_b"] = data_b
 inputs["tb.select"] = select
 outputs = {}
 outputs["tb.result_y"] = result_y
+os.execute("./makevcd")
 if not sim:apply_vcd("alu_testbench.vcd", inputs, outputs, 4, true) then
 	error()
 end
