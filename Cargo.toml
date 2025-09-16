@@ -33,8 +33,12 @@ vcd = "0.7.0"
 [profile.perf]
 inherits = "release"
 debug = true
+overflow-checks = false
 
 [profile.dev]
+overflow-checks = false
+
+[profile.release]
 overflow-checks = false
 
 [features]

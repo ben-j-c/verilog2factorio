@@ -1,7 +1,7 @@
 use std::{
 	cell::RefCell,
 	fmt::Display,
-	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shr},
+	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shl, Shr},
 	rc::Rc,
 	usize,
 };
@@ -315,8 +315,8 @@ impl SimState {
 			ArithmeticOperator::Sub => left.wrapping_sub(right),
 			ArithmeticOperator::Mod => left.checked_rem(right).unwrap_or(0),
 			ArithmeticOperator::Exp => left.checked_pow(right as u32).unwrap_or(0),
-			ArithmeticOperator::Sll => left.rotate_left(right as u32),
-			ArithmeticOperator::Srl => left.shr(right as u32),
+			ArithmeticOperator::Shl => left.shl(right as u32),
+			ArithmeticOperator::Sshr => left.shr(right as u32),
 			ArithmeticOperator::And => left.bitand(right),
 			ArithmeticOperator::Or => left.bitor(right),
 			ArithmeticOperator::Xor => left.bitxor(right),
@@ -823,16 +823,18 @@ impl SimState {
 		outputs: HashM<String, (Signal, NodeId)>,
 		propagation_delay: u32,
 		reset: bool,
-	) {
+	) -> bool {
 		if reset {
 			self.reset();
 		}
 		for vcd_time in 0..vcd.last_time() {
+			let mut inputs_snapshot = vec![];
 			{
 				let mut logd = self.logd.borrow_mut();
 				for (wire_name, id) in &inputs {
 					let val = vcd.get_value(wire_name, vcd_time);
 					let count: i32 = convert_to_signal_count(&val);
+					inputs_snapshot.push((wire_name, count));
 					logd.set_ith_output_count(*id, 0, count);
 				}
 			}
@@ -844,12 +846,21 @@ impl SimState {
 					let seen_signals = self.probe_input(*id, NET_RED_GREEN);
 					for (sig, actual_count) in seen_signals {
 						if sig == signal.id() {
-							assert_eq!(actual_count, expected_count);
+							if actual_count == expected_count {
+								continue;
+							}
+							println!("Found unexpected value for output '{}'", wire_name);
+							println!("Inputs:");
+							for (name, count) in &inputs_snapshot {
+								println!("\t{} = {}", name, count);
+							}
+							return false;
 						}
 					}
 				}
 			}
 		}
+		true
 	}
 
 	pub fn reset(&mut self) {

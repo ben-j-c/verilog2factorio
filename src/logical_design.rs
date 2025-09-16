@@ -55,8 +55,8 @@ pub enum ArithmeticOperator {
 	Sub,
 	Mod,
 	Exp,
-	Sll,
-	Srl,
+	Shl,
+	Sshr,
 	And,
 	Or,
 	Xor,
@@ -1570,9 +1570,9 @@ impl LogicalDesign {
 					(
 						output,
 						if shift > 0 {
-							ArithmeticOperator::Sll
+							ArithmeticOperator::Shl
 						} else {
-							ArithmeticOperator::Srl
+							ArithmeticOperator::Sshr
 						},
 						Signal::Constant(shift.abs()),
 					),

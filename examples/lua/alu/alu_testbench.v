@@ -1,3 +1,5 @@
+`include "alu.v"
+
 module tb;
 	reg signed [31:0] data_a;
 	reg signed [31:0] data_b;
@@ -11,15 +13,17 @@ module tb;
 		.result_y(result_y)
 	);
 
+	integer i;
+	integer op_select;
+	integer seed;
 	initial begin
-		integer i;
-		integer op_select;
+		seed = 123;
 		$dumpfile("alu_testbench.vcd");
-		$dumpvars(1, bench);
+		$dumpvars(1, tb);
 
 		for (i = 0; i < 50; i = i + 1) begin
-			data_a = $random;
-			data_b = $random;
+			data_a = $random(seed);
+			data_b = $random(seed);
 
 			for (op_select = 0; op_select < 16; op_select = op_select + 1) begin
 				select = op_select;
@@ -28,5 +32,4 @@ module tb;
 		end
 		$finish;
 	end
-
 endmodule

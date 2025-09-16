@@ -195,10 +195,10 @@ impl UserData for Signal {
 			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Exp, rhs))
 		});
 		methods.add_meta_method(MetaMethod::Shr, |_, lhs, rhs: Signal| {
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Srl, rhs))
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sshr, rhs))
 		});
 		methods.add_meta_method(MetaMethod::Shl, |_, lhs, rhs: Signal| {
-			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Sll, rhs))
+			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::Shl, rhs))
 		});
 		methods.add_meta_method(MetaMethod::BAnd, |_, lhs, rhs: Signal| {
 			Ok(ArithmeticExpression(*lhs, ArithmeticOperator::And, rhs))
@@ -781,7 +781,6 @@ impl UserData for SimStateAPI {
 				}
 			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
 				let (nodeid, logd) = term_side.clone().get();
-				println!("{}", logd.borrow().get_node(nodeid));
 				if logd.as_ptr() != this.logd.as_ptr() {
 					return Err(Error::runtime(
 						"Supplied a combinator that doesn't belong to this design.",
@@ -963,7 +962,7 @@ impl UserData for SimStateAPI {
 				let outputs = {
 					let mut outputs = hash_map();
 					let logd = this.logd.borrow();
-					for pair in outputs_lua.pairs::<String, Constant>() {
+					for pair in outputs_lua.pairs::<String, Lamp>() {
 						let (net, comb) = pair?;
 						if !vcd.has_var(&net) {
 							return runtime_err(format!("{net} is not a known variable."));
@@ -984,11 +983,10 @@ impl UserData for SimStateAPI {
 					}
 					outputs
 				};
-
-				this.sim
+				Ok(this
+					.sim
 					.borrow_mut()
-					.play_vcd(&vcd, inputs, outputs, propagation_delay, reset);
-				Ok(())
+					.play_vcd(&vcd, inputs, outputs, propagation_delay, reset))
 			},
 		);
 	}

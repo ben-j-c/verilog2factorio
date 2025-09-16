@@ -152,14 +152,25 @@ module v2f_shl #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDT
 endmodule
 
 (*whitebox*)
-module v2f_shr #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
+module v2f_sshl #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
 	input [A_WIDTH-1:0] A,
 	input [B_WIDTH-1:0] B,
 	output [Y_WIDTH-1:0] Y,
 );
 	parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
-	assign Y = A >> B;
+	assign Y = A <<< B;
+endmodule
+
+(*whitebox*)
+module v2f_sshr #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
+	input [A_WIDTH-1:0] A,
+	input [B_WIDTH-1:0] B,
+	output [Y_WIDTH-1:0] Y,
+);
+	parameter A_SIGNED = 0;
+	parameter B_SIGNED = 0;
+	assign Y = A >>> B;
 endmodule
 
 module v2f_gt (A, B, Y);

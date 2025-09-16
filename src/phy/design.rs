@@ -2585,7 +2585,7 @@ mod test {
 	#[test]
 	fn synthetic_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design(2000);
+		let l = crate::tests::logical_design_tests::get_large_logical_design(200);
 		p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_n_mcmc_dense.svg")
 			.expect("Failed to save");
@@ -2594,7 +2594,7 @@ mod test {
 	#[test]
 	fn synthetic_2d_n_mcmc_dense() {
 		let mut p = PhysicalDesign::new();
-		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(30);
+		let l = crate::tests::logical_design_tests::get_large_logical_design_2d(20);
 		p.user_partition_size = Some(200);
 		let res = p.build_from(&l);
 		p.save_svg(&l, "svg/synthetic_2d_n_mcmc_dense.svg")

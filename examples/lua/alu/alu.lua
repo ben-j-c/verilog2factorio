@@ -115,4 +115,16 @@ if (sim:probe(result_y.input)[y_sig] ~= 3) then
 	error()
 end
 
+-- Now reset and test the VCD
+inputs = {}
+inputs["tb.data_a"] = data_a
+inputs["tb.data_b"] = data_b
+inputs["tb.select"] = select
+outputs = {}
+outputs["tb.result_y"] = result_y
+if not sim:apply_vcd("alu_testbench.vcd", inputs, outputs, 4, true) then
+	error()
+end
+print("ALU sim matches VCD")
+
 return logd

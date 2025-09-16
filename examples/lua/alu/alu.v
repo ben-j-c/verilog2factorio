@@ -2,7 +2,7 @@ module alu(
 	input signed [31:0] data_a,
 	input signed [31:0] data_b,
 	input [31:0] select,
-	output signed [31:0] result_y,
+	output signed [31:0] result_y
 );
 	wire signed [31:0] A;
 	wire signed [31:0] B;
@@ -52,10 +52,10 @@ module alu(
 				Y <= A == B;
 			end
 			4'b1101: begin
-				Y <= A << B;
+				Y <= A <<< B[4:0];
 			end
 			4'b1110: begin
-				Y <= A >> B;
+				Y <= A >>> B[4:0];
 			end
 			4'b1111: begin
 				Y <= A;

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+rm alu_testbench.vcd 2> /dev/null
+iverilog -o alu_obj alu_testbench.v
+vvp alu_obj
