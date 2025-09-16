@@ -1702,7 +1702,6 @@ impl PhysicalDesign {
 	}
 
 	fn validate_against(&self, _ld: &LogicalDesign) {
-		return;
 		/*
 		unreachable!();
 		for c in &self.nodes {
