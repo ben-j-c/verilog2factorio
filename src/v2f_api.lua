@@ -19,7 +19,7 @@
 ---@field probe_lamp_state fun(self: SimStateAPI, lamp: Lamp): boolean
 ---@field add_trace fun(self: SimStateAPI)
 ---@field inspect fun(self: SimStateAPI)
----@field apply_vcd fun(self: SimStateAPI, filename: string, inputs_lua: table, outputs_lua: table, propagation_delay: integer, reset: boolean)
+---@field apply_vcd fun(self: SimStateAPI, filename: string, inputs_lua: table, outputs_lua: table, propagation_delay: integer, reset: boolean): boolean
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr
