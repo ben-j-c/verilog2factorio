@@ -2,5 +2,5 @@
 	path = yosys
 	url = git@github.com:YosysHQ/yosys.git
 [submodule "examples/lua/riscv_v2f_optimized"]
-	path = examples/lua/riscv_v2f_optimized
+	path = examples/riscv_v2f_optimized
 	url = https://github.com/ben-j-c/riscv_v2f_optimized
