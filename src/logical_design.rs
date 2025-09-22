@@ -134,6 +134,17 @@ pub enum Signal {
 	Constant(i32),
 }
 
+impl TryInto<Signal> for i32 {
+	type Error = ();
+	fn try_into(self) -> Result<Signal, Self::Error> {
+		if self < signal_lookup_table::n_ids() && self >= 0 {
+			Ok(Signal::Id(self))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl Signal {
 	pub fn id(&self) -> i32 {
 		match self {

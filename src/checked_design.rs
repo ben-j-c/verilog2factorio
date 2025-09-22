@@ -623,7 +623,7 @@ impl CheckedDesign {
 					});
 				if !required_signals.contains(&choice) {
 					required_signals.insert(choice);
-					signal_choices[*nodeid] = Signal::Id(choice);
+					signal_choices[*nodeid] = choice.try_into().expect("Impl error");
 					continue;
 				}
 				// This port cant use this signal internally, so we must rename it with a nop.
@@ -761,7 +761,12 @@ impl CheckedDesign {
 				while set_io.contains(&sig) {
 					sig += 1;
 				}
-				self.set_signal(signal_choices, *id, Signal::Id(sig));
+				self.set_signal(
+					signal_choices,
+					*id,
+					sig.try_into()
+						.expect("Too many signals on one wire network"),
+				);
 				sig += 1;
 			}
 		}
@@ -816,6 +821,12 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => assert!(signal_choices[node.id].is_none()),
 				NodeType::Pruned => {},
 			}
+		}
+		for choice in signal_choices {
+			let _sig: Signal = match choice {
+				Signal::Id(id) => (*id).try_into().expect("Impl error"),
+				_ => Signal::None,
+			};
 		}
 	}
 
@@ -1068,7 +1079,7 @@ impl CheckedDesign {
 					fallback_id %= signal_lookup_table::n_ids();
 					ret
 				});
-				signal_choices[node.id] = Signal::Id(choice);
+				signal_choices[node.id] = choice.try_into().expect("Impl error");
 				if let Some(fiid) = node.fanin.first() {
 					signal_choices[*fiid] = Signal::Id(choice);
 				}
