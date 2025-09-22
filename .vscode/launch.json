@@ -76,18 +76,23 @@
 			"cwd": "${workspaceFolder}"
 		},
 		{
-			"name": "Cargo debug (gdb)",
-			"type": "cppdbg",
+			"type": "lldb",
 			"request": "launch",
-			"program": "${workspaceFolder}/target/debug/examples/alu_example",
-			"cwd": "${workspaceFolder}",
-			"MIMode": "gdb",
-			"miDebuggerPath": "/home/ben/.cargo/bin/rust-gdb",
-			"setupCommands": [
-				{
-					"text": "-enable-pretty-printing"
-				}
+			"name": "debug riscv",
+			"cargo": {
+				"args": [
+					"run",
+					"--example",
+					"riscv",
+					"--",
+					"--no-run"
+				]
+			},
+			"args": [
+				"--nocapture",
+				"--show-output",
 			],
-		}
+			"cwd": "${workspaceFolder}"
+		},
 	]
 }
