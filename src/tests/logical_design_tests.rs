@@ -946,3 +946,25 @@ fn test10() {
 	let blueprint_json = serde_json::to_string(&serializable_design).unwrap();
 	println!("\n{}", blueprint_json);
 }
+
+#[test]
+fn sim_srl() {
+	let mut logd = LogicalDesign::new();
+	let a = logd.add_constant(vec![Signal::Id(0)], vec![-1]);
+	let b = logd.add_constant(vec![Signal::Id(1)], vec![16]);
+	let (ab_wire, y) = logd.add_srl(&[Signal::Id(0), Signal::Id(1)], Signal::Id(2));
+	let lamp = logd.add_lamp((
+		Signal::Id(2),
+		DeciderOperator::Equal,
+		Signal::Constant(0xffff),
+	));
+	logd.connect_red(a, ab_wire[0]);
+	logd.connect_red(b, ab_wire[1]);
+	let outp_wire = logd.add_wire_red_simple(y, lamp);
+	let logd = Rc::new(RefCell::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(3);
+	let outp = sim.probe_lamp_state(lamp);
+	assert_eq!(outp, Some(true));
+	assert_eq!(sim.probe_red_out(outp_wire), vec![(2, 0xffff)]);
+}

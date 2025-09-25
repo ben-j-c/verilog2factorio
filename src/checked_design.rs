@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
 	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
@@ -27,6 +28,7 @@ pub enum ImplementableOp {
 	XorBitwise,
 	Shl,
 	Sshr,
+	Srl,
 	Mul,
 	Div,
 	Mod,
@@ -44,8 +46,14 @@ pub enum ImplementableOp {
 	Neg,
 	V2FRollingAccumulate,
 	DFF,
+	SDFF,
+	SDFFE,
+	ADFFE,
+	ADFF,
+	DFFE,
 	LUT(usize),
 	PMux(bool, usize),
+	Mux,
 	Memory,
 
 	Swizzle, // Imaginary cell
@@ -59,6 +67,7 @@ impl ImplementableOp {
 			ImplementableOp::XorBitwise => BodyType::ABY,
 			ImplementableOp::Shl => BodyType::MultiPart,
 			ImplementableOp::Sshr => BodyType::ABY,
+			ImplementableOp::Srl => BodyType::MultiPart,
 			ImplementableOp::Mul => BodyType::ABY,
 			ImplementableOp::Div => BodyType::ABY,
 			ImplementableOp::Mod => BodyType::ABY,
@@ -77,9 +86,15 @@ impl ImplementableOp {
 			ImplementableOp::LUT(_) => BodyType::MultiPart,
 			ImplementableOp::Memory => BodyType::MultiPart,
 			ImplementableOp::PMux(_, _) => BodyType::MultiPart,
+			ImplementableOp::Mux => BodyType::MultiPart,
 			ImplementableOp::ReduceAnd => BodyType::MultiPart,
 			ImplementableOp::ReduceOr => BodyType::MultiPart,
 			ImplementableOp::Neg => BodyType::AY,
+			ImplementableOp::SDFF => BodyType::MultiPart,
+			ImplementableOp::SDFFE => BodyType::MultiPart,
+			ImplementableOp::ADFFE => BodyType::MultiPart,
+			ImplementableOp::ADFF => BodyType::MultiPart,
+			ImplementableOp::DFFE => BodyType::MultiPart,
 		}
 	}
 
@@ -1592,7 +1607,47 @@ impl CheckedDesign {
 				let (input_wires, output_comb) = logical_design.add_reduce_or(&sig_in, sig_out[0]);
 				(input_wires, vec![output_comb])
 			},
-			_ => unreachable!(),
+			ImplementableOp::Srl => {
+				let (input_wires, output_comb) = logical_design.add_srl(&sig_in, sig_out[0]);
+				(input_wires, vec![output_comb])
+			},
+			ImplementableOp::Mux => {
+				let abs_folded_expr = if self.nodes[nodeid].folded_expressions.is_empty() {
+					None
+				} else {
+					let exprs = &self.nodes[nodeid].folded_expressions;
+					Some((&exprs[0], &exprs[1], &exprs[2]))
+				};
+				if let [a, b, s, y] = sig_in[0..4] {
+					let (a, b, s, y) = logical_design.add_mux(a, b, s, y, abs_folded_expr);
+					(vec![a, b, s], vec![y])
+				} else {
+					panic!("Got wrong number of args for mux.")
+				}
+			},
+			ImplementableOp::SDFF => todo!(),
+			ImplementableOp::SDFFE => todo!(),
+			ImplementableOp::ADFFE => todo!(),
+			ImplementableOp::ADFF => todo!(),
+			ImplementableOp::DFFE => todo!(),
+			ImplementableOp::AndBitwise
+			| ImplementableOp::OrBitwise
+			| ImplementableOp::XorBitwise
+			| ImplementableOp::Sshr
+			| ImplementableOp::Mul
+			| ImplementableOp::Div
+			| ImplementableOp::Mod
+			| ImplementableOp::Pow
+			| ImplementableOp::Add
+			| ImplementableOp::Sub
+			| ImplementableOp::LessThan
+			| ImplementableOp::GreaterThan
+			| ImplementableOp::Equal
+			| ImplementableOp::NotEqual
+			| ImplementableOp::GreaterThanEqual
+			| ImplementableOp::LessThanEqual
+			| ImplementableOp::Neg
+			| ImplementableOp::V2FRollingAccumulate => panic!("This is not a multi-part op."),
 		};
 		(input_wires, outputs)
 	}

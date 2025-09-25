@@ -26,6 +26,7 @@ use std::{
 	collections::{BTreeSet, HashSet},
 	fmt::{Debug, Display},
 	hash::Hash,
+	i32,
 	panic::UnwindSafe,
 	slice::Iter,
 	usize, vec,
@@ -1022,6 +1023,42 @@ impl LogicalDesign {
 		inputs
 	}
 
+	pub(crate) fn add_mux(
+		&mut self,
+		a: Signal,
+		b: Signal,
+		s: Signal,
+		y: Signal,
+		abs_folded_expr: Option<(
+			&Option<(Signal, DeciderOperator, Signal)>,
+			&Option<(Signal, DeciderOperator, Signal)>,
+			&Option<(Signal, DeciderOperator, Signal)>,
+		)>,
+	) -> (NodeId, NodeId, NodeId, NodeId) {
+		let inp_a = self.add_decider();
+		self.add_decider_input(
+			inp_a,
+			(s, DeciderOperator::Equal, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_out_input_count(inp_a, a, NET_RED_GREEN);
+		let inp_b = self.add_decider();
+		self.add_decider_input(
+			inp_b,
+			(s, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_out_input_count(inp_b, b, NET_RED_GREEN);
+		let lhs = self.add_wire_red(vec![], vec![inp_a, inp_b]);
+		let outp = self.add_nop(Signal::Each, y);
+		self.add_wire_red_simple(inp_a, outp);
+		(lhs, lhs, lhs, outp)
+	}
+
 	pub(crate) fn add_ram(
 		&mut self,
 		read_ports: Vec<MemoryReadPort>,
@@ -2006,6 +2043,45 @@ impl LogicalDesign {
 			vec![self.add_wire_red(vec![], vec![reducer]); a.len()],
 			reducer,
 		)
+	}
+
+	pub(crate) fn add_srl(&mut self, ab: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {
+		assert!(
+			matches!(y, Signal::Id(_)),
+			"Must have regular signal as output."
+		);
+		let (a, b) = (ab[0], ab[1]);
+		assert!(
+			matches!(a, Signal::Id(_)),
+			"Must have regular signal as output."
+		);
+		assert!(
+			matches!(b, Signal::Id(_)),
+			"Must have regular signal as output."
+		);
+		use ArithmeticOperator as Aop;
+		use DeciderOperator as Dop;
+		// ((a & 0x7fffffff) >> b) + ((a < 0) << (31 - b))
+		let mask = self.add_arithmetic((a, Aop::And, Signal::Constant(i32::MAX)), a);
+		let b_nop = self.add_nop(b, b);
+		let shr_magnitude = self.add_arithmetic((a, Aop::Sshr, b), y);
+		let sign_check = self.add_decider();
+		self.add_decider_input(
+			sign_check,
+			(a, Dop::LessThan, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_out_constant(sign_check, a, 1, NET_RED_GREEN);
+		let inverse_b = self.add_arithmetic((Signal::Constant(i32::MAX), Aop::Sub, b), b);
+		let shl_sign = self.add_arithmetic((a, Aop::Shl, b), y);
+		let a_wire = self.add_wire_red(vec![], vec![mask, sign_check]);
+		let b_wire = self.add_wire_red(vec![], vec![b_nop, inverse_b]);
+		self.add_wire_red(vec![shr_magnitude, shl_sign], vec![]);
+		self.add_wire_red(vec![sign_check, inverse_b], vec![shl_sign]);
+		self.add_wire_red(vec![mask, b_nop], vec![shr_magnitude]);
+		(vec![a_wire, b_wire], shr_magnitude)
 	}
 
 	#[allow(dead_code)]

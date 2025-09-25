@@ -218,11 +218,16 @@ pub struct Net {
 impl Cell {
 	/// Defines the canonical ordering of ports in fanin/fanout.
 	pub(crate) fn get_terminal_names(&self) -> Vec<String> {
+		let aby = || vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()];
+		let ay = || vec!["A".to_owned(), "Y".to_owned()];
+		fn ports<S: AsRef<str>, A: AsRef<[S]>>(x: A) -> Vec<String> {
+			let x = x.as_ref();
+			x.iter().map(|s| s.as_ref().to_owned()).collect_vec()
+		}
 		match self.cell_type.get_body_type() {
-			BodyType::ABY => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
-			BodyType::AY => vec!["A".to_owned(), "Y".to_owned()],
-			BodyType::MultiPart => match &self.cell_type {
-				ImplementableOp::Shl => vec!["A".to_owned(), "B".to_owned(), "Y".to_owned()],
+			BodyType::Constant { .. } => vec!["Y".to_owned()],
+			BodyType::Nop => ay(),
+			_ => match &self.cell_type {
 				ImplementableOp::DFF => vec!["D".to_owned(), "CLK".to_owned(), "Q".to_owned()],
 				ImplementableOp::Swizzle => {
 					unreachable!("Imaginary cell encountered before it should be created.")
@@ -284,10 +289,38 @@ impl Cell {
 					let width = self.parameters["A_WIDTH"].unwrap_bin_str();
 					chain!((0..width).map(|i| format!("A{i}")), ["Y".to_owned()]).collect_vec()
 				},
-				_ => unreachable!(),
+				ImplementableOp::Mux => vec![
+					"A".to_owned(),
+					"B".to_owned(),
+					"S".to_owned(),
+					"Y".to_owned(),
+				],
+				ImplementableOp::Shl => aby(),
+				ImplementableOp::Srl => aby(),
+				ImplementableOp::AndBitwise => aby(),
+				ImplementableOp::OrBitwise => aby(),
+				ImplementableOp::XorBitwise => aby(),
+				ImplementableOp::Sshr => aby(),
+				ImplementableOp::Mul => aby(),
+				ImplementableOp::Div => aby(),
+				ImplementableOp::Mod => aby(),
+				ImplementableOp::Pow => aby(),
+				ImplementableOp::Add => aby(),
+				ImplementableOp::Sub => aby(),
+				ImplementableOp::LessThan => aby(),
+				ImplementableOp::GreaterThan => aby(),
+				ImplementableOp::Equal => aby(),
+				ImplementableOp::NotEqual => aby(),
+				ImplementableOp::GreaterThanEqual => aby(),
+				ImplementableOp::LessThanEqual => aby(),
+				ImplementableOp::Neg => ay(),
+				ImplementableOp::V2FRollingAccumulate => ay(),
+				ImplementableOp::DFFE => ports(["D", "CLK", "Q"]),
+				ImplementableOp::SDFF => ports(["D", "CLK", "RST", "Q"]),
+				ImplementableOp::SDFFE => ports(["D", "CLK", "EN", "RST", "Q"]),
+				ImplementableOp::ADFFE => ports(["D", "CLK", "EN", "ARST", "Q"]),
+				ImplementableOp::ADFF => ports(["D", "CLK", "ARST", "Q"]),
 			},
-			BodyType::Constant { .. } => vec!["Y".to_owned()],
-			BodyType::Nop => vec!["A".to_owned(), "Y".to_owned()],
 		}
 	}
 
@@ -500,6 +533,7 @@ impl Display for ImplementableOp {
 			ImplementableOp::XorBitwise => "v2f_xor",
 			ImplementableOp::Shl => "v2f_shl",
 			ImplementableOp::Sshr => "v2f_sshr",
+			ImplementableOp::Srl => "v2f_shr",
 			ImplementableOp::Mul => "v2f_mul",
 			ImplementableOp::Div => "v2f_div",
 			ImplementableOp::Mod => "v2f_mod",
@@ -517,10 +551,16 @@ impl Display for ImplementableOp {
 			ImplementableOp::V2FRollingAccumulate => "v2f_rolling_accumulate",
 			ImplementableOp::Neg => "v2f_neg",
 			ImplementableOp::PMux(_, _) => "v2f_pmux",
+			ImplementableOp::Mux => "v2f_mux",
 			ImplementableOp::DFF => "$dff",
 			ImplementableOp::Swizzle => "$swizzle",
 			ImplementableOp::LUT(_) => "$lut",
 			ImplementableOp::Memory => "$mem_v2",
+			ImplementableOp::SDFF => "$sdff",
+			ImplementableOp::SDFFE => "$sdffe",
+			ImplementableOp::ADFFE => "$adffe",
+			ImplementableOp::ADFF => "$adff",
+			ImplementableOp::DFFE => "$dffe",
 		};
 		f.write_str(data)
 	}
@@ -540,6 +580,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_shl" => ImplementableOp::Shl,
 			"v2f_sshl" => ImplementableOp::Shl,
 			"v2f_sshr" => ImplementableOp::Sshr,
+			"v2f_srl" => ImplementableOp::Srl,
 			"v2f_mul" => ImplementableOp::Mul,
 			"v2f_div" => ImplementableOp::Div,
 			"v2f_mod" => ImplementableOp::Mod,

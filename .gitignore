@@ -4,3 +4,5 @@ yosys.log
 svg/global_*
 svg/partition*
 cfg
+perf.data
+perf.data.old

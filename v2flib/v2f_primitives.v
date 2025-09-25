@@ -173,6 +173,17 @@ module v2f_sshr #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WID
 	assign Y = A >>> B;
 endmodule
 
+(*whitebox*)
+module v2f_shr #( parameter A_WIDTH = 1, parameter B_WIDTH = 1, parameter Y_WIDTH = 1) (
+	input [A_WIDTH-1:0] A,
+	input [B_WIDTH-1:0] B,
+	output [Y_WIDTH-1:0] Y,
+);
+	parameter A_SIGNED = 0;
+	parameter B_SIGNED = 0;
+	assign Y = A >> B;
+endmodule
+
 module v2f_gt (A, B, Y);
 	parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
@@ -261,4 +272,15 @@ module v2f_pmux (A, B, S, Y);
 	input [S_WIDTH-1:0] S;
 	output [WIDTH-1:0] Y;
 	// Blackbox
+endmodule
+
+(*whitebox*)
+module v2f_mux (A, B, S, Y);
+	parameter WIDTH = 0;
+
+	input [WIDTH-1:0] A;
+	input [WIDTH-1:0] B;
+	input S;
+	output [WIDTH-1:0] Y;
+	assign Y = S ? B : A;
 endmodule
