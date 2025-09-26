@@ -98,7 +98,12 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let input_file = args.input_file.unwrap();
 	let lua = get_lua()?;
 	let chunk = lua.load(input_file.clone());
-	let eval = chunk.eval::<AnyUserData>()?;
+	let eval = chunk.eval::<AnyUserData>();
+	let eval = if let Ok(e) = eval {
+		e
+	} else {
+		return Ok("".to_owned());
+	};
 	if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		let mut phyd = PhysicalDesign::new();

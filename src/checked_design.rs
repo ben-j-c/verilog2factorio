@@ -1618,7 +1618,8 @@ impl CheckedDesign {
 					let exprs = &self.nodes[nodeid].folded_expressions;
 					Some((&exprs[0], &exprs[1], &exprs[2]))
 				};
-				if let [a, b, s, y] = sig_in[0..4] {
+				if let [a, b, s] = sig_in[0..3] {
+					let y = sig_out[0];
 					let (a, b, s, y) = logical_design.add_mux(a, b, s, y, abs_folded_expr);
 					(vec![a, b, s], vec![y])
 				} else {

@@ -598,10 +598,16 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
 			"v2f_neg" => ImplementableOp::Neg,
 			"v2f_pmux" => ImplementableOp::PMux(false, 0),
+			"v2f_mux" => ImplementableOp::Mux,
 			"$dff" => ImplementableOp::DFF,
-			"$swizzle" => unreachable!("This is a fake op, we don't accept it in a design."),
+			"$dffe" => ImplementableOp::DFFE,
+			"$sdff" => ImplementableOp::SDFF,
+			"$sdffe" => ImplementableOp::SDFFE,
+			"$adff" => ImplementableOp::ADFF,
+			"$adffe" => ImplementableOp::ADFFE,
 			"$lut" => ImplementableOp::LUT(0),
 			"$mem_v2" => ImplementableOp::Memory,
+			"$swizzle" => panic!("This is a fake op, we don't accept it in a design."),
 			_ => panic!("Can't implement this operation."),
 		};
 
