@@ -102,6 +102,7 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let eval = if let Ok(e) = eval {
 		e
 	} else {
+		println!("{eval:#?}");
 		return Ok("".to_owned());
 	};
 	if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {

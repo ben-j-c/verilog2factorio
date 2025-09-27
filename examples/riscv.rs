@@ -1,15 +1,18 @@
+use itertools::Itertools;
 use std::{env, path::PathBuf};
 use v2f::*;
 fn main() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());
 	let tb_dir = std::fs::read_dir("examples/riscv_v2f_optimized/testbench")
 		.expect("Failed to read directory.");
-	for entry in tb_dir {
-		let entry = entry.expect("Failed to get directory entry");
-		let path = entry.path();
-		if !path.is_dir() || path.is_symlink() {
-			continue;
-		}
+	let tb_dir = tb_dir
+		.filter_map(|e| e.ok())
+		.filter(|p| p.path().is_dir() && !p.path().is_symlink())
+		.map(|p| p.path().canonicalize())
+		.into_iter()
+		.flatten()
+		.collect_vec();
+	for path in tb_dir {
 		env::set_current_dir(&path).expect(&format!("Failed to descend into {path:?}"));
 		let args = Args {
 			input_file: Some(PathBuf::from("tb.lua")),
