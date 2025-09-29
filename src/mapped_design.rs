@@ -317,7 +317,7 @@ impl Cell {
 				ImplementableOp::V2FRollingAccumulate => ay(),
 				ImplementableOp::DFFE => ports(["D", "CLK", "Q"]),
 				ImplementableOp::SDFF => ports(["D", "CLK", "RST", "Q"]),
-				ImplementableOp::SDFFE => ports(["D", "CLK", "EN", "RST", "Q"]),
+				ImplementableOp::SDFFE => ports(["D", "CLK", "RST", "EN", "Q"]),
 				ImplementableOp::ADFFE => ports(["D", "CLK", "EN", "ARST", "Q"]),
 				ImplementableOp::ADFF => ports(["D", "CLK", "ARST", "Q"]),
 			},

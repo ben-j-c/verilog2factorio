@@ -94,5 +94,29 @@
 			],
 			"cwd": "${workspaceFolder}"
 		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "riscv module",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=v2f",
+					"--package=v2f"
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"env": {
+				"V2F_ROOT": "${workspaceFolder}"
+			},
+			"args": [
+				"-i",
+				"tb.lua"
+			],
+			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/multiplier"
+		},
 	]
 }

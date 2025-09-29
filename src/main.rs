@@ -14,7 +14,7 @@ pub fn main() {
 			std::env::set_var("V2F_ROOT", std::env::current_dir().unwrap())
 		},
 	}
-	match if args.input_file.as_ref().unwrap().ends_with(".lua") {
+	match if args.input_file.as_ref().unwrap().extension().unwrap() == "lua" {
 		lua_flow(args)
 	} else {
 		mapped_flow(args)

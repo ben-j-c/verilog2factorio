@@ -1409,11 +1409,6 @@ impl CheckedDesign {
 					vec![mult],
 				)
 			},
-			ImplementableOp::DFF => {
-				let (input_wire, clk_wire, output_comb) =
-					logical_design.add_dff(sig_in[0], sig_in[1], sig_out[0]);
-				(vec![input_wire, clk_wire], vec![output_comb])
-			},
 			ImplementableOp::Swizzle => {
 				let fi_exprs = self.nodes[nodeid]
 					.fanin
@@ -1626,11 +1621,46 @@ impl CheckedDesign {
 					panic!("Got wrong number of args for mux.")
 				}
 			},
-			ImplementableOp::SDFF => todo!(),
-			ImplementableOp::SDFFE => todo!(),
-			ImplementableOp::ADFFE => todo!(),
-			ImplementableOp::ADFF => todo!(),
-			ImplementableOp::DFFE => todo!(),
+			ImplementableOp::DFF => {
+				let (input_wire, clk_wire, output_comb) =
+					logical_design.add_dff(sig_in[0], sig_in[1], sig_out[0]);
+				(vec![input_wire, clk_wire], vec![output_comb])
+			},
+			ImplementableOp::SDFF => {
+				let (wire_data, wire_clk, wire_srst, _wire_en, comb_q) = logical_design.add_sdffe(
+					sig_in[0],
+					sig_in[1],
+					sig_in[2],
+					Signal::Constant(1),
+					sig_out[0],
+				);
+				(vec![wire_data, wire_clk, wire_srst], vec![comb_q])
+			},
+			ImplementableOp::SDFFE => {
+				let (wire_data, wire_clk, wire_srst, wire_en, comb_q) = logical_design
+					.add_sdffe(sig_in[0], sig_in[1], sig_in[2], sig_in[3], sig_out[0]);
+				(vec![wire_data, wire_clk, wire_srst, wire_en], vec![comb_q])
+			},
+			ImplementableOp::ADFFE => {
+				let (wire_data, wire_clk, wire_en, wire_arst, comb_q) = logical_design
+					.add_adffe(sig_in[0], sig_in[1], sig_in[2], sig_in[3], sig_out[0]);
+				(vec![wire_data, wire_clk, wire_en, wire_arst], vec![comb_q])
+			},
+			ImplementableOp::ADFF => {
+				let (w1, w2, _w3, w4, c_q) = logical_design.add_adffe(
+					sig_in[0],
+					sig_in[1],
+					Signal::Constant(1),
+					sig_in[2],
+					sig_out[0],
+				);
+				(vec![w1, w2, w4], vec![c_q])
+			},
+			ImplementableOp::DFFE => {
+				let (w1, w2, w3, c_q) =
+					logical_design.add_dffe(sig_in[0], sig_in[1], sig_in[2], sig_out[0]);
+				(vec![w1, w2, w3], vec![c_q])
+			},
 			ImplementableOp::AndBitwise
 			| ImplementableOp::OrBitwise
 			| ImplementableOp::XorBitwise

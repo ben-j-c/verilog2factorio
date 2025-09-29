@@ -13,9 +13,6 @@ module v2f_rule_32x32_64_mul_narrowing (A, B, Y);
 
 	wire _TECHMAP_FAIL_ = A_WIDTH != 32 || B_WIDTH != 32 || Y_WIDTH != 64;
 
-	integer i;
-	integer j;
-	
 	wire [31:0] LL;
 	wire [31:0] HL;
 	wire [31:0] LH;
@@ -34,3 +31,45 @@ module v2f_rule_32x32_64_mul_narrowing (A, B, Y);
 	assign Y[63:48] = HH[31:16] + c2;
 endmodule
 
+
+(* techmap_celltype = "$mul" *)
+module v2f_rule_64x64_64_mul_narrowing (A, B, Y);
+	parameter A_SIGNED = 0;
+	parameter B_SIGNED = 0;
+	parameter A_WIDTH = 64;
+	parameter B_WIDTH = 64;
+	parameter Y_WIDTH = 64;
+
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output [Y_WIDTH-1:0] Y;
+
+	wire _TECHMAP_FAIL_ = A_WIDTH != 64 || B_WIDTH != 64 || Y_WIDTH != 64;
+
+	wire [31:0] prod [15:0];
+
+	generate
+		genvar i;
+		genvar j;
+		for (i = 0; i < 4; i = i + 1) begin
+			for (j = 0; j < 4; j = j + 1) begin
+				assign prod[i*4 + j] = A[16*(i+1) - 1:16*i] * B[16*(j+1) - 1:16*j];
+			end
+		end
+	endgenerate
+
+	wire [31:0] sum0;
+	wire [31:0] sum1;
+	wire [31:0] sum2;
+	wire [31:0] sum3;
+
+	assign sum0 = prod[0];
+	assign sum1 = prod[1] + prod[4] + sum0[31:0];
+	assign sum2 = prod[2] + prod[5] + prod[8] + sum1[31:0];
+	assign sum3 = prod[3] + prod[6] + prod[9] + prod[12] + sum2[31:0];
+
+	assign Y[15:00] = sum0[15:0];
+	assign Y[31:16] = sum1[15:0];
+	assign Y[47:32] = sum2[15:0];
+	assign Y[63:48] = sum3[15:0];
+endmodule
