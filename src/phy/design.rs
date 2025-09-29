@@ -387,7 +387,7 @@ impl PhysicalDesign {
 				self.side_length_single_partition,
 				partition,
 				local_to_global,
-				true,
+				false,
 			);
 			let comb_positions = match algo {
 				Ok(pos) => pos,
@@ -494,7 +494,7 @@ impl PhysicalDesign {
 		let mut round = 0;
 		//let mut momentum = vec![(0.0, 0.0); placement.num_cells()];
 		while !cost.1 {
-			if round.rem(500) == 0 {
+			if round.rem(1000) == 0 {
 				println!("{round}");
 				if !animated {
 					placement

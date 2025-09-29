@@ -215,7 +215,7 @@ impl Default for Config {
 			placement2: ConfigPlacement2 {
 				round_to_time_divisor: 9_692.926,
 				step_size: 1.889_578_2e-5,
-				spring_k0: 1.760_459_5,
+				spring_k0: 10.760_459_5,
 				spring_k1: 1.019_981_3,
 				spring_k2: 4.809_123_5,
 				legalization_k0: 2.476_878_6,
