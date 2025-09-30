@@ -16,6 +16,7 @@ fn main() {
 	let args = Args {
 		input_file: Some(PathBuf::from("alu.lua")),
 		dump_phy_cfg: false,
+		output_file: None,
 	};
 	match lua_flow(args) {
 		Ok(json) => {

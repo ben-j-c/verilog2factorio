@@ -10,6 +10,7 @@ fn basics_example() {
 	let args = Args {
 		input_file: Some(PathBuf::from("basics.lua")),
 		dump_phy_cfg: true,
+		output_file: None,
 	};
 	match lua_flow(args) {
 		Ok(_) => {},

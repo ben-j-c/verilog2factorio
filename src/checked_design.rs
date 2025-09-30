@@ -776,13 +776,14 @@ impl CheckedDesign {
 				while set_io.contains(&sig) {
 					sig += 1;
 				}
-				self.set_signal(
+				if self.set_signal(
 					signal_choices,
 					*id,
 					sig.try_into()
 						.expect("Too many signals on one wire network"),
-				);
-				sig += 1;
+				) {
+					sig += 1;
+				}
 			}
 		}
 		//println!("\n\n");
@@ -868,10 +869,10 @@ impl CheckedDesign {
 		self.signals = signal_choices;
 	}
 
-	fn set_signal(&self, signals: &mut Vec<Signal>, nodeid: NodeId, signal: Signal) {
+	fn set_signal(&self, signals: &mut Vec<Signal>, nodeid: NodeId, signal: Signal) -> bool {
 		let node = &self.nodes[nodeid];
 		if signals[nodeid].is_some() {
-			return;
+			return false;
 		}
 		match &node.node_type {
 			NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
@@ -883,7 +884,9 @@ impl CheckedDesign {
 					}
 				}
 				if signals[driver].is_none() {
-					self.set_signal(signals, driver, signal);
+					self.set_signal(signals, driver, signal)
+				} else {
+					false
 				}
 			},
 			NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
@@ -891,10 +894,11 @@ impl CheckedDesign {
 				for foid in &node.fanout {
 					signals[*foid] = signal;
 				}
+				true
 			},
-			NodeType::PortBody => {},
-			NodeType::CellBody { .. } => {},
-			NodeType::Pruned => {},
+			NodeType::PortBody => false,
+			NodeType::CellBody { .. } => false,
+			NodeType::Pruned => false,
 		}
 	}
 

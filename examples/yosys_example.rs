@@ -10,6 +10,7 @@ fn yosys_example() {
 	let args = Args {
 		input_file: Some(PathBuf::from("yosys.lua")),
 		dump_phy_cfg: true,
+		output_file: None,
 	};
 	match lua_flow(args) {
 		Ok(bp) => {

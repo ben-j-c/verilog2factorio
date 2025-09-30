@@ -1,5 +1,5 @@
 use std::{
-	fs::File,
+	fs::{self, File},
 	io::BufReader,
 	path::{Path, PathBuf},
 };
@@ -72,6 +72,9 @@ pub struct Args {
 	#[arg(short, long, required_unless_present = "dump_phy_cfg")]
 	pub input_file: Option<PathBuf>,
 
+	#[arg(short, long)]
+	pub output_file: Option<PathBuf>,
+
 	/// Dump a template cfg/phy_template.toml. Rename to cfg/phy.toml to use for real.
 	#[arg(short, long)]
 	pub dump_phy_cfg: bool,
@@ -105,7 +108,7 @@ pub fn lua_flow(args: Args) -> Result<String> {
 		println!("{eval:#?}");
 		return Ok("".to_owned());
 	};
-	if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
+	let blueprint_json = if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		let mut phyd = PhysicalDesign::new();
 		phyd.build_from(&logd.logd.borrow());
@@ -120,9 +123,16 @@ pub fn lua_flow(args: Args) -> Result<String> {
 		let mut serd = SerializableDesign::new();
 		serd.build_from(&phyd.phyd.borrow(), &phyd.logd.borrow());
 		let blueprint_json = serde_json::to_string(&serd)?;
+
 		Ok(blueprint_json)
 	} else {
 		Err(Error::LuaErrorNoReturnedDesign)
+	}?;
+	match args.output_file {
+		Some(file) => fs::write(file.clone(), blueprint_json)
+			.map(|_| format!("Blueprint written to {file:?}"))
+			.map_err(|e| Error::IOError(e)),
+		None => Ok(blueprint_json),
 	}
 }
 
