@@ -1,8 +1,7 @@
 use std::{
-	cell::RefCell,
 	fs::File,
 	io::{BufRead, BufReader},
-	rc::Rc,
+	sync::{Arc, RwLock},
 };
 
 use itertools::Itertools;
@@ -19,9 +18,9 @@ use crate::{
 
 #[test]
 fn delay_correctness() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, nop) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
 		let mut nops = vec![];
 		nops.push(logd.add_nop_simple());
@@ -38,7 +37,7 @@ fn delay_correctness() {
 	assert_eq!(sim.probe_red_out(nop), vec![]);
 	sim.step(1);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(c1, 0, 0);
 	}
 	assert_eq!(sim.probe_red_out(c1), vec![(10, 1)]);
@@ -71,21 +70,21 @@ use crate::logical_design::{
 
 #[test]
 fn new() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
-	let nop = logd.borrow_mut().add_nop_simple();
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
+	let nop = logd.write().unwrap().add_nop_simple();
 	let mut sim = SimState::new(logd.clone());
 	sim.probe_green_out(nop);
-	logd.borrow_mut().nodes[nop.0].description = Some("The description".to_owned());
+	logd.write().unwrap().nodes[nop.0].description = Some("The description".to_owned());
 	sim.step(10);
-	logd.borrow_mut().nodes[nop.0].description = Some("The description2".to_owned());
+	logd.write().unwrap().nodes[nop.0].description = Some("The description2".to_owned());
 	sim.step(10);
 }
 
 #[test]
 fn constant_through_nop() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, nop, wire) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let nop = logd.add_nop_simple();
 		let wire = logd.add_wire_red_simple(c1, nop);
@@ -151,9 +150,9 @@ fn constant_through_nop() {
 
 #[test]
 fn decider_simple() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
@@ -184,9 +183,9 @@ fn decider_simple() {
 
 #[test]
 fn decider_simple2() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
@@ -218,9 +217,9 @@ fn decider_simple2() {
 
 #[test]
 fn decider_simple3() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, d1, wire) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let d1 = logd.add_decider();
 		let wire = logd.add_wire_red_simple(c1, d1);
@@ -263,9 +262,9 @@ fn decider_simple3() {
 
 #[test]
 fn decider_simple4() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, _, _, wire, wire2) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1234]);
 		let d1 = logd.add_decider();
 		let d2 = logd.add_decider();
@@ -310,9 +309,9 @@ fn decider_simple4() {
 
 #[test]
 fn decider_each1() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, c2, d1, d2) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
 		let c2 = logd.add_constant(vec![Signal::Id(10)], vec![2]);
 		let d1 = logd.add_decider();
@@ -359,9 +358,9 @@ fn decider_each1() {
 
 #[test]
 fn decider_each2() {
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 	let (c1, c2, d1, _, _) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let c1 = logd.add_constant(vec![Signal::Id(10)], vec![1]);
 		let c2 = logd.add_constant(vec![Signal::Id(11)], vec![2]);
 		let d1 = logd.add_decider();
@@ -427,7 +426,7 @@ fn test10_multiport_rom() {
 
 	let signal_2 = signal_lookup_table::lookup_id("signal_2").unwrap();
 
-	let logd = Rc::new(RefCell::new(logd));
+	let logd = Arc::new(RwLock::new(logd));
 	let mut sim = SimState::new(logd.clone());
 	sim.add_trace(in_1);
 	sim.add_trace(in_2);
@@ -436,12 +435,12 @@ fn test10_multiport_rom() {
 		let idx1 = idx;
 		let idx2 = ((idx + data_len / 2) % data_len) as usize;
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(in_1, 0, idx1 as i32);
 			logd.set_ith_output_count(in_2, 0, idx2 as i32);
 		}
 		for _ in 0..period {
-			let logd = logd.borrow();
+			let logd = logd.read().unwrap();
 			sim.step(1);
 			let _ = phy.save_svg_full(Some(&sim), &logd, "svg/test10_phy_sim.svg");
 		}
@@ -485,7 +484,7 @@ fn pmux() {
 		logd.add_wire_red(vec![comb_y], vec![output_y]);
 	}
 
-	let logd = Rc::new(RefCell::new(logd));
+	let logd = Arc::new(RwLock::new(logd));
 	let mut sim = SimState::new(logd.clone());
 	sim.step(3);
 	assert_eq!(
@@ -494,7 +493,7 @@ fn pmux() {
 	);
 
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_constant_enabled(input_s0, false);
 		logd.set_constant_enabled(input_s1, true);
 	}
@@ -505,7 +504,7 @@ fn pmux() {
 	);
 
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_constant_enabled(input_s0, false);
 		logd.set_constant_enabled(input_s1, false);
 	}
@@ -562,7 +561,7 @@ fn pmux_n() {
 		println!("{}", blueprint_json);
 	}
 
-	let logd = Rc::new(RefCell::new(logd));
+	let logd = Arc::new(RwLock::new(logd));
 	let mut sim = SimState::new(logd.clone());
 	sim.step(3);
 	assert_eq!(
@@ -573,7 +572,7 @@ fn pmux_n() {
 	for i in 0..n as usize {
 		let count = i as i32 + 500;
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_constant_enabled(input_s[i], true);
 		}
 
@@ -583,7 +582,7 @@ fn pmux_n() {
 			vec![(y.id(), count)]
 		);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_constant_enabled(input_s[i], false);
 		}
 	}

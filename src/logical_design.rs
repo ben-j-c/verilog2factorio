@@ -1029,7 +1029,7 @@ impl LogicalDesign {
 		b: Signal,
 		s: Signal,
 		y: Signal,
-		abs_folded_expr: Option<(
+		_abs_folded_expr: Option<(
 			&Option<(Signal, DeciderOperator, Signal)>,
 			&Option<(Signal, DeciderOperator, Signal)>,
 			&Option<(Signal, DeciderOperator, Signal)>,

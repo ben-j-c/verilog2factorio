@@ -1,4 +1,10 @@
-use std::{cell::RefCell, fs::File, io::BufReader, rc::Rc};
+use std::{
+	cell::RefCell,
+	fs::File,
+	io::BufReader,
+	rc::Rc,
+	sync::{Arc, RwLock},
+};
 
 use crate::{
 	checked_design::CheckedDesign, logical_design::*, mapped_design::MappedDesign,
@@ -175,7 +181,11 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 
 #[cfg(test)]
 mod test {
-	use std::{cell::RefCell, rc::Rc};
+	use std::{
+		cell::RefCell,
+		rc::Rc,
+		sync::{Arc, RwLock},
+	};
 
 	use crate::{
 		phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
@@ -564,14 +574,14 @@ mod test {
 	#[test]
 	fn sim_dff() {
 		const STEPS: u32 = 5;
-		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 
 		let sig_data = signal_lookup_table::lookup_sig("signal-D");
 		let sig_clk = signal_lookup_table::lookup_sig("signal-C");
 		let sig_q = signal_lookup_table::lookup_sig("signal-Q");
 
 		let (data_c, clock_c, comb_out) = {
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			let (wire_data, wire_clk, comb_out) = logd.add_dff(sig_data, sig_clk, sig_q);
 			let c1 = logd.add_constant(vec![sig_data], vec![0]);
 			let c2 = logd.add_constant(vec![sig_clk], vec![0]);
@@ -590,7 +600,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 100);
 		}
 		sim.step(STEPS);
@@ -598,7 +608,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -606,7 +616,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
@@ -615,7 +625,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
@@ -623,7 +633,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -637,7 +647,7 @@ mod test {
 	#[test]
 	fn sim_dffe() {
 		const STEPS: u32 = 6;
-		let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+		let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 
 		let sig_data = signal_lookup_table::lookup_sig("signal-D");
 		let sig_clk = signal_lookup_table::lookup_sig("signal-C");
@@ -645,7 +655,7 @@ mod test {
 		let sig_q = signal_lookup_table::lookup_sig("signal-Q");
 
 		let (data_c, clock_c, en_c, comb_out) = {
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			let (wire_data, wire_clk, wire_en, comb_out) =
 				logd.add_dffe(sig_data, sig_clk, sig_en, sig_q);
 			let c1 = logd.add_constant(vec![sig_data], vec![0]);
@@ -670,7 +680,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(en_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 100);
 			logd.set_ith_output_count(en_c, 0, 1);
 		}
@@ -679,7 +689,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -687,7 +697,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
@@ -696,7 +706,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
@@ -704,7 +714,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 100)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -713,7 +723,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		// Now for disabled
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 100);
 			logd.set_ith_output_count(en_c, 0, 0);
 			logd.set_ith_output_count(clock_c, 0, 0);
@@ -723,7 +733,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -731,7 +741,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![(sig_clk.id(), 1)]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 200);
 			logd.set_ith_output_count(clock_c, 0, 0);
 		}
@@ -740,7 +750,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(data_c, 0, 300);
 		}
 		sim.step(STEPS);
@@ -748,7 +758,7 @@ mod test {
 		assert_eq!(sim.probe_red_out(clock_c), vec![]);
 		assert_eq!(sim.probe_red_out(comb_out), vec![(sig_q.id(), 300)]);
 		{
-			let mut logd = logd.borrow_mut();
+			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock_c, 0, 1);
 		}
 		sim.step(STEPS);
@@ -764,7 +774,7 @@ mod test {
 fn sim_dffe() {
 	const NO_SIGNAL: Vec<(i32, i32)> = vec![];
 	const STEPS: u32 = 10;
-	let logd = Rc::new(RefCell::new(LogicalDesign::new()));
+	let logd = Arc::new(RwLock::new(LogicalDesign::new()));
 
 	let sig_data = signal_lookup_table::lookup_sig("signal-D");
 	let sig_clk = signal_lookup_table::lookup_sig("signal-C");
@@ -773,7 +783,7 @@ fn sim_dffe() {
 	let sig_q = signal_lookup_table::lookup_sig("signal-Q");
 
 	let (data_c, clock_c, rst_c, en_c, q_out) = {
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		let (wire_data, wire_clk, wire_rst, wire_en, comb_out) =
 			logd.add_sdffe(sig_data, sig_clk, sig_rst, sig_en, sig_q);
 		let c1 = logd.add_constant(vec![sig_data], vec![0]);
@@ -799,33 +809,33 @@ fn sim_dffe() {
 	sim.add_trace(q_out);
 	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 100);
 		logd.set_ith_output_count(en_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 200);
 		logd.set_ith_output_count(clock_c, 0, 0);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 300);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 100)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
@@ -834,7 +844,7 @@ fn sim_dffe() {
 	// Now for disabled
 
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 100);
 		logd.set_ith_output_count(en_c, 0, 0);
 		logd.set_ith_output_count(clock_c, 0, 0);
@@ -842,26 +852,26 @@ fn sim_dffe() {
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 200);
 		logd.set_ith_output_count(clock_c, 0, 0);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(data_c, 0, 300);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
@@ -869,7 +879,7 @@ fn sim_dffe() {
 
 	// Now with reset
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 0);
 		logd.set_ith_output_count(rst_c, 0, 1); // Set reset
 		logd.set_ith_output_count(data_c, 0, 555);
@@ -877,20 +887,20 @@ fn sim_dffe() {
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 300)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 0);
 		logd.set_ith_output_count(en_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
@@ -898,7 +908,7 @@ fn sim_dffe() {
 
 	// Now turn off reset
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 0);
 		logd.set_ith_output_count(rst_c, 0, 0); // Clear reset
 		logd.set_ith_output_count(data_c, 0, 1234);
@@ -906,20 +916,20 @@ fn sim_dffe() {
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), NO_SIGNAL);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 1234)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 0);
 		logd.set_ith_output_count(rst_c, 0, 1); // Set reset
 	}
 	sim.step(STEPS);
 	assert_eq!(sim.probe_red_out(q_out), vec![(sig_q.id(), 1234)]);
 	{
-		let mut logd = logd.borrow_mut();
+		let mut logd = logd.write().unwrap();
 		logd.set_ith_output_count(clock_c, 0, 1);
 	}
 	sim.step(STEPS);
@@ -961,7 +971,7 @@ fn sim_srl() {
 	logd.connect_red(a, ab_wire[0]);
 	logd.connect_red(b, ab_wire[1]);
 	let outp_wire = logd.add_wire_red_simple(y, lamp);
-	let logd = Rc::new(RefCell::new(logd));
+	let logd = Arc::new(RwLock::new(logd));
 	let mut sim = SimState::new(logd.clone());
 	sim.step(3);
 	let outp = sim.probe_lamp_state(lamp);

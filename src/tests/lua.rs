@@ -30,7 +30,7 @@ fn simple2() {
 		.unwrap()
 		.borrow::<lua::LogicalDesignAPI>()
 		.unwrap();
-	assert_eq!(logd.logd.borrow().nodes.len(), 1);
+	assert_eq!(logd.logd.read().unwrap().nodes.len(), 1);
 }
 
 #[test]
@@ -56,5 +56,5 @@ fn single_decider() {
 		.unwrap()
 		.borrow::<lua::LogicalDesignAPI>()
 		.unwrap();
-	assert_eq!(logd.logd.borrow().nodes.len(), 5);
+	assert_eq!(logd.logd.read().unwrap().nodes.len(), 5);
 }

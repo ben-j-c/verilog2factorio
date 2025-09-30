@@ -322,8 +322,8 @@ impl SimState {
 	pub(super) fn compute_decider_comb(
 		&self,
 		node: &Node,
-		new_state_red: &mut Vec<OutputState>,
-		new_state_green: &mut Vec<OutputState>,
+		new_state_red: &mut OutputState,
+		new_state_green: &mut OutputState,
 	) {
 		let (
 			expressions,
@@ -380,7 +380,7 @@ impl SimState {
 				Signal::None => continue,
 			}
 		}
-		new_state_red[node.id.0] = state_out.clone();
-		new_state_green[node.id.0] = state_out;
+		*new_state_red = state_out.clone();
+		*new_state_green = state_out;
 	}
 }

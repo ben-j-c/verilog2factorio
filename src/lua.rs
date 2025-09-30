@@ -6,14 +6,17 @@ use mlua::{
 use rustyline::{config::Configurer, DefaultEditor};
 
 use std::{
-	cell::RefCell,
 	fmt::Display,
 	fs::File,
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
 	path::{Path, PathBuf},
-	rc::Rc,
+	sync::{Arc, RwLock},
 };
+
+type LogDRef = Arc<RwLock<LogicalDesign>>;
+type PhyDRef = Arc<RwLock<PhysicalDesign>>;
+type SimRef = Arc<RwLock<SimState>>;
 
 use crate::{
 	checked_design::CheckedDesign,
@@ -36,18 +39,18 @@ impl From<crate::Error> for mlua::Error {
 }
 
 pub(crate) struct LogicalDesignAPI {
-	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
+	pub(crate) logd: LogDRef,
 	pub(crate) make_svg: bool,
 }
 
 pub(crate) struct PhysicalDesignAPI {
-	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
-	pub(crate) phyd: Rc<RefCell<PhysicalDesign>>,
+	pub(crate) logd: LogDRef,
+	pub(crate) phyd: PhyDRef,
 }
 
 pub(crate) struct SimStateAPI {
-	pub(crate) logd: Rc<RefCell<LogicalDesign>>,
-	pub(crate) sim: Rc<RefCell<SimState>>,
+	pub(crate) logd: LogDRef,
+	pub(crate) sim: SimRef,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -101,8 +104,8 @@ pub(crate) struct RTL {
 
 #[derive(Clone, Debug)]
 enum TerminalSide {
-	Input(NodeId, Rc<RefCell<LogicalDesign>>),
-	Output(NodeId, Rc<RefCell<LogicalDesign>>),
+	Input(NodeId, LogDRef),
+	Output(NodeId, LogDRef),
 }
 
 impl PartialEq for TerminalSide {
@@ -131,7 +134,7 @@ struct ArithmeticExpression(Signal, ArithmeticOperator, Signal);
 impl UserData for ArithmeticExpression {}
 
 impl TerminalSide {
-	fn get(&self) -> (NodeId, Rc<RefCell<LogicalDesign>>) {
+	fn get(&self) -> (NodeId, LogDRef) {
 		match self {
 			TerminalSide::Input(node_id, ref_cell) => (*node_id, ref_cell.clone()),
 			TerminalSide::Output(node_id, ref_cell) => (*node_id, ref_cell.clone()),
@@ -245,7 +248,7 @@ impl FromLua for Signal {
 struct Terminal(TerminalSide, WireColour);
 
 impl Terminal {
-	fn get(&self) -> (NodeId, Rc<RefCell<LogicalDesign>>, WireColour) {
+	fn get(&self) -> (NodeId, LogDRef, WireColour) {
 		let inner = self.0.get();
 		(inner.0, inner.1, self.1)
 	}
@@ -255,11 +258,11 @@ fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error
 	let other = other.borrow::<TerminalSide>()?;
 	let (this_id, this_logd, this_colour) = this.get();
 	let (other_id, other_logd) = other.get();
-	if this_logd.as_ptr() != other_logd.as_ptr() {
-		return Err(Error::RuntimeError(
-			"Can't connect two logical designs together".to_owned(),
-		));
-	}
+	//if this_logd.as_ptr() != other_logd.as_ptr() {
+	//	return Err(Error::RuntimeError(
+	//		"Can't connect two logical designs together".to_owned(),
+	//	));
+	//}
 	if this_id == other_id && this.0 == *other {
 		return Err(Error::RuntimeError(
 			"Can't connect a terminal to itself.".to_owned(),
@@ -277,8 +280,8 @@ fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error
 			TerminalSide::Output(..) => fanin.push(other_id),
 		}
 		match this_colour {
-			WireColour::Red => this_logd.borrow_mut().add_wire_red(fanin, fanout),
-			WireColour::Green => this_logd.borrow_mut().add_wire_green(fanin, fanout),
+			WireColour::Red => this_logd.write().unwrap().add_wire_red(fanin, fanout),
+			WireColour::Green => this_logd.write().unwrap().add_wire_green(fanin, fanout),
 		};
 	}));
 	if let Err(_) = res {
@@ -433,7 +436,7 @@ where
 	logd.build_from(&checked_design, &mapped_design);
 	checked_design.save_dot(&mapped_design);
 	Ok(LogicalDesignAPI {
-		logd: Rc::new(RefCell::new(logd)),
+		logd: Arc::new(RwLock::new(logd)),
 		make_svg: false,
 	})
 }
@@ -449,25 +452,25 @@ impl UserData for Terminal {
 #[derive(Debug, Clone)]
 struct Decider {
 	id: NodeId,
-	logd: Rc<RefCell<LogicalDesign>>,
+	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Arithmetic {
 	id: NodeId,
-	logd: Rc<RefCell<LogicalDesign>>,
+	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Lamp {
 	id: NodeId,
-	logd: Rc<RefCell<LogicalDesign>>,
+	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Constant {
 	id: NodeId,
-	logd: Rc<RefCell<LogicalDesign>>,
+	logd: LogDRef,
 }
 
 impl UserData for Decider {
@@ -489,7 +492,7 @@ impl UserData for Decider {
 				let net_left = (args.2 & 1 > 0, args.2 & 2 > 0);
 				let net_right = (args.3 & 1 > 0, args.3 & 2 > 0);
 				let res = catch_unwind(AssertUnwindSafe(|| {
-					this.logd.borrow_mut().add_decider_input(
+					this.logd.write().unwrap().add_decider_input(
 						this.id,
 						(expr.0, expr.1, expr.2),
 						row_op.clone(),
@@ -521,11 +524,13 @@ impl UserData for Decider {
 			let res = catch_unwind(AssertUnwindSafe(|| {
 				if let Some(constant) = constant {
 					this.logd
-						.borrow_mut()
+						.write()
+						.unwrap()
 						.add_decider_out_constant(this.id, sig, constant, net_out);
 				} else {
 					this.logd
-						.borrow_mut()
+						.write()
+						.unwrap()
 						.add_decider_out_input_count(this.id, sig, net_out);
 				}
 			}));
@@ -537,7 +542,7 @@ impl UserData for Decider {
 		});
 		methods.add_method("signals", |_, this, _: ()| {
 			let binding = this.logd.clone();
-			let logd = binding.borrow();
+			let logd = binding.write().unwrap();
 			Ok(logd
 				.get_output_signals(this.id)
 				.iter()
@@ -559,7 +564,7 @@ impl UserData for Arithmetic {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("signals", |_, this, _: ()| {
 			let binding = this.logd.clone();
-			let logd = binding.borrow();
+			let logd = binding.write().unwrap();
 			Ok(logd
 				.get_output_signals(this.id)
 				.iter()
@@ -581,7 +586,7 @@ impl UserData for Constant {
 			"set_ith_output_count",
 			|_, this, (idx, count): (usize, i32)| {
 				let binding = this.logd.clone();
-				let mut logd = binding.borrow_mut();
+				let mut logd = binding.write().unwrap();
 				let node = logd.get_node(this.id);
 				if node.output.len() <= idx {
 					return Err(Error::runtime("idx too large"));
@@ -596,7 +601,7 @@ impl UserData for Constant {
 			|_, this, (sigs, vals): (Vec<Signal>, Vec<i32>)| {
 				assert_eq!(sigs.len(), vals.len());
 				let binding = this.logd.clone();
-				let mut logd = binding.borrow_mut();
+				let mut logd = binding.write().unwrap();
 				logd.set_constants_output(this.id, sigs, vals);
 				Ok(())
 			},
@@ -604,14 +609,14 @@ impl UserData for Constant {
 
 		methods.add_method("set_enabled", |_, this, status: bool| {
 			let binding = this.logd.clone();
-			let mut logd = binding.borrow_mut();
+			let mut logd = binding.write().unwrap();
 			logd.set_constant_enabled(this.id, status);
 			Ok(())
 		});
 
 		methods.add_method("signals", |_, this, _: ()| {
 			let binding = this.logd.clone();
-			let logd = binding.borrow();
+			let logd = binding.read().unwrap();
 			Ok(logd
 				.get_output_signals(this.id)
 				.iter()
@@ -631,7 +636,7 @@ impl UserData for Lamp {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("signals", |_, this, _: ()| {
 			let binding = this.logd.clone();
-			let logd = binding.borrow();
+			let logd = binding.read().unwrap();
 			if logd.is_port(this.id).is_some() {
 				return Ok(logd.get_port_signal(this.id).into_iter().collect_vec());
 			}
@@ -643,17 +648,17 @@ impl UserData for Lamp {
 impl UserData for LogicalDesignAPI {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("description", |_, this| {
-			Ok(this.logd.borrow().description.clone())
+			Ok(this.logd.read().unwrap().description.clone())
 		});
 		fields.add_field_method_set("description", |_, this, description: String| {
-			this.logd.borrow_mut().set_description(description);
+			this.logd.write().unwrap().set_description(description);
 			Ok(())
 		});
 	}
 
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("add_decider", |_, this, _: ()| {
-			let id = this.logd.borrow_mut().add_decider();
+			let id = this.logd.write().unwrap().add_decider();
 			Ok(Decider {
 				id,
 				logd: this.logd.clone(),
@@ -666,7 +671,7 @@ impl UserData for LogicalDesignAPI {
 				let net_left = (args.2 & 1 > 0, args.2 & 2 > 0);
 				let net_right = (args.3 & 1 > 0, args.3 & 2 > 0);
 				let out = args.1;
-				let id = this.logd.borrow_mut().add_arithmetic_with_net(
+				let id = this.logd.write().unwrap().add_arithmetic_with_net(
 					(expr.0, expr.1, expr.2),
 					out,
 					net_left,
@@ -680,7 +685,11 @@ impl UserData for LogicalDesignAPI {
 		);
 		methods.add_method("add_lamp", |_, this, args: (AnyUserData,)| {
 			let expr = args.0.borrow::<DeciderExpression>()?;
-			let id = this.logd.borrow_mut().add_lamp((expr.0, expr.1, expr.2));
+			let id = this
+				.logd
+				.write()
+				.unwrap()
+				.add_lamp((expr.0, expr.1, expr.2));
 			Ok(Lamp {
 				id,
 				logd: this.logd.clone(),
@@ -692,7 +701,7 @@ impl UserData for LogicalDesignAPI {
 				if sigs.len() != counts.len() {
 					return Err(Error::RuntimeError("Mismatched length.".to_owned()));
 				}
-				let id = this.logd.borrow_mut().add_constant(sigs, counts);
+				let id = this.logd.write().unwrap().add_constant(sigs, counts);
 				Ok(Constant {
 					id,
 					logd: this.logd.clone(),
@@ -700,7 +709,7 @@ impl UserData for LogicalDesignAPI {
 			},
 		);
 		methods.add_method("print", |_, this, _: ()| {
-			println!("{}", this.logd.borrow());
+			println!("{}", this.logd.read().unwrap());
 			Ok(())
 		});
 		methods.add_method_mut("make_svg", |_, this, _: ()| {
@@ -710,19 +719,25 @@ impl UserData for LogicalDesignAPI {
 		methods.add_method("new_simulation", |_, this, _: ()| {
 			Ok(SimStateAPI {
 				logd: this.logd.clone(),
-				sim: Rc::new(RefCell::new(SimState::new(this.logd.clone()))),
+				sim: SimRef::new(RwLock::new(SimState::new(this.logd.clone()))),
 			})
 		});
 		methods.add_method("find_out_port", |_, this, name: String| {
-			Ok(this.logd.borrow().get_out_port_node(name).map(|id| Lamp {
-				id,
-				logd: this.logd.clone(),
-			}))
+			Ok(this
+				.logd
+				.read()
+				.unwrap()
+				.get_out_port_node(name)
+				.map(|id| Lamp {
+					id,
+					logd: this.logd.clone(),
+				}))
 		});
 		methods.add_method("find_in_port", |_, this, name: String| {
 			Ok(this
 				.logd
-				.borrow()
+				.read()
+				.unwrap()
 				.get_in_port_node(name)
 				.map(|id| Constant {
 					id,
@@ -730,7 +745,7 @@ impl UserData for LogicalDesignAPI {
 				}))
 		});
 		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
-			Ok(format!("{}", this.logd.borrow()))
+			Ok(format!("{}", this.logd.read().unwrap()))
 		});
 	}
 }
@@ -749,48 +764,48 @@ fn verify_is_combinator(this: &SimStateAPI, data: &AnyUserData) -> Result<NodeId
 	} else {
 		return Err(Error::runtime("Got non-combinator as an input."));
 	};
-	if logd.as_ptr() != this.logd.as_ptr() {
-		return Err(Error::runtime(
-			"Supplied a combinator that doesn't belong to this design.",
-		));
-	}
+	//if logd.as_ptr() != this.logd.as_ptr() {
+	//	return Err(Error::runtime(
+	//		"Supplied a combinator that doesn't belong to this design.",
+	//	));
+	//}
 	Ok(nodeid)
 }
 
 impl UserData for SimStateAPI {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("step", |_, this, steps: u32| {
-			this.sim.borrow_mut().step(steps);
+			this.sim.write().unwrap().step(steps);
 			Ok(())
 		});
 		methods.add_method("probe", |_, this, data: AnyUserData| {
 			let signals: Vec<(i32, i32)> = if let Ok(term) = data.borrow::<Terminal>() {
 				let (nodeid, logd, colour) = term.get();
-				if logd.as_ptr() != this.logd.as_ptr() {
-					return Err(Error::runtime(
-						"Supplied a combinator that doesn't belong to this design.",
-					));
-				}
+				//if logd.as_ptr() != this.logd.as_ptr() {
+				//	return Err(Error::runtime(
+				//		"Supplied a combinator that doesn't belong to this design.",
+				//	));
+				//}
 				let net = match colour {
 					WireColour::Red => NET_RED,
 					WireColour::Green => NET_GREEN,
 				};
 				match term.0 {
-					TerminalSide::Input(_, _) => this.sim.borrow().probe_input(nodeid, net),
-					TerminalSide::Output(_, _) => this.sim.borrow().probe_red_out(nodeid),
+					TerminalSide::Input(_, _) => this.sim.write().unwrap().probe_input(nodeid, net),
+					TerminalSide::Output(_, _) => this.sim.write().unwrap().probe_red_out(nodeid),
 				}
 			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
 				let (nodeid, logd) = term_side.clone().get();
-				if logd.as_ptr() != this.logd.as_ptr() {
-					return Err(Error::runtime(
-						"Supplied a combinator that doesn't belong to this design.",
-					));
-				}
+				//if logd.as_ptr() != this.logd.as_ptr() {
+				//	return Err(Error::runtime(
+				//		"Supplied a combinator that doesn't belong to this design.",
+				//	));
+				//}
 				match *term_side {
 					TerminalSide::Input(_, _) => {
-						this.sim.borrow().probe_input(nodeid, NET_RED_GREEN)
+						this.sim.write().unwrap().probe_input(nodeid, NET_RED_GREEN)
 					},
-					TerminalSide::Output(_, _) => this.sim.borrow().probe_red_out(nodeid),
+					TerminalSide::Output(_, _) => this.sim.write().unwrap().probe_red_out(nodeid),
 				}
 			} else {
 				return Err(Error::runtime("Passed an invalid type into probe."));
@@ -803,7 +818,7 @@ impl UserData for SimStateAPI {
 		});
 		methods.add_method("add_trace", |_, this, data: AnyUserData| {
 			let nodeid = verify_is_combinator(this, &data)?;
-			this.sim.borrow_mut().add_trace(nodeid);
+			this.sim.write().unwrap().add_trace(nodeid);
 			Ok(())
 		});
 		methods.add_method("probe_lamp_state", |_, this, data: AnyUserData| {
@@ -811,19 +826,19 @@ impl UserData for SimStateAPI {
 			if !data.is::<Lamp>() {
 				return Err(Error::runtime("Tried to probe a non-lamp as a lamp."));
 			}
-			Ok(this.sim.borrow().probe_lamp_state(nodeid))
+			Ok(this.sim.read().unwrap().probe_lamp_state(nodeid))
 		});
 		methods.add_method("save_svg", |_, this, filename: String| {
-			let svg = this.sim.borrow().render_traces();
+			let svg = this.sim.read().unwrap().render_traces();
 			svg.save(filename)?;
 			Ok(())
 		});
 		methods.add_method("print", |_, this, _: ()| {
-			this.sim.borrow().print();
+			this.sim.read().unwrap().print();
 			Ok(())
 		});
 		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
-			Ok(format!("{}", this.sim.borrow()))
+			Ok(format!("{}", this.sim.read().unwrap()))
 		});
 		methods.add_method("inspect", |_, this, _: ()| {
 			println!("Valid commands:");
@@ -840,7 +855,7 @@ impl UserData for SimStateAPI {
 						let line = line.trim().to_owned();
 						if line.starts_with("log") {
 							let detailed = line.starts_with("logd");
-							let logd = this.logd.borrow();
+							let logd = this.logd.read().unwrap();
 							for v in line.split(" ").skip(1) {
 								if let Ok(v) = v.parse::<usize>() {
 									if detailed {
@@ -851,14 +866,14 @@ impl UserData for SimStateAPI {
 								}
 							}
 						} else if line.starts_with("sim") {
-							let sim = this.sim.borrow();
+							let sim = this.sim.read().unwrap();
 							for v in line.split(" ").skip(1) {
 								if let Ok(v) = v.parse::<usize>() {
 									sim.print_row(v);
 								}
 							}
 						} else if line.starts_with("regex") {
-							let logd = this.logd.borrow();
+							let logd = this.logd.read().unwrap();
 							let pattern = &line[6..];
 							let pattern = match regex::Regex::new(pattern) {
 								Ok(v) => v,
@@ -884,7 +899,7 @@ impl UserData for SimStateAPI {
 								println!("<no matches>");
 							}
 						} else if line.starts_with("step") {
-							let mut sim = this.sim.borrow_mut();
+							let mut sim = this.sim.write().unwrap();
 
 							let mut found = false;
 							for v in line.split(" ").skip(1).take(1) {
@@ -902,8 +917,8 @@ impl UserData for SimStateAPI {
 							println!("Doing 1 step.");
 							sim.step(1);
 						} else if line.starts_with("wire_net") {
-							let sim = this.sim.borrow();
-							let logd = this.logd.borrow();
+							let sim = this.sim.read().unwrap();
+							let logd = this.logd.read().unwrap();
 							for v in line.split(" ").skip(1) {
 								if let Ok(v) = v.parse::<usize>() {
 									let (fanin, fanout) = sim.get_attached(v);
@@ -950,28 +965,28 @@ impl UserData for SimStateAPI {
 						if !vcd.has_var(&net) {
 							return runtime_err(format!("{net} is not a known variable."));
 						}
-						if comb.logd.as_ptr() != this.logd.as_ptr() {
-							return runtime_err(format!(
-								"Input combinator for net {net} is not owned by this design."
-							));
-						}
+						//if comb.logd.as_ptr() != this.logd.as_ptr() {
+						//	return runtime_err(format!(
+						//		"Input combinator for net {net} is not owned by this design."
+						//	));
+						//}
 						inputs.insert(net, comb.id);
 					}
 					inputs
 				};
 				let outputs = {
 					let mut outputs = hash_map();
-					let logd = this.logd.borrow();
+					let logd = this.logd.read().unwrap();
 					for pair in outputs_lua.pairs::<String, Lamp>() {
 						let (net, comb) = pair?;
 						if !vcd.has_var(&net) {
 							return runtime_err(format!("{net} is not a known variable."));
 						}
-						if comb.logd.as_ptr() != this.logd.as_ptr() {
-							return runtime_err(format!(
-								"Output lamp for net {net} is not owned by this design."
-							));
-						}
+						//if comb.logd.as_ptr() != this.logd.as_ptr() {
+						//	return runtime_err(format!(
+						//		"Output lamp for net {net} is not owned by this design."
+						//	));
+						//}
 						let lamp = logd.get_node(comb.id);
 						let signal = match lamp.function {
 							crate::logical_design::NodeFunction::Lamp { expression } => {
@@ -983,10 +998,13 @@ impl UserData for SimStateAPI {
 					}
 					outputs
 				};
-				Ok(this
-					.sim
-					.borrow_mut()
-					.play_vcd(&vcd, inputs, outputs, propagation_delay, reset))
+				Ok(this.sim.write().unwrap().play_vcd(
+					&vcd,
+					inputs,
+					outputs,
+					propagation_delay,
+					reset,
+				))
 			},
 		);
 	}
@@ -1159,7 +1177,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 		"get_empty_design",
 		lua.create_function(|_, _: ()| {
 			Ok(LogicalDesignAPI {
-				logd: Rc::new(RefCell::new(LogicalDesign::new())),
+				logd: LogDRef::new(RwLock::new(LogicalDesign::new())),
 				make_svg: false,
 			})
 		})?,

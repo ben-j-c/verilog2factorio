@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ConfigPartition {
-	target_size: i32,
-	side_length_single_partition_scale_factor: f64,
+	pub target_size: i32,
+	pub side_length_single_partition_scale_factor: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,7 +215,7 @@ impl Default for Config {
 			placement2: ConfigPlacement2 {
 				round_to_time_divisor: 9_692.926,
 				step_size: 1.889_578_2e-5,
-				spring_k0: 10.760_459_5,
+				spring_k0: 4.760_459_5,
 				spring_k1: 1.019_981_3,
 				spring_k2: 4.809_123_5,
 				legalization_k0: 2.476_878_6,
@@ -231,7 +231,7 @@ impl Default for Config {
 				radial_k2: 7.270_569_3,
 			},
 			parition: ConfigPartition {
-				target_size: 64,
+				target_size: 32,
 				side_length_single_partition_scale_factor: 1.4,
 			},
 			routing: ConfigRouting { max_margin: 10 },

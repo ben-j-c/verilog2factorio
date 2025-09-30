@@ -1,6 +1,7 @@
 use std::{
 	fs::{self, File},
 	io::BufReader,
+	ops::Deref,
 	path::{Path, PathBuf},
 };
 
@@ -111,17 +112,19 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let blueprint_json = if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		let mut phyd = PhysicalDesign::new();
-		phyd.build_from(&logd.logd.borrow());
+		phyd.build_from(&logd.logd.read().unwrap());
 		if logd.make_svg {
 			let svg_name = get_derivative_file_name(input_file.clone(), ".svg")?;
-			phyd.save_svg(&logd.logd.borrow(), svg_name)?;
+			phyd.save_svg(&logd.logd.read().unwrap(), svg_name)?;
 		}
-		serd.build_from(&phyd, &logd.logd.borrow());
+		serd.build_from(&phyd, &logd.logd.read().unwrap());
 		let blueprint_json = serde_json::to_string(&serd)?;
 		Ok(blueprint_json)
 	} else if let Ok(phyd) = eval.borrow::<PhysicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
-		serd.build_from(&phyd.phyd.borrow(), &phyd.logd.borrow());
+		let logd = phyd.logd.read().unwrap();
+		let phyd = phyd.phyd.read().unwrap();
+		serd.build_from(phyd.deref(), logd.deref());
 		let blueprint_json = serde_json::to_string(&serd)?;
 
 		Ok(blueprint_json)

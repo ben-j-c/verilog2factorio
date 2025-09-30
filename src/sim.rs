@@ -1,13 +1,15 @@
 use std::{
-	cell::RefCell,
 	fmt::Display,
 	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shl, Shr},
-	rc::Rc,
+	sync::{Arc, RwLock},
 	usize,
 };
 
 use ::vcd::Value;
 use itertools::Itertools;
+use rayon::iter::{
+	IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 
 mod decider_model;
 pub mod vcd;
@@ -87,7 +89,7 @@ pub struct Trace {
 
 pub struct SimState {
 	network: Vec<WireNetwork>,
-	logd: Rc<RefCell<LogicalDesign>>,
+	logd: Arc<std::sync::RwLock<LogicalDesign>>,
 	step_number: usize,
 	state: Vec<SimStateRow>,
 
@@ -103,7 +105,7 @@ pub struct SimStateRow {
 }
 
 impl SimState {
-	pub fn new(logd: Rc<RefCell<LogicalDesign>>) -> Self {
+	pub fn new(logd: Arc<RwLock<LogicalDesign>>) -> Self {
 		let mut ret = Self {
 			network: vec![],
 			logd,
@@ -117,7 +119,7 @@ impl SimState {
 	}
 
 	pub fn update_logical_design(&mut self) {
-		let logd = self.logd.borrow();
+		let logd = self.logd.read().unwrap();
 		let state_len = self.state.len();
 		for _ in logd.nodes.iter().skip(state_len) {
 			self.state.push(SimStateRow::default());
@@ -260,7 +262,7 @@ impl SimState {
 	}
 
 	pub fn probe_lamp_state(&self, id: NodeId) -> Option<bool> {
-		let logd = self.logd.borrow();
+		let logd = self.logd.read().unwrap();
 		let expr = match &logd.get_node(id).function {
 			NodeFunction::Lamp { expression } => expression,
 			_ => return None,
@@ -290,7 +292,7 @@ impl SimState {
 
 	pub fn step(&mut self, steps: u32) {
 		self.update_logical_design();
-		let n_nodes = self.logd.borrow().nodes.len();
+		let n_nodes = self.logd.read().unwrap().nodes.len();
 		for _ in 0..steps {
 			let mut new_state_red = vec![OutputState::default(); n_nodes];
 			let mut new_state_green = vec![OutputState::default(); n_nodes];
@@ -425,8 +427,8 @@ impl SimState {
 	fn compute_arithmetic_comb(
 		&self,
 		node: &Node,
-		new_state_red: &mut Vec<OutputState>,
-		new_state_green: &mut Vec<OutputState>,
+		new_state_red: &mut OutputState,
+		new_state_green: &mut OutputState,
 	) {
 		let (op, input_1, input_2, input_left_network, input_right_network) =
 			node.function.unwrap_arithmetic();
@@ -461,8 +463,8 @@ impl SimState {
 					}
 					let res = Self::execute_arith_op(left[sig_id], op, right[sig_id]);
 					if res != 0 {
-						new_state_red[node.id.0][output] += res;
-						new_state_green[node.id.0][output] += res;
+						new_state_red[output] += res;
+						new_state_green[output] += res;
 					}
 				}
 			},
@@ -479,8 +481,8 @@ impl SimState {
 					}
 					let res = Self::execute_arith_op(left[*sig_id], op, right);
 					if res != 0 {
-						new_state_red[node.id.0][output] += res;
-						new_state_green[node.id.0][output] += res;
+						new_state_red[output] += res;
+						new_state_green[output] += res;
 					}
 				}
 			},
@@ -497,8 +499,8 @@ impl SimState {
 					}
 					let res = Self::execute_arith_op(left, op, right[*sig_id]);
 					if res != 0 {
-						new_state_red[node.id.0][output] += res;
-						new_state_green[node.id.0][output] += res;
+						new_state_red[output] += res;
+						new_state_green[output] += res;
 					}
 				}
 			},
@@ -520,8 +522,8 @@ impl SimState {
 				};
 				let res = Self::execute_arith_op(left, op, right);
 				if res != 0 {
-					new_state_red[node.id.0][output] += res;
-					new_state_green[node.id.0][output] += res;
+					new_state_red[output] += res;
+					new_state_green[output] += res;
 				}
 			},
 		}
@@ -532,8 +534,46 @@ impl SimState {
 		new_state_red: &mut Vec<OutputState>,
 		new_state_green: &mut Vec<OutputState>,
 	) {
-		let logd = self.logd.borrow();
-		for node in &logd.nodes {
+		let logd = self.logd.read().unwrap();
+
+		logd.nodes
+			.par_iter()
+			.zip(
+				new_state_red
+					.par_iter_mut()
+					.zip(new_state_green.par_iter_mut()),
+			)
+			.for_each(|(node, (new_state_red, new_state_green))| {
+				//
+				match &node.function {
+				NodeFunction::Arithmetic { .. } => {
+					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
+				},
+				NodeFunction::Decider { .. } => {
+					self.compute_decider_comb(node, new_state_red, new_state_green);
+				},
+				NodeFunction::Constant { enabled, constants } => {
+					if !*enabled {
+						return;
+					}
+					for (signal, count) in node.output.iter().zip(constants) {
+						if *count == 0 {
+							continue;
+						}
+						if let Signal::Id(sig_id) = *signal {
+							new_state_red[sig_id] = *count;
+							new_state_green[sig_id] = *count;
+						} else {
+							assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
+						}
+					}
+				},
+				NodeFunction::Lamp { .. } => {},
+				NodeFunction::WireSum(_wire_colour) => {},
+			}
+			}
+		);
+		/*for node in &logd.nodes {
 			match &node.function {
 				NodeFunction::Arithmetic { .. } => {
 					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
@@ -560,7 +600,7 @@ impl SimState {
 				NodeFunction::Lamp { .. } => continue,
 				NodeFunction::WireSum(_wire_colour) => continue,
 			}
-		}
+		}*/
 	}
 
 	pub fn compute_nets(
@@ -592,7 +632,7 @@ impl SimState {
 	}
 
 	pub fn print(&self) {
-		let logd = self.logd.borrow();
+		let logd = self.logd.read().unwrap();
 		println!("--------------");
 		println!("RED: (signal_id, count)");
 		for node_num in 0..self.state.len() {
@@ -792,7 +832,7 @@ impl SimState {
 			}
 			let y2 = y;
 			let text = {
-				match &self.logd.borrow().get_node(*nodeid).description {
+				match &self.logd.read().unwrap().get_node(*nodeid).description {
 					Some(desc) => desc.clone(),
 					None => format!("{:?}", nodeid),
 				}
@@ -830,7 +870,7 @@ impl SimState {
 		for vcd_time in 0..vcd.last_time() {
 			let mut inputs_snapshot = vec![];
 			{
-				let mut logd = self.logd.borrow_mut();
+				let mut logd = self.logd.write().unwrap();
 				for (wire_name, id) in &inputs {
 					let val = vcd.get_value(wire_name, vcd_time);
 					let count: i32 = convert_to_signal_count(&val);

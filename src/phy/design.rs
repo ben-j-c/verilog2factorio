@@ -173,8 +173,8 @@ impl PhysicalDesign {
 	}
 
 	pub(crate) fn build_from(&mut self, logical: &LogicalDesign) -> bool {
-		let partition_size = self.user_partition_size.unwrap_or(64);
-		let scale_factor = 1.4;
+		let partition_size = CFG.parition.target_size;
+		let scale_factor = CFG.parition.side_length_single_partition_scale_factor;
 		self.side_length_single_partition =
 			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		self.extract_combs(logical);
