@@ -537,11 +537,11 @@ impl SimState {
 		let logd = self.logd.read().unwrap();
 
 		logd.nodes
-			.par_iter()
+			.iter()
 			.zip(
 				new_state_red
-					.par_iter_mut()
-					.zip(new_state_green.par_iter_mut()),
+					.iter_mut()
+					.zip(new_state_green.iter_mut()),
 			)
 			.for_each(|(node, (new_state_red, new_state_green))| {
 				//
@@ -889,7 +889,10 @@ impl SimState {
 							if actual_count == expected_count {
 								continue;
 							}
+							println!("At time {vcd_time}:");
+							println!("Expected {expected_count}, got {actual_count}.");
 							println!("Found unexpected value for output '{}'", wire_name);
+							println!("NodeId: {id}");
 							println!("Inputs:");
 							for (name, count) in &inputs_snapshot {
 								println!("\t{} = {}", name, count);

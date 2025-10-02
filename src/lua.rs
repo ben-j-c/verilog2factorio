@@ -916,7 +916,7 @@ impl UserData for SimStateAPI {
 							}
 							println!("Doing 1 step.");
 							sim.step(1);
-						} else if line.starts_with("wire_net") {
+						} else if line.starts_with("wire") {
 							let sim = this.sim.read().unwrap();
 							let logd = this.logd.read().unwrap();
 							for v in line.split(" ").skip(1) {

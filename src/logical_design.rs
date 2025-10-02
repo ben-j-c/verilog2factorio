@@ -108,7 +108,7 @@ impl DeciderOperator {
 ///
 /// This enum can be thought of as an OR or an AND prefix to every expression in the decider.
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeciderRowConjDisj {
 	And,
 	Or,
@@ -546,6 +546,9 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
+		if self.nodes.len() == 455 {
+			print!("");
+		}
 		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
@@ -1612,7 +1615,6 @@ impl LogicalDesign {
 				if let Some(prev) = last_comb {
 					self.add_wire_red(vec![prev, mask_comb], vec![]);
 				}
-				last_comb = Some(mask_comb);
 			} else {
 				let shift_comb = self.add_arithmetic(
 					(
@@ -1626,12 +1628,12 @@ impl LogicalDesign {
 					),
 					output,
 				);
-				self.add_wire_red(vec![mask_comb], vec![shift_comb]);
+				self.add_wire_red(vec![shift_comb], vec![mask_comb]);
 				if let Some(prev) = last_comb {
-					self.add_wire_red(vec![prev, shift_comb], vec![]);
+					self.add_wire_red(vec![prev, mask_comb], vec![]);
 				}
-				last_comb = Some(shift_comb);
 			}
+			last_comb = Some(mask_comb);
 		}
 		(retval, last_comb.unwrap())
 	}
@@ -1941,9 +1943,34 @@ impl LogicalDesign {
 		sig_out: Signal,
 		lut: Vec<bool>,
 		width: usize,
+		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
 	) -> (Vec<NodeId>, NodeId) {
 		assert_eq!(width, sig_in.len());
 		let mut counter = vec![false; width];
+
+		let get_ith_expr = |i: usize, bit: bool| {
+			if folded_expr.is_empty() {
+				return (
+					sig_in[i],
+					DeciderOperator::Equal,
+					Signal::Constant(bit as i32),
+				);
+			}
+			if let Some(expr) = folded_expr[i] {
+				let op = if bit { expr.1 } else { expr.1.complement() };
+				match expr {
+					(Signal::None, _, rhs) => (sig_in[i], op, rhs),
+					(lhs, _, Signal::None) => (sig_in[i], op.swap_operands(), lhs),
+					_ => unreachable!(),
+				}
+			} else {
+				(
+					sig_in[i],
+					DeciderOperator::Equal,
+					Signal::Constant(bit as i32),
+				)
+			}
+		};
 
 		let lut_comb = self.add_decider();
 		self.add_decider_out_constant(lut_comb, sig_out, 1, NET_RED_GREEN);
@@ -1955,7 +1982,6 @@ impl LogicalDesign {
 			if lut[lut_idx] {
 				let mut first_condition = true;
 				for (bit_idx, bit) in counter.iter().enumerate() {
-					let sig_left = sig_in[bit_idx];
 					let conj_disj = if first {
 						DeciderRowConjDisj::FirstRow
 					} else if first_condition {
@@ -1963,18 +1989,8 @@ impl LogicalDesign {
 					} else {
 						DeciderRowConjDisj::And
 					};
-					let sig_right = if *bit {
-						Signal::Constant(1)
-					} else {
-						Signal::Constant(0)
-					};
-					self.add_decider_input(
-						lut_comb,
-						(sig_left, DeciderOperator::Equal, sig_right),
-						conj_disj,
-						NET_RED_GREEN,
-						NET_RED_GREEN,
-					);
+					let expr = get_ith_expr(bit_idx, *bit);
+					self.add_decider_input(lut_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
 					first_condition = false;
 					first = false;
 				}
@@ -1991,6 +2007,60 @@ impl LogicalDesign {
 			}
 		}
 		(vec![retwire; width], lut_comb)
+	}
+
+	pub fn add_sop(
+		&mut self,
+		sig_in: Vec<Signal>,
+		sig_out: Signal,
+		table: Vec<bool>,
+		depth: usize,
+		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+	) -> (Vec<NodeId>, NodeId) {
+		let sop_comb = self.add_decider();
+		let width = sig_in.len();
+		self.add_decider_out_constant(sop_comb, sig_out, 1, NET_RED_GREEN);
+		let retwire = self.add_wire_red(vec![], vec![sop_comb]);
+		let mut conj_disj = DeciderRowConjDisj::FirstRow;
+		let get_ith_expr = |i: usize, bit: bool| {
+			if folded_expr.is_empty() {
+				return (
+					sig_in[i],
+					DeciderOperator::Equal,
+					Signal::Constant(bit as i32),
+				);
+			}
+			if let Some(expr) = folded_expr[i] {
+				let op = if bit { expr.1 } else { expr.1.complement() };
+				match expr {
+					(Signal::None, _, rhs) => (sig_in[i], op, rhs),
+					(lhs, _, Signal::None) => (sig_in[i], op.swap_operands(), lhs),
+					_ => unreachable!(),
+				}
+			} else {
+				(
+					sig_in[i],
+					DeciderOperator::Equal,
+					Signal::Constant(bit as i32),
+				)
+			}
+		};
+		for i in 0..depth {
+			for j in 0..width {
+				if table[2 * width * i + 2 * j] {
+					let expr = get_ith_expr(j, false);
+					self.add_decider_input(sop_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
+					conj_disj = DeciderRowConjDisj::And;
+				}
+				if table[2 * width * i + 2 * j + 1] {
+					let expr = get_ith_expr(j, true);
+					self.add_decider_input(sop_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
+					conj_disj = DeciderRowConjDisj::And;
+				}
+			}
+			conj_disj = DeciderRowConjDisj::Or;
+		}
+		(vec![retwire; width], sop_comb)
 	}
 
 	pub fn add_reduce_and(&mut self, a: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {

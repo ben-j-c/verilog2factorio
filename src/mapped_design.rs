@@ -320,6 +320,10 @@ impl Cell {
 				ImplementableOp::SDFFE => ports(["D", "CLK", "SRST", "EN", "Q"]),
 				ImplementableOp::ADFFE => ports(["D", "CLK", "EN", "ARST", "Q"]),
 				ImplementableOp::ADFF => ports(["D", "CLK", "ARST", "Q"]),
+				ImplementableOp::Sop(n) => (0..*n)
+					.map(|i| format!("A{}", i))
+					.chain(vec!["Y".to_owned()])
+					.collect_vec(),
 			},
 		}
 	}
@@ -561,6 +565,7 @@ impl Display for ImplementableOp {
 			ImplementableOp::ADFFE => "$adffe",
 			ImplementableOp::ADFF => "$adff",
 			ImplementableOp::DFFE => "$dffe",
+			ImplementableOp::Sop(_) => "$sop",
 		};
 		f.write_str(data)
 	}
@@ -607,6 +612,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"$adffe" => ImplementableOp::ADFFE,
 			"$lut" => ImplementableOp::LUT(0),
 			"$mem_v2" => ImplementableOp::Memory,
+			"$sop" => ImplementableOp::Sop(0),
 			"$swizzle" => panic!("This is a fake op, we don't accept it in a design."),
 			_ => panic!("Can't implement this operation."),
 		};
@@ -615,6 +621,8 @@ impl<'de> Deserialize<'de> for Cell {
 			Ok(convert_mem_v2(helper))
 		} else if helper.cell_type == *"$lut" {
 			Ok(convert_lut_ports(helper))
+		} else if helper.cell_type == *"$sop" {
+			Ok(convert_sop_ports(helper))
 		} else if helper.cell_type == *"v2f_pmux" {
 			Ok(convert_pmux_ports(helper))
 		} else if helper.cell_type.starts_with("v2f_reduce") {
@@ -764,8 +772,6 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 	}
 }
 
-// Mark of shame.
-// Wow I have the foresight of a goldfish. I should have really looked at what a LUT is mapped at before I made that huge ass commit that assumes LUTs will have single bit ports. It's like wow how could this happen to me?! Good luck for me that I didn't have this option and didn't need to do some global bullshit or you would see yet another XXX_design.rs file to fix myopic me.
 fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 	let mut new_connections = hash_map();
 	let mut new_directions = hash_map();
@@ -784,6 +790,32 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 	Cell {
 		hide_name: pre_mapped.hide_name,
 		cell_type: ImplementableOp::LUT(pre_mapped.parameters["WIDTH"].unwrap_bin_str()),
+		model: pre_mapped.model,
+		parameters: pre_mapped.parameters,
+		attributes: pre_mapped.attributes,
+		port_directions: new_directions,
+		connections: new_connections,
+	}
+}
+
+fn convert_sop_ports(pre_mapped: MappedCell) -> Cell {
+	let mut new_connections = hash_map();
+	let mut new_directions = hash_map();
+	assert!(pre_mapped.connections.contains_key("A"));
+	assert!(pre_mapped.connections.contains_key("Y"));
+	assert!(pre_mapped.port_directions.contains_key("A"));
+	assert!(pre_mapped.port_directions.contains_key("Y"));
+	assert_eq!(pre_mapped.port_directions["A"], Direction::Input);
+	assert_eq!(pre_mapped.port_directions["Y"], Direction::Output);
+	for (idx, bit) in pre_mapped.connections["A"].iter().enumerate() {
+		new_connections.insert(format!("A{}", idx), vec![*bit]);
+		new_directions.insert(format!("A{}", idx), pre_mapped.port_directions["A"]);
+	}
+	new_connections.insert("Y".to_owned(), pre_mapped.connections["Y"].clone());
+	new_directions.insert("Y".to_owned(), Direction::Output);
+	Cell {
+		hide_name: pre_mapped.hide_name,
+		cell_type: ImplementableOp::Sop(pre_mapped.parameters["WIDTH"].unwrap_bin_str()),
 		model: pre_mapped.model,
 		parameters: pre_mapped.parameters,
 		attributes: pre_mapped.attributes,

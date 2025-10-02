@@ -55,6 +55,7 @@ pub enum ImplementableOp {
 	PMux(bool, usize),
 	Mux,
 	Memory,
+	Sop(usize),
 
 	Swizzle, // Imaginary cell
 }
@@ -95,6 +96,7 @@ impl ImplementableOp {
 			ImplementableOp::ADFFE => BodyType::MultiPart,
 			ImplementableOp::ADFF => BodyType::MultiPart,
 			ImplementableOp::DFFE => BodyType::MultiPart,
+			ImplementableOp::Sop(_) => BodyType::MultiPart,
 		}
 	}
 
@@ -1434,6 +1436,7 @@ impl CheckedDesign {
 						.rev()
 						.collect_vec(),
 					mapped_cell.unwrap().parameters["WIDTH"].unwrap_bin_str(),
+					&self.nodes[nodeid].folded_expressions,
 				);
 				(input_wires, vec![output_comb])
 			},
@@ -1665,6 +1668,23 @@ impl CheckedDesign {
 					logical_design.add_dffe(sig_in[0], sig_in[1], sig_in[2], sig_out[0]);
 				(vec![w1, w2, w3], vec![c_q])
 			},
+			ImplementableOp::Sop(width) => {
+				assert_eq!(width, sig_in.len());
+				let table = mapped_cell.unwrap().parameters["TABLE"]
+					.into_bool_vec()
+					.unwrap()
+					.into_iter()
+					.rev() // blow my brains out
+					.collect_vec();
+				let (wires, sop_comb) = logical_design.add_sop(
+					sig_in,
+					sig_out[0],
+					table,
+					mapped_cell.unwrap().parameters["DEPTH"].unwrap_bin_str(),
+					&self.nodes[nodeid].folded_expressions,
+				);
+				(wires, vec![sop_comb])
+			},
 			ImplementableOp::AndBitwise
 			| ImplementableOp::OrBitwise
 			| ImplementableOp::XorBitwise
@@ -1895,7 +1915,7 @@ impl CheckedDesign {
 			};
 			let optimization_applies = matches!(
 				mapped.cell_type,
-				ImplementableOp::PMux(_, _) | ImplementableOp::LUT(_)
+				ImplementableOp::PMux(_, _) | ImplementableOp::LUT(_) | ImplementableOp::Sop(_)
 			);
 			if !optimization_applies {
 				continue;
