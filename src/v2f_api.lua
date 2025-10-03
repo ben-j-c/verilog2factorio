@@ -117,10 +117,11 @@ function get_empty_design() end
 ---@field to_design fun(self: RTL): LogicalDesignAPI
 
 --- Take verilog code and map it to RTL. Right now RTL doesn't do much.
----@param filename string
+---@param filename string|string[]
 ---@param top_mod string
+---@param include_dir string|nil
 ---@return RTL
-function yosys_load_rtl(filename, top_mod) end
+function yosys_load_rtl(filename, top_mod, include_dir) end
 
 --- Take the RTL, or filename of the verilog code and turn it into a LogicalDesign.
 ---@param rtl RTL|string

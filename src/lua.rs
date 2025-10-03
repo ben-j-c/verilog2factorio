@@ -314,7 +314,11 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 	}
 }
 
-fn method_load_rtl<P>(filenames: &[P], top_mod: String) -> Result<RTL, mlua::Error>
+fn method_load_rtl<P>(
+	filenames: &[P],
+	top_mod: String,
+	include_dir: Option<String>,
+) -> Result<RTL, mlua::Error>
 where
 	P: AsRef<Path>,
 {
@@ -357,6 +361,14 @@ where
 			.replace("{filename_out}", filename_out.as_os_str().to_str().unwrap())
 			.replace("{exe_dir}", exe_dir.to_str().unwrap())
 			.replace("{top_mod}", &top_mod);
+		let rtl_script_text = if let Some(include_dir) = include_dir {
+			rtl_script_text.replace(
+				"{include_dir}",
+				&format!(" -libdir {} ", include_dir.as_str()),
+			)
+		} else {
+			rtl_script_text.replace("{include_dir}", "")
+		};
 		let mut rtl_script_final = File::create("rtl.ys")?;
 		rtl_script_final.write_all(rtl_script_text.as_bytes())?;
 		rtl_script_final.flush()?;
@@ -1079,10 +1091,10 @@ impl FromLua for RTL {
 					let (_idx, file) = pair?;
 					filenames.push(file);
 				}
-				method_load_rtl(&filenames, "top".to_owned())
+				method_load_rtl(&filenames, "top".to_owned(), None)
 			},
 			Value::String(filename) => {
-				method_load_rtl(&[filename.to_string_lossy()], "top".to_owned())
+				method_load_rtl(&[filename.to_string_lossy()], "top".to_owned(), None)
 			},
 			Value::UserData(data) => Ok(data.borrow::<Self>()?.clone()),
 			_ => Err(Error::FromLuaConversionError {
@@ -1218,20 +1230,24 @@ pub fn get_lua() -> Result<Lua, Error> {
 
 	lua.globals().set(
 		"yosys_load_rtl",
-		lua.create_function(|_, (files, top_mod): (Value, String)| match files {
-			Value::String(filename) => method_load_rtl(&[filename.to_string_lossy()], top_mod),
-			Value::Table(table) => {
-				let mut filenames = vec![];
-				for pair in table.pairs::<u32, String>() {
-					let (_idx, file) = pair?;
-					filenames.push(file);
-				}
-				method_load_rtl(&filenames, top_mod)
+		lua.create_function(
+			|_, (files, top_mod, include_dirs): (Value, String, String)| match files {
+				Value::String(filename) => {
+					method_load_rtl(&[filename.to_string_lossy()], top_mod, Some(include_dirs))
+				},
+				Value::Table(table) => {
+					let mut filenames = vec![];
+					for pair in table.pairs::<u32, String>() {
+						let (_idx, file) = pair?;
+						filenames.push(file);
+					}
+					method_load_rtl(&filenames, top_mod, Some(include_dirs))
+				},
+				_ => Err(Error::runtime(
+					"Must be a single filename or a list of filenames.",
+				)),
 			},
-			_ => Err(Error::runtime(
-				"Must be a single filename or a list of filenames.",
-			)),
-		})?,
+		)?,
 	)?;
 
 	lua.globals().set(

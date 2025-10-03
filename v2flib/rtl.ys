@@ -1,10 +1,10 @@
 {source_read}
 read_verilog -lib {exe_dir}/v2flib/v2f_primitives.v
-hierarchy -libdir {exe_dir}/v2flib -check -top {top_mod}
+hierarchy -libdir {exe_dir}/v2flib {include_dir} -check -top {top_mod}
 
 #coarse
 proc
-flatten
+flatten -noscopeinfo
 opt_expr
 opt_clean
 check

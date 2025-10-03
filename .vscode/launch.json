@@ -103,7 +103,7 @@
 					"build",
 					"--bin=v2f",
 					"--package=v2f",
-					"--release"
+					//"--release"
 				],
 				"filter": {
 					"name": "v2f",
@@ -115,11 +115,11 @@
 			},
 			"args": [
 				"-i",
-				"tb.lua",
+				"decode.lua",
 				"-o",
 				"blueprint.json",
 			],
-			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/decoder"
+			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/decode"
 		},
 	]
 }

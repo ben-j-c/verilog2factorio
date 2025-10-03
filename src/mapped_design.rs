@@ -614,7 +614,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"$mem_v2" => ImplementableOp::Memory,
 			"$sop" => ImplementableOp::Sop(0),
 			"$swizzle" => panic!("This is a fake op, we don't accept it in a design."),
-			_ => panic!("Can't implement this operation."),
+			_ => panic!("Can't implement this operation: {}", helper.cell_type),
 		};
 
 		if helper.cell_type == *"$mem_v2" {
