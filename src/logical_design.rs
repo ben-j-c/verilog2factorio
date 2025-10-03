@@ -546,6 +546,9 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
+		if self.nodes.len() == 445 {
+			print!("");
+		}
 		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
