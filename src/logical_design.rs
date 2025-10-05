@@ -546,9 +546,6 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
-		if self.nodes.len() == 445 {
-			print!("");
-		}
 		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
@@ -1947,6 +1944,10 @@ impl LogicalDesign {
 	) -> (Vec<NodeId>, NodeId) {
 		assert_eq!(width, sig_in.len());
 		let mut counter = vec![false; width];
+
+		if self.nodes.len() == 38 {
+			print!("");
+		}
 
 		let get_ith_expr = |i: usize, bit: bool| {
 			if folded_expr.is_empty() {

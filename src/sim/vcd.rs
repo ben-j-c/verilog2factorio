@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, io};
 
+use graphviz_rust::attributes::id;
 use itertools::Itertools;
 use vcd::{Value, Vector};
 
