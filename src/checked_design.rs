@@ -613,7 +613,6 @@ impl CheckedDesign {
 
 	pub fn enforce_network_requirements(&mut self) {
 		let (_, _, _, localio_group_nodes) = self.get_groupings();
-		let mut fallback_id = 0;
 		let mut signal_choices = vec![Signal::None; self.nodes.len()];
 		for local_group in &localio_group_nodes {
 			let mut required_signals = hash_set::<i32>();
@@ -624,20 +623,12 @@ impl CheckedDesign {
 				) {
 					continue;
 				}
-				let choice = signal_lookup_table::lookup_id(&self.nodes[*nodeid].mapped_id)
-					.unwrap_or_else(|| {
-						let mut counter = 0;
-						while required_signals.contains(&fallback_id) {
-							fallback_id += 1;
-							counter += 1;
-							fallback_id %= signal_lookup_table::n_ids();
-							if counter > signal_lookup_table::n_ids() {
-								panic!("Need to add a nop after at least one port.")
-							}
-						}
-
-						fallback_id
-					});
+				let choice = signal_lookup_table::lookup_id(&self.nodes[*nodeid].mapped_id);
+				let choice = if let Some(c) = choice {
+					c
+				} else {
+					continue;
+				};
 				if !required_signals.contains(&choice) {
 					required_signals.insert(choice);
 					signal_choices[*nodeid] = choice.try_into().expect("Impl error");
@@ -713,7 +704,87 @@ impl CheckedDesign {
 	}
 
 	fn calculate_and_validate_signal_choices(&self) -> Vec<Signal> {
-		self.get_signal_choice_final()
+		let mut signal_choices = vec![Signal::None; self.nodes.len()];
+		let mut fallback_id = 0;
+		for node in &self.nodes {
+			if node.node_type == NodeType::PortBody {
+				let mut choice = Signal::None;
+				if let Some(fiid) = node.fanin.first() {
+					let attached = self.get_attached_nodes(*fiid);
+					for attachedid in attached.iter() {
+						if signal_choices[*attachedid].is_some() {
+							if choice.is_some() && choice != signal_choices[*attachedid] {
+								panic!(
+								"Conflicting signal choices for node {} attached to {:?} with previous choice {:?} and new choice {:?}.",
+								fiid, attached, choice, signal_choices[*attachedid])
+							}
+							choice = signal_choices[*attachedid];
+						}
+					}
+				}
+				if let Some(foid) = node.fanout.first() {
+					let attached = self.get_attached_nodes(*foid);
+					for attachedid in attached.iter() {
+						if signal_choices[*attachedid].is_some() {
+							if choice.is_some() && choice != signal_choices[*attachedid] {
+								panic!(
+								"Conflicting signal choices for node {} attached to {:?} with previous choice {:?} and new choice {:?}.",
+								foid, attached, choice, signal_choices[*attachedid])
+							}
+							choice = signal_choices[*attachedid];
+						}
+					}
+				}
+				if choice.is_none() {
+					choice = signal_lookup_table::lookup_id(&node.mapped_id)
+						.unwrap_or_else(|| {
+							let ret = fallback_id;
+							fallback_id += 1;
+							fallback_id %= signal_lookup_table::n_ids();
+							ret
+						})
+						.try_into()
+						.unwrap();
+				}
+				signal_choices[node.id] = choice;
+				if let Some(fiid) = node.fanin.first() {
+					signal_choices[*fiid] = choice;
+				}
+				if let Some(foid) = node.fanout.first() {
+					signal_choices[*foid] = choice;
+				}
+			}
+			if matches!(node.node_type, NodeType::CellBody { .. }) {
+				for (idx, val_opt) in node.constants.iter().enumerate() {
+					if let Some(val) = val_opt {
+						signal_choices[node.fanin[idx]] = Signal::Constant(*val)
+					}
+				}
+			}
+		}
+		for nodeid in 0..self.nodes.len() {
+			if signal_choices[nodeid].is_some() {
+				continue;
+			}
+			let attached = self.get_attached_nodes(nodeid);
+			let mut choice = Signal::None;
+			for attachedid in attached.iter() {
+				if *attachedid == nodeid {
+					continue;
+				}
+				if signal_choices[*attachedid].is_some() {
+					if choice.is_some() && choice != signal_choices[*attachedid] {
+						panic!(
+							"Got conflicting signal choices for node {} attached to {:?} with previous choice {:?} and new choice {:?}.",
+							nodeid, attached, choice, signal_choices[*attachedid],
+						)
+					}
+					choice = signal_choices[*attachedid];
+				}
+			}
+			signal_choices[nodeid] = choice;
+		}
+		signal_choices
 	}
 
 	fn elaborate_signal_choices(&self, signal_choices: &mut Vec<Signal>) {
@@ -1083,58 +1154,6 @@ impl CheckedDesign {
 					continue;
 				}
 				choice.extend(signal_choices[*localid].iter());
-			}
-			signal_choices[nodeid] = choice;
-		}
-		signal_choices
-	}
-
-	fn get_signal_choice_final(&self) -> Vec<Signal> {
-		let mut signal_choices = vec![Signal::None; self.nodes.len()];
-		let mut fallback_id = 0;
-		for node in &self.nodes {
-			if node.node_type == NodeType::PortBody {
-				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap_or_else(|| {
-					let ret = fallback_id;
-					fallback_id += 1;
-					fallback_id %= signal_lookup_table::n_ids();
-					ret
-				});
-				signal_choices[node.id] = choice.try_into().expect("Impl error");
-				if let Some(fiid) = node.fanin.first() {
-					signal_choices[*fiid] = Signal::Id(choice);
-				}
-				if let Some(foid) = node.fanout.first() {
-					signal_choices[*foid] = Signal::Id(choice);
-				}
-			}
-			if matches!(node.node_type, NodeType::CellBody { .. }) {
-				for (idx, val_opt) in node.constants.iter().enumerate() {
-					if let Some(val) = val_opt {
-						signal_choices[node.fanin[idx]] = Signal::Constant(*val)
-					}
-				}
-			}
-		}
-		for nodeid in 0..self.nodes.len() {
-			if signal_choices[nodeid].is_some() {
-				continue;
-			}
-			let attached = self.get_attached_nodes(nodeid);
-			let mut choice = Signal::None;
-			for attachedid in attached.iter() {
-				if *attachedid == nodeid {
-					continue;
-				}
-				if signal_choices[*attachedid].is_some() {
-					if choice.is_some() && choice != signal_choices[*attachedid] {
-						panic!(
-							"Got conflicting signal choices for node {} attached to {:?} with previous choice {:?} and new choice {:?}.",
-							nodeid, attached, choice, signal_choices[*attachedid],
-						)
-					}
-					choice = signal_choices[*attachedid];
-				}
 			}
 			signal_choices[nodeid] = choice;
 		}
