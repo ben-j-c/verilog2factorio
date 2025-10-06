@@ -546,6 +546,9 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
+		if self.nodes.len() == 410 {
+			print!("");
+		}
 		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
@@ -1593,7 +1596,6 @@ impl LogicalDesign {
 		let mut last_comb = None;
 		for (idx, expr_opt) in fi_exprs.iter().enumerate() {
 			if expr_opt.is_none() {
-				// A constant
 				let constant_nop = self.add_nop(input[idx], output);
 				retval.push(self.add_wire_red(vec![], vec![constant_nop]));
 				if let Some(prev) = last_comb {
@@ -1607,15 +1609,10 @@ impl LogicalDesign {
 				(input[idx], ArithmeticOperator::And, Signal::Constant(mask)),
 				output,
 			);
-			retval.push(self.add_wire_red(vec![], vec![mask_comb]));
-			if shift == 0 {
-				if let Some(prev) = last_comb {
-					self.add_wire_red(vec![prev, mask_comb], vec![]);
-				}
-			} else {
+			if shift != 0 {
 				let shift_comb = self.add_arithmetic(
 					(
-						output,
+						input[idx],
 						if shift > 0 {
 							ArithmeticOperator::Shl
 						} else {
@@ -1623,12 +1620,15 @@ impl LogicalDesign {
 						},
 						Signal::Constant(shift.abs()),
 					),
-					output,
+					input[idx],
 				);
 				self.add_wire_red(vec![shift_comb], vec![mask_comb]);
-				if let Some(prev) = last_comb {
-					self.add_wire_red(vec![prev, mask_comb], vec![]);
-				}
+				retval.push(self.add_wire_red(vec![], vec![shift_comb]));
+			} else {
+				retval.push(self.add_wire_red(vec![], vec![mask_comb]));
+			}
+			if let Some(prev) = last_comb {
+				self.add_wire_red(vec![prev, mask_comb], vec![]);
 			}
 			last_comb = Some(mask_comb);
 		}
@@ -1944,10 +1944,6 @@ impl LogicalDesign {
 	) -> (Vec<NodeId>, NodeId) {
 		assert_eq!(width, sig_in.len());
 		let mut counter = vec![false; width];
-
-		if self.nodes.len() == 38 {
-			print!("");
-		}
 
 		let get_ith_expr = |i: usize, bit: bool| {
 			if folded_expr.is_empty() {

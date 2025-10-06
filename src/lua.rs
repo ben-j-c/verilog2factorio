@@ -1231,9 +1231,9 @@ pub fn get_lua() -> Result<Lua, Error> {
 	lua.globals().set(
 		"yosys_load_rtl",
 		lua.create_function(
-			|_, (files, top_mod, include_dirs): (Value, String, String)| match files {
+			|_, (files, top_mod, include_dirs): (Value, String, Option<String>)| match files {
 				Value::String(filename) => {
-					method_load_rtl(&[filename.to_string_lossy()], top_mod, Some(include_dirs))
+					method_load_rtl(&[filename.to_string_lossy()], top_mod, include_dirs)
 				},
 				Value::Table(table) => {
 					let mut filenames = vec![];
@@ -1241,7 +1241,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 						let (_idx, file) = pair?;
 						filenames.push(file);
 					}
-					method_load_rtl(&filenames, top_mod, Some(include_dirs))
+					method_load_rtl(&filenames, top_mod, include_dirs)
 				},
 				_ => Err(Error::runtime(
 					"Must be a single filename or a list of filenames.",

@@ -52,7 +52,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::test10",
+				"tests::logical_design_tests::swizzle_riscv_branch",
 			],
 			"cwd": "${workspaceFolder}"
 		},
@@ -115,11 +115,11 @@
 			},
 			"args": [
 				"-i",
-				"decode.lua",
+				"tb.lua",
 				"-o",
 				"blueprint.json",
 			],
-			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/decode"
+			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/decoder"
 		},
 	]
 }

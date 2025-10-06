@@ -317,7 +317,8 @@ impl SimState {
 		} else {
 			0
 		};
-		Self::execute_decider_op(left, expr.1, right)
+		let res = Self::execute_decider_op(left, expr.1, right);
+		res
 	}
 
 	pub(super) fn compute_decider_comb(

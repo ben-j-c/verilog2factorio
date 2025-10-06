@@ -7,9 +7,9 @@ use std::{
 };
 
 use crate::{
-	checked_design::CheckedDesign, logical_design::*, mapped_design::MappedDesign,
-	phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
-	sim::SimState,
+	checked_design::CheckedDesign, connected_design::CoarseExpr, logical_design::*,
+	mapped_design::MappedDesign, phy::PhysicalDesign, serializable_design::SerializableDesign,
+	signal_lookup_table, sim::SimState,
 };
 
 #[cfg(test)]
@@ -977,4 +977,47 @@ fn sim_srl() {
 	let outp = sim.probe_lamp_state(lamp);
 	assert_eq!(outp, Some(true));
 	assert_eq!(sim.probe_red_out(outp_wire), vec![(2, 0xffff)]);
+}
+
+#[test]
+/// An example test from the a riscv decoder
+fn swizzle_riscv_branch() {
+	let opcode: i32 = 1910063075;
+	let excted_closed_form = (opcode & 0b111_1111) + ((opcode >> 5) & 0b11_1000_0000);
+	let expected = 483;
+	assert_eq!(excted_closed_form, expected);
+	let mut logd = LogicalDesign::new();
+	let instruction = logd.add_constant(vec![Signal::Id(0)], vec![opcode]);
+	let (swizzle_wires, swizzle_comb) = logd.add_swizzle(
+		vec![Signal::Id(0), Signal::Id(0)],
+		vec![
+			Some(CoarseExpr::DriverChunk {
+				driver_ioid: 0,
+				shift: 0,
+				bit_start: 0,
+				bit_end: 7,
+			}),
+			Some(CoarseExpr::DriverChunk {
+				driver_ioid: 0,
+				shift: -5,
+				bit_start: 7,
+				bit_end: 10,
+			}),
+		],
+		Signal::Id(1),
+	);
+	let lamp = logd.add_lamp((
+		Signal::Id(1),
+		DeciderOperator::Equal,
+		Signal::Constant(expected),
+	));
+	logd.connect_red(instruction, swizzle_wires[0]);
+	logd.connect_red(instruction, swizzle_wires[1]);
+	let outp_wire = logd.add_wire_red_simple(swizzle_comb, lamp);
+
+	let mut sim = SimState::new(Arc::new(RwLock::new(logd)));
+	sim.step(3);
+	let outp = sim.probe_lamp_state(lamp);
+	assert_eq!(sim.probe_red_out(outp_wire), vec![(1, expected)]);
+	assert_eq!(outp, Some(true));
 }
