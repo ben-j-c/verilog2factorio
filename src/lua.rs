@@ -756,6 +756,42 @@ impl UserData for LogicalDesignAPI {
 					logd: this.logd.clone(),
 				}))
 		});
+		methods.add_method("in_ports", |_, this, _: ()| {
+			Ok(this
+				.logd
+				.read()
+				.unwrap()
+				.get_in_port_nodes()
+				.into_iter()
+				.map(|(name, id)| {
+					(
+						name,
+						Constant {
+							id,
+							logd: this.logd.clone(),
+						},
+					)
+				})
+				.collect::<HashM<String, Constant>>())
+		});
+		methods.add_method("out_ports", |_, this, _: ()| {
+			Ok(this
+				.logd
+				.read()
+				.unwrap()
+				.get_out_port_nodes()
+				.into_iter()
+				.map(|(name, id)| {
+					(
+						name,
+						Lamp {
+							id,
+							logd: this.logd.clone(),
+						},
+					)
+				})
+				.collect::<HashM<String, Lamp>>())
+		});
 		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
 			Ok(format!("{}", this.logd.read().unwrap()))
 		});

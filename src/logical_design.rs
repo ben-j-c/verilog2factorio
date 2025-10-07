@@ -2395,6 +2395,14 @@ impl LogicalDesign {
 			.map(|v| v.id)
 	}
 
+	pub fn get_out_port_nodes(&self) -> Vec<(String, NodeId)> {
+		self.ports
+			.iter()
+			.filter(|v| v.direction == Direction::Output)
+			.map(|v| (v.name.clone(), v.id))
+			.collect_vec()
+	}
+
 	pub fn get_in_port_node<S>(&self, name: S) -> Option<NodeId>
 	where
 		S: AsRef<str>,
@@ -2403,6 +2411,14 @@ impl LogicalDesign {
 			.iter()
 			.find(|v| v.name == name.as_ref() && v.direction == Direction::Input)
 			.map(|v| v.id)
+	}
+
+	pub fn get_in_port_nodes(&self) -> Vec<(String, NodeId)> {
+		self.ports
+			.iter()
+			.filter(|v| v.direction == Direction::Input)
+			.map(|v| (v.name.clone(), v.id))
+			.collect_vec()
 	}
 
 	pub fn get_named_node<S>(&self, name: S) -> Option<NodeId>

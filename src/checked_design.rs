@@ -118,6 +118,18 @@ impl ImplementableOp {
 		}
 	}
 
+	pub fn is_dff(&self) -> bool {
+		matches!(
+			self,
+			ImplementableOp::DFF
+				| ImplementableOp::SDFF
+				| ImplementableOp::ADFF
+				| ImplementableOp::ADFFE
+				| ImplementableOp::DFFE
+				| ImplementableOp::SDFFE
+		)
+	}
+
 	pub fn get_decider_op(&self) -> Option<DeciderOperator> {
 		match self {
 			ImplementableOp::LessThan => Some(DeciderOperator::LessThan),
@@ -204,6 +216,23 @@ pub(crate) enum BodyType {
 }
 
 #[derive(Debug, Clone)]
+enum TimingBoundary {
+	Pre,
+	Post,
+	None,
+}
+
+impl TimingBoundary {
+	fn in_none(&self) -> bool {
+		matches!(self, TimingBoundary::None)
+	}
+
+	fn is_some(&self) -> bool {
+		!self.in_none()
+	}
+}
+
+#[derive(Debug, Clone)]
 struct Node {
 	id: NodeId,
 	node_type: NodeType,
@@ -213,16 +242,7 @@ struct Node {
 	keep: bool,
 	constants: Vec<Option<i32>>,
 	folded_expressions: Vec<Option<(Signal, DeciderOperator, Signal)>>,
-}
-
-impl Node {
-	#[allow(dead_code)]
-	fn is_port_input(&self) -> bool {
-		match self.node_type {
-			NodeType::PortInput { .. } => true,
-			_ => false,
-		}
-	}
+	timing_boundary: TimingBoundary,
 }
 
 impl Default for CheckedDesign {
@@ -270,6 +290,7 @@ impl CheckedDesign {
 			constants: vec![],
 			folded_expressions: vec![],
 			keep: false,
+			timing_boundary: TimingBoundary::None,
 		});
 		if let Some(connected_id) = connected_id {
 			if connected_id != usize::MAX {
@@ -410,6 +431,10 @@ impl CheckedDesign {
 									},
 								);
 								self.connect(nodeid, id);
+								if cell.cell_type.is_dff() {
+									self.nodes[id].timing_boundary = TimingBoundary::Pre;
+									self.nodes[nodeid].timing_boundary = TimingBoundary::Post;
+								}
 							},
 							Direction::Inout => panic!("Not supported"),
 						};
@@ -790,19 +815,6 @@ impl CheckedDesign {
 	fn elaborate_signal_choices(&self, signal_choices: &mut Vec<Signal>) {
 		// Check that we now only have 0 or 1 option for a signal
 		let topo_order = self.get_topo_order();
-		//topo_order
-		//	.iter()
-		//	.map(|x| {
-		//		(
-		//			*x,
-		//			self.node_type(*x).clone(),
-		//			signal_choices[*x],
-		//			self.nodes[*x].fanin.clone(),
-		//			self.nodes[*x].fanout.clone(),
-		//		)
-		//	})
-		//	.for_each(|tpl| println!("{:?}", tpl));
-		// Final signal resolve
 		for nodeid in topo_order {
 			if signal_choices[nodeid].is_some() {
 				continue;
@@ -816,12 +828,13 @@ impl CheckedDesign {
 					}
 				},
 				NodeType::CellOutput { .. } => {
-					if node
+					if let Some(sink_signal) = node
 						.fanout
 						.iter()
-						.any(|foid| signal_choices[*foid].is_some())
+						.map(|foid| signal_choices[*foid])
+						.find(Signal::is_some)
 					{
-						signal_choices[nodeid] = signal_choices[node.fanin[0]];
+						signal_choices[nodeid] = sink_signal;
 						continue;
 					}
 				},
@@ -1165,7 +1178,7 @@ impl CheckedDesign {
 		let mut topological_order = vec![];
 		let mut root_nodes = vec![];
 		for node in &self.nodes {
-			if node.fanin.is_empty() {
+			if node.fanin.is_empty() || matches!(node.timing_boundary, TimingBoundary::Pre) {
 				root_nodes.push(node.id);
 			}
 		}
@@ -1177,6 +1190,9 @@ impl CheckedDesign {
 			let id = queue.pop_front().unwrap();
 			topo_seen.insert(id);
 			topological_order.push(id);
+			if matches!(self.nodes[id].timing_boundary, TimingBoundary::Post) {
+				continue;
+			}
 			for foid in &self.nodes[id].fanout {
 				if self.nodes[*foid]
 					.fanin
@@ -1187,23 +1203,8 @@ impl CheckedDesign {
 				}
 			}
 		}
+		assert_eq!(topological_order.len(), self.nodes.len());
 		topological_order
-	}
-
-	#[allow(dead_code)]
-	fn get_depth(&self) -> Vec<i32> {
-		let topo = self.get_topo_order();
-		let mut depth = vec![0; self.nodes.len()];
-		for nodeid in &topo {
-			depth[*nodeid] = self.nodes[*nodeid]
-				.fanin
-				.iter()
-				.map(|fiid| depth[*fiid])
-				.max()
-				.unwrap_or(-1)
-				+ 1
-		}
-		depth
 	}
 
 	pub fn apply_onto(&self, logical_design: &mut LogicalDesign, mapped_design: &MappedDesign) {
@@ -1673,14 +1674,9 @@ impl CheckedDesign {
 				(vec![wire_data, wire_clk, wire_en, wire_arst], vec![comb_q])
 			},
 			ImplementableOp::ADFF => {
-				let (w1, w2, _w3, w4, c_q) = logical_design.add_adffe(
-					sig_in[0],
-					sig_in[1],
-					Signal::Constant(1),
-					sig_in[2],
-					sig_out[0],
-				);
-				(vec![w1, w2, w4], vec![c_q])
+				let (dw, cw, aw, qc, _lb) =
+					logical_design.add_adff_isolated(sig_in[0], sig_in[1], sig_in[2], sig_out[0]);
+				(vec![dw, cw, aw], vec![qc])
 			},
 			ImplementableOp::DFFE => {
 				let (w1, w2, w3, c_q) =
