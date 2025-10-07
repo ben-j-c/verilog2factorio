@@ -1745,7 +1745,6 @@ impl LogicalDesign {
 			counts.len(),
 			"Tried to create constant combinator with mismatched outputs and counts"
 		);
-
 		self.add_node(
 			NodeFunction::Constant {
 				enabled: true,

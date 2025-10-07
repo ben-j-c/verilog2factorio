@@ -222,16 +222,6 @@ enum TimingBoundary {
 	None,
 }
 
-impl TimingBoundary {
-	fn in_none(&self) -> bool {
-		matches!(self, TimingBoundary::None)
-	}
-
-	fn is_some(&self) -> bool {
-		!self.in_none()
-	}
-}
-
 #[derive(Debug, Clone)]
 struct Node {
 	id: NodeId,
@@ -813,10 +803,10 @@ impl CheckedDesign {
 	}
 
 	fn elaborate_signal_choices(&self, signal_choices: &mut Vec<Signal>) {
-		// Check that we now only have 0 or 1 option for a signal
 		let topo_order = self.get_topo_order();
 		for nodeid in topo_order {
-			if signal_choices[nodeid].is_some() {
+			let choice = signal_choices[nodeid];
+			if choice.is_some() {
 				continue;
 			}
 			let node = &self.nodes[nodeid];
@@ -872,20 +862,6 @@ impl CheckedDesign {
 				}
 			}
 		}
-		//println!("\n\n");
-		//let topo_order = self.get_topo_order();
-		//topo_order
-		//	.iter()
-		//	.map(|x| {
-		//		(
-		//			*x,
-		//			self.node_type(*x).clone(),
-		//			signal_choices[*x],
-		//			self.nodes[*x].fanin.clone(),
-		//			self.nodes[*x].fanout.clone(),
-		//		)
-		//	})
-		//	.for_each(|tpl| println!("{:?}", tpl));
 	}
 
 	fn signals_correctness_check(&self, signal_choices: &[Signal]) {
@@ -1132,45 +1108,6 @@ impl CheckedDesign {
 			attached_group_nodes,
 			localio_group_nodes,
 		)
-	}
-
-	#[allow(dead_code)]
-	fn get_signal_choices(&self) -> Vec<Vec<i32>> {
-		let mut signal_choices = vec![vec![]; self.nodes.len()];
-		let mut fallback_id = 0;
-		for node in &self.nodes {
-			if node.node_type == NodeType::PortBody {
-				let choice = signal_lookup_table::lookup_id(&node.mapped_id).unwrap_or_else(|| {
-					let ret = fallback_id;
-					fallback_id += 1;
-					fallback_id %= signal_lookup_table::n_ids();
-					ret
-				});
-				signal_choices[node.id] = vec![choice];
-				if let Some(port_in_id) = node.fanin.first() {
-					signal_choices[*port_in_id] = vec![choice];
-				}
-				if let Some(port_out_id) = node.fanout.first() {
-					signal_choices[*port_out_id] = vec![choice];
-				}
-			}
-		}
-		for nodeid in 0..self.nodes.len() {
-			if !signal_choices[nodeid].is_empty() {
-				continue;
-			}
-			let localio = self.get_local_cell_io_network(nodeid);
-			let attached = self.get_attached_nodes(nodeid);
-			let mut choice = vec![];
-			for localid in localio.iter() {
-				if attached.contains(localid) {
-					continue;
-				}
-				choice.extend(signal_choices[*localid].iter());
-			}
-			signal_choices[nodeid] = choice;
-		}
-		signal_choices
 	}
 
 	fn get_topo_order(&self) -> Vec<NodeId> {

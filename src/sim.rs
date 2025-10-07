@@ -185,8 +185,8 @@ impl SimState {
 	}
 
 	pub fn probe_red_out(&self, id: NodeId) -> Vec<(i32, i32)> {
-		let red = self.state[id.0]
-			.red
+		let state = &self.state[id.0].red;
+		let red = state
 			.data
 			.iter()
 			.map(|(k, v)| (*k, *v))
@@ -856,7 +856,7 @@ impl SimState {
 		(vec![], vec![])
 	}
 
-	pub fn play_vcd(
+	pub fn apply_vcd(
 		&mut self,
 		vcd: &VCD,
 		inputs: HashM<String, NodeId>,
@@ -882,6 +882,12 @@ impl SimState {
 			{
 				for (wire_name, (signal, id)) in &outputs {
 					let val = vcd.get_value(wire_name, vcd_time);
+					if let Some(v) = &val {
+						if v.iter().any(|b| matches!(b, Value::X | Value::Z)) {
+							println!("WARN: {wire_name} has an X or Z. This can match anything. Regs should be initialized to 0.");
+							continue;
+						}
+					}
 					let expected_count: i32 = convert_to_signal_count(&val);
 					let seen_signals = self.probe_input(*id, NET_RED_GREEN);
 					for (sig, actual_count) in seen_signals {

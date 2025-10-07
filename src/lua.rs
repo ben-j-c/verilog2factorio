@@ -1046,7 +1046,7 @@ impl UserData for SimStateAPI {
 					}
 					outputs
 				};
-				Ok(this.sim.write().unwrap().play_vcd(
+				Ok(this.sim.write().unwrap().apply_vcd(
 					&vcd,
 					inputs,
 					outputs,
