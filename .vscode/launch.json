@@ -115,11 +115,11 @@
 			},
 			"args": [
 				"-i",
-				"csr_regfile.lua",
+				"csr.lua",
 				"-o",
 				"blueprint.json",
 			],
-			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/csr_regfile"
+			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/csr"
 		},
 	]
 }
