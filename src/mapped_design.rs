@@ -324,6 +324,7 @@ impl Cell {
 					.map(|i| format!("A{}", i))
 					.chain(vec!["Y".to_owned()])
 					.collect_vec(),
+				ImplementableOp::Not => ay(),
 			},
 		}
 	}
@@ -554,6 +555,7 @@ impl Display for ImplementableOp {
 			ImplementableOp::ReduceAnd => "v2f_reduce_and",
 			ImplementableOp::V2FRollingAccumulate => "v2f_rolling_accumulate",
 			ImplementableOp::Neg => "v2f_neg",
+			ImplementableOp::Not => "v2f_not",
 			ImplementableOp::PMux(_, _) => "v2f_pmux",
 			ImplementableOp::Mux => "v2f_mux",
 			ImplementableOp::DFF => "$dff",
@@ -602,6 +604,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_reduce_and" => ImplementableOp::ReduceAnd,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
 			"v2f_neg" => ImplementableOp::Neg,
+			"v2f_not" => ImplementableOp::Not,
 			"v2f_pmux" => ImplementableOp::PMux(false, 0),
 			"v2f_mux" => ImplementableOp::Mux,
 			"$dff" => ImplementableOp::DFF,

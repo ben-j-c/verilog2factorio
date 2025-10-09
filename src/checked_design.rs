@@ -44,6 +44,7 @@ pub enum ImplementableOp {
 	ReduceAnd,
 	ReduceOr,
 	Neg,
+	Not,
 	V2FRollingAccumulate,
 	DFF,
 	SDFF,
@@ -91,6 +92,7 @@ impl ImplementableOp {
 			ImplementableOp::ReduceAnd => BodyType::MultiPart,
 			ImplementableOp::ReduceOr => BodyType::MultiPart,
 			ImplementableOp::Neg => BodyType::AY,
+			ImplementableOp::Not => BodyType::AY,
 			ImplementableOp::SDFF => BodyType::MultiPart,
 			ImplementableOp::SDFFE => BodyType::MultiPart,
 			ImplementableOp::ADFFE => BodyType::MultiPart,
@@ -1654,6 +1656,7 @@ impl CheckedDesign {
 			| ImplementableOp::GreaterThanEqual
 			| ImplementableOp::LessThanEqual
 			| ImplementableOp::Neg
+			| ImplementableOp::Not
 			| ImplementableOp::V2FRollingAccumulate => panic!("This is not a multi-part op."),
 		};
 		(input_wires, outputs)
@@ -1689,6 +1692,13 @@ impl CheckedDesign {
 					sig_out,
 				);
 				(neg, neg)
+			},
+			ImplementableOp::Not => {
+				let not = logical_design.add_arithmetic(
+					(Signal::Constant(-1), ArithmeticOperator::Xor, sig_in),
+					sig_out,
+				);
+				(not, not)
 			},
 			_ => {
 				unreachable!()
