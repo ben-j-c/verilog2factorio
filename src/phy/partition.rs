@@ -156,7 +156,7 @@ mod test {
 	#[test]
 	fn csr() {
 		let conn = vec![vec![1], vec![0]];
-		let (adj, idx_adj) = convert_connectivity_to_csr(&conn);
+		let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(&conn);
 		assert_eq!(adj, vec![1, 0]);
 		assert_eq!(idx_adj, vec![0, 1, 2]);
 		println!("{:?}, {:?}", adj, idx_adj);
@@ -172,7 +172,7 @@ mod test {
 			vec![0, 1, 3],
 			vec![3],
 		];
-		let (adj, idx_adj) = convert_connectivity_to_csr(&conn);
+		let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(&conn);
 		assert_eq!(adj, vec![1, 4, 0, 2, 4, 1, 3, 2, 4, 5, 0, 1, 3, 3]);
 		assert_eq!(idx_adj, vec![0, 2, 5, 7, 10, 13, 14]);
 		println!("{:?}, {:?}", adj, idx_adj);
