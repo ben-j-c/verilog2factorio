@@ -9,7 +9,6 @@ type NodeId = usize;
 
 use itertools::{chain, izip, Itertools};
 
-use crate::mapped_design::MappedDesign;
 use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
 	logical_design::{
@@ -18,8 +17,9 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::{hash_set, index_of},
+	util::{hash_set, index_of, HashS},
 };
+use crate::{mapped_design::MappedDesign, util::HashM};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ImplementableOp {
@@ -804,7 +804,10 @@ impl CheckedDesign {
 		signal_choices
 	}
 
-	fn elaborate_signal_choices(&self, signal_choices: &mut Vec<Signal>) {
+	fn elaborate_signal_choices(
+		&self,
+		signal_choices: &mut Vec<Signal>,
+	) -> Result<(), Vec<NodeId>> {
 		let topo_order = self.get_topo_order();
 		for nodeid in topo_order {
 			let choice = signal_choices[nodeid];
@@ -854,16 +857,18 @@ impl CheckedDesign {
 				while set_io.contains(&sig) {
 					sig += 1;
 				}
-				if self.set_signal(
-					signal_choices,
-					*id,
-					sig.try_into()
-						.expect("Too many signals on one wire network"),
-				) {
+				let sig_decision: Signal = match sig.try_into() {
+					Ok(s) => s,
+					Err(_) => {
+						return Err(local_io);
+					},
+				};
+				if self.set_signal(signal_choices, *id, sig_decision) {
 					sig += 1;
 				}
 			}
 		}
+		Ok(())
 	}
 
 	fn signals_correctness_check(&self, signal_choices: &[Signal]) {
@@ -928,9 +933,136 @@ impl CheckedDesign {
 			}
 		}
 		let mut signal_choices = self.calculate_and_validate_signal_choices();
-		self.elaborate_signal_choices(&mut signal_choices);
+		loop {
+			match self.elaborate_signal_choices(&mut signal_choices) {
+				Ok(_) => break,
+				Err(local_io) => {
+					self.partition_io_network(local_io);
+				},
+			}
+		}
+
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
+	}
+
+	fn partition_io_network(&mut self, mut local_io: Vec<NodeId>) {
+		use metis;
+		{
+			let mut seen = HashS::default();
+			let mut idx = 0;
+			while idx < local_io.len() {
+				let id = local_io[idx];
+				let node = &self.nodes[id];
+				match &node.node_type {
+					NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
+						if seen.contains(&node.fanout[0]) {
+							continue;
+						}
+						seen.insert(node.fanout[0]);
+						local_io.push(node.fanout[0]);
+					},
+					NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
+						if seen.contains(&node.fanin[0]) {
+							continue;
+						}
+						seen.insert(node.fanin[0]);
+						local_io.push(node.fanin[0]);
+					},
+					_ => {},
+				}
+				idx += 1;
+			}
+		}
+		let id_to_idx = local_io
+			.iter()
+			.enumerate()
+			.map(|(idx, id)| (*id, idx))
+			.collect::<HashM<NodeId, usize>>();
+		let mut connectivity = vec![vec![]; local_io.len()];
+		for (idx, id) in local_io.iter().enumerate() {
+			let attached = self.get_attached_nodes(*id);
+			connectivity[idx] = attached.into_iter().map(|id| id_to_idx[&id]).collect();
+			let node = &self.nodes[*id];
+			match &node.node_type {
+				NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
+					connectivity[idx].push(id_to_idx[&node.fanout[0]]);
+				},
+				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
+					connectivity[idx].push(id_to_idx[&node.fanin[0]]);
+				},
+				NodeType::PortBody => {
+					if id_to_idx.contains_key(&node.fanout[0]) {
+						connectivity[idx].push(id_to_idx[&node.fanout[0]]);
+					}
+					if id_to_idx.contains_key(&node.fanin[0]) {
+						connectivity[idx].push(id_to_idx[&node.fanin[0]]);
+					}
+				},
+				NodeType::CellBody { .. } => {
+					for fiid in &node.fanin {
+						if id_to_idx.contains_key(fiid) {
+							connectivity[idx].push(id_to_idx[fiid]);
+						}
+					}
+					for foid in &node.fanout {
+						if id_to_idx.contains_key(foid) {
+							connectivity[idx].push(id_to_idx[foid]);
+						}
+					}
+				},
+				_ => {},
+			}
+		}
+		let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(&connectivity);
+		let graph = metis::Graph::new(1, 2, &idx_adj, &adj).unwrap();
+		let mut partition = vec![0; connectivity.len()];
+		let ret = graph.part_recursive(&mut partition).unwrap();
+		println!("Have to incur {ret} nops to enforce network requirements.");
+		for (idx, id) in local_io.iter().enumerate() {
+			let node = &self.nodes[*id];
+			match &node.node_type {
+				NodeType::PortInput { .. } | NodeType::CellInput { .. } => {
+					let has_been_cut = {
+						let body_id = node.fanout[0];
+						let source_id = node.fanin[0];
+						let source_body_id = self.nodes[source_id].fanin[0];
+						partition[idx] != partition[id_to_idx[&body_id]]
+							|| partition[idx] != partition[id_to_idx[&source_id]]
+							|| partition[idx] != partition[id_to_idx[&source_body_id]]
+					};
+					let fiid = node.fanin[0];
+					if has_been_cut {
+						self.disconnect(fiid, *id);
+						let nop = self.new_node(
+							"$nop",
+							NodeType::CellBody {
+								cell_type: BodyType::Nop,
+							},
+						);
+						let a = self.new_node(
+							"$nop",
+							NodeType::CellInput {
+								port: "A".to_string(),
+								connected_id: usize::MAX,
+							},
+						);
+						let y = self.new_node(
+							"$nop",
+							NodeType::CellOutput {
+								port: "Y".to_owned(),
+								connected_id: usize::MAX,
+							},
+						);
+						self.connect(fiid, a);
+						self.connect(a, nop);
+						self.connect(nop, y);
+						self.connect(y, *id);
+					};
+				},
+				_ => {},
+			}
+		}
 	}
 
 	fn set_signal(&self, signals: &mut Vec<Signal>, nodeid: NodeId, signal: Signal) -> bool {

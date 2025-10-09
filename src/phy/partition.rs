@@ -108,25 +108,11 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 }
 
 pub(crate) fn metis(connectivity: &Vec<Vec<usize>>, n_parts: i32) -> (Vec<i32>, i32) {
-	let (adj, idx_adj) = convert_connectivity_to_csr(connectivity);
+	let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(connectivity);
 	let graph = metis::Graph::new(1, n_parts, &idx_adj, &adj).unwrap();
 	let mut partition = vec![0; connectivity.len()];
 	let ret = graph.part_recursive(&mut partition).unwrap();
 	(partition, ret)
-}
-
-pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, Vec<i32>) {
-	let mut idx_adj = vec![0];
-	let mut adj = vec![];
-	let mut idx = 0;
-	for neighbors in conn.iter() {
-		for neigh in neighbors.iter().sorted() {
-			adj.push(*neigh as i32);
-			idx += 1;
-		}
-		idx_adj.push(idx);
-	}
-	(adj, idx_adj)
 }
 
 pub(crate) fn report_partition_quality(

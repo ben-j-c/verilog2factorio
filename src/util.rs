@@ -73,3 +73,17 @@ pub(crate) fn index_of(strings: &[&str], target: &str) -> Option<usize> {
 	}
 	None
 }
+
+pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, Vec<i32>) {
+	let mut idx_adj = vec![0];
+	let mut adj = vec![];
+	let mut idx = 0;
+	for neighbors in conn.iter() {
+		for neigh in neighbors.iter().sorted() {
+			adj.push(*neigh as i32);
+			idx += 1;
+		}
+		idx_adj.push(idx);
+	}
+	(adj, idx_adj)
+}

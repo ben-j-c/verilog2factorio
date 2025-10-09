@@ -379,7 +379,7 @@ module v2f_rule_mux (A, B, S, Y);
 	input [WIDTH-1:0] B;
 	input S;
 	output [WIDTH-1:0] Y;
-	wire _TECHMAP_FAIL_ = WIDTH > 32;
+	wire _TECHMAP_FAIL_ = WIDTH > 32 || WIDTH <= 2;
 	v2f_mux #(.WIDTH(WIDTH),)
 		_TECHMAP_REPLACE_(.A(A), .B(B), .S(S), .Y(Y));
 	// Blackbox
