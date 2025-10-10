@@ -952,7 +952,7 @@ impl LogicalDesign {
 				NET_RED,
 				NET_NONE,
 			);
-			self.add_decider_out_input_count(inp, b[i], NET_RED);
+			self.add_decider_out_input_count(inp, Signal::Id(i as i32), NET_RED);
 			mux_wires.push(self.add_wire_red(vec![], vec![inp]));
 			if i != 0 {
 				self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]);

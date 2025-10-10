@@ -231,7 +231,7 @@ impl Default for Config {
 				radial_k2: 7.270_569_3,
 			},
 			parition: ConfigPartition {
-				target_size: 32,
+				target_size: 20,
 				side_length_single_partition_scale_factor: 1.4,
 			},
 			routing: ConfigRouting { max_margin: 10 },

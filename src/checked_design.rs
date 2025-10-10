@@ -2,6 +2,8 @@ use core::panic;
 use std::{
 	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
+	i32,
+	mem::swap,
 	usize, vec,
 };
 
@@ -938,6 +940,7 @@ impl CheckedDesign {
 				Ok(_) => break,
 				Err(local_io) => {
 					self.partition_io_network(local_io);
+					signal_choices.resize(self.nodes.len(), Signal::None);
 				},
 			}
 		}
@@ -957,17 +960,19 @@ impl CheckedDesign {
 				match &node.node_type {
 					NodeType::CellInput { .. } | NodeType::PortInput { .. } => {
 						if seen.contains(&node.fanout[0]) {
-							continue;
+							//continue;
+						} else {
+							seen.insert(node.fanout[0]);
+							local_io.push(node.fanout[0]);
 						}
-						seen.insert(node.fanout[0]);
-						local_io.push(node.fanout[0]);
 					},
 					NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 						if seen.contains(&node.fanin[0]) {
-							continue;
+							//continue;
+						} else {
+							seen.insert(node.fanin[0]);
+							local_io.push(node.fanin[0]);
 						}
-						seen.insert(node.fanin[0]);
-						local_io.push(node.fanin[0]);
 					},
 					_ => {},
 				}
@@ -991,15 +996,7 @@ impl CheckedDesign {
 				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 					connectivity[idx].push(id_to_idx[&node.fanin[0]]);
 				},
-				NodeType::PortBody => {
-					if id_to_idx.contains_key(&node.fanout[0]) {
-						connectivity[idx].push(id_to_idx[&node.fanout[0]]);
-					}
-					if id_to_idx.contains_key(&node.fanin[0]) {
-						connectivity[idx].push(id_to_idx[&node.fanin[0]]);
-					}
-				},
-				NodeType::CellBody { .. } => {
+				NodeType::CellBody { .. } | NodeType::PortBody => {
 					for fiid in &node.fanin {
 						if id_to_idx.contains_key(fiid) {
 							connectivity[idx].push(id_to_idx[fiid]);
@@ -1014,18 +1011,34 @@ impl CheckedDesign {
 				_ => {},
 			}
 		}
+		let n_drivers = local_io
+			.iter()
+			.filter(|id| {
+				matches!(
+					self.node_type(**id),
+					NodeType::PortOutput { .. } | NodeType::CellOutput { .. }
+				)
+			})
+			.count();
+		let min_n_parts = (n_drivers / signal_lookup_table::n_ids() as usize).max(2) as i32;
 		let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(&connectivity);
-		let graph = metis::Graph::new(1, 2, &idx_adj, &adj).unwrap();
 		let mut partition = vec![0; connectivity.len()];
-		let ret = graph.part_recursive(&mut partition).unwrap();
-		println!("Have to incur {ret} nops to enforce network requirements.");
+		let graph = metis::Graph::new(1, min_n_parts, &idx_adj, &adj).unwrap();
+		let graph = graph.set_option(metis::option::UFactor(150));
+		let ret = graph.part_recursive(&mut partition).unwrap() / 2;
+
+		println!("Have to incur ~{ret} nops to enforce network requirements.");
 		for (idx, id) in local_io.iter().enumerate() {
 			let node = &self.nodes[*id];
 			match &node.node_type {
 				NodeType::PortInput { .. } | NodeType::CellInput { .. } => {
 					let has_been_cut = {
 						let body_id = node.fanout[0];
-						let source_id = node.fanin[0];
+						let source_id = if node.fanin.is_empty() {
+							continue;
+						} else {
+							node.fanin[0]
+						};
 						let source_body_id = self.nodes[source_id].fanin[0];
 						partition[idx] != partition[id_to_idx[&body_id]]
 							|| partition[idx] != partition[id_to_idx[&source_id]]

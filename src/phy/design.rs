@@ -1337,18 +1337,20 @@ impl PhysicalDesign {
 				continue;
 			}
 			for route in &node.routes {
-				route_edges.push((
-					route.input_sided,
-					PhyId(id),
-					route.near_side_pole_id,
-					WireColour::Red,
-				));
-				route_edges.push((
-					route.input_sided,
-					PhyId(id),
-					route.near_side_pole_id,
-					WireColour::Green,
-				));
+				if self.close_enough_to_connect_phy(logical, PhyId(id), route.near_side_pole_id) {
+					route_edges.push((
+						route.input_sided,
+						PhyId(id),
+						route.near_side_pole_id,
+						WireColour::Red,
+					));
+					route_edges.push((
+						route.input_sided,
+						PhyId(id),
+						route.near_side_pole_id,
+						WireColour::Green,
+					));
+				}
 			}
 			// Naming is from perspective of the foreign node.
 			let far_side_ld_id = node.logic;
@@ -2231,6 +2233,21 @@ impl PhysicalDesign {
 		let near_side_pole_id = last_id;
 		let mut far_side_pole_id = last_id;
 		while let Some(loc) = path.pop() {
+			{
+				let curr_id = self.global_space[(loc.0, loc.1)];
+				if curr_id != PhyId::default()
+					&& self.nodes[curr_id.0].logic == self.nodes[src.0].logic
+				{
+					last_id = curr_id;
+					far_side_pole_id = last_id;
+					continue;
+				} else if curr_id != PhyId::default()
+					&& self.nodes[curr_id.0].logic != self.nodes[src.0].logic
+				{
+					panic!("Overwritting existing path.");
+				}
+			}
+
 			let id = PhyId(self.nodes.len());
 			self.nodes.push(PhyNode {
 				id,
@@ -2287,10 +2304,10 @@ impl PhysicalDesign {
 			&SpaceIndex(0, 0),
 		);
 
-		let neig2 = self.get_neighbors(
-			&SpaceIndex(comb2.position.0 as usize, comb2.position.1 as usize),
-			&SpaceIndex(0, 0),
-		);
+		let neig2 = self.get_neighbors_permit_poles(&SpaceIndex(
+			comb2.position.0 as usize,
+			comb2.position.1 as usize,
+		));
 		let neig2 = [SpaceIndex(
 			comb2.position.0 as usize,
 			comb2.position.1 as usize,
@@ -2305,6 +2322,7 @@ impl PhysicalDesign {
 		let b = neig2
 			.filter(|pos| distance_diff(&(pos.0 as f64, pos.1 as f64), &comb2.position) <= 7.0)
 			.collect_vec();
+
 		a.extend(
 			self.route_cache
 				.entry((edge.0, is_input))
@@ -2333,6 +2351,29 @@ impl PhysicalDesign {
 				if distance <= 81.0
 					&& self.global_space.index_good((x, y))
 					&& self.global_space[(x, y)] == PhyId::default()
+				{
+					ret.push(SpaceIndex(x, y));
+				}
+			}
+		}
+		SpaceIter { points: ret }
+	}
+
+	fn get_neighbors_permit_poles(&self, index: &SpaceIndex) -> SpaceIter {
+		let min_x = (index.0 as isize - 9).max(0) as usize;
+		let min_y = (index.1 as isize - 9).max(0) as usize;
+		let max_x = index.0 + 9;
+		let max_y = index.1 + 9;
+		let mut ret = vec![];
+		for x in min_x..=max_x {
+			for y in min_y..=max_y {
+				let dx = x.abs_diff(index.0) as f32;
+				let dy = y.abs_diff(index.1) as f32;
+				let distance = dx * dx + dy * dy;
+				if distance <= 81.0
+					&& self.global_space.index_good((x, y))
+					&& (self.global_space[(x, y)] == PhyId::default()
+						|| self.nodes[self.global_space[(x, y)].0].is_pole())
 				{
 					ret.push(SpaceIndex(x, y));
 				}
