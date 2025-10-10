@@ -103,7 +103,7 @@
 					"build",
 					"--bin=v2f",
 					"--package=v2f",
-					"--release"
+					//"--release"
 				],
 				"filter": {
 					"name": "v2f",

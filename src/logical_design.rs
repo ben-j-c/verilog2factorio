@@ -942,6 +942,7 @@ impl LogicalDesign {
 		// Build the one-hot encoded mux switch.
 		let mut mux_wires = Vec::with_capacity(n);
 		let mut b_muxes = Vec::with_capacity(n);
+		let mut first_unused_signal = 0;
 		for i in 0..n {
 			let inp = self.add_decider();
 			b_muxes.push(inp);
@@ -952,7 +953,35 @@ impl LogicalDesign {
 				NET_RED,
 				NET_NONE,
 			);
-			self.add_decider_out_input_count(inp, Signal::Id(i as i32), NET_RED);
+			match b[i] {
+				Signal::Constant(c) => {
+					loop {
+						let mut br = true;
+						for b_sig in b {
+							if let Signal::Id(sig) = *b_sig {
+								if sig == first_unused_signal {
+									first_unused_signal += 1;
+									br = false;
+									break;
+								}
+							}
+						}
+						if br {
+							break;
+						}
+					}
+					self.add_decider_out_constant(
+						inp,
+						first_unused_signal.try_into().expect("pmux too big"),
+						c,
+						NET_RED,
+					);
+					first_unused_signal += 1;
+				},
+				_ => {
+					self.add_decider_out_input_count(inp, b[i], NET_RED);
+				},
+			}
 			mux_wires.push(self.add_wire_red(vec![], vec![inp]));
 			if i != 0 {
 				self.add_wire_red(vec![inp, b_muxes[i - 1]], vec![]);
@@ -962,7 +991,11 @@ impl LogicalDesign {
 			{
 				self.set_description_node(
 					inp,
-					format!("{n}-pmux|i={i},s={:?},b={:?}", get_ith_s_expr(i), b[i],),
+					format!(
+						"{n}-pmux|i={i},s={:?},b={:?}",
+						get_ith_s_expr(i),
+						Signal::Id(i as i32),
+					),
 				);
 			}
 		}

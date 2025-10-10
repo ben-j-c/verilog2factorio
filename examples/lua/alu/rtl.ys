@@ -1,11 +1,11 @@
 read_verilog alu.v
 
 read_verilog -lib /home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v
-hierarchy -libdir /home/ben/repo/verilog2factorio/v2flib -check -top alu
+hierarchy -libdir /home/ben/repo/verilog2factorio/v2flib  -check -top alu
 
 #coarse
 proc
-flatten
+flatten -noscopeinfo
 opt_expr
 opt_clean
 check

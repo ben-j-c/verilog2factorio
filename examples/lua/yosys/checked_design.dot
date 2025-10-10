@@ -112,13 +112,13 @@ Y"]
   n13 -> n3
   n14 -> n4
   n15 -> n4
-  n16 -> n28 [label="transport-belt(4)",syle=bold,color=blue]
+  n16 -> n28 [label="iron-chest(1)",syle=bold,color=blue]
   n17 -> n5
   n18 -> n19 [label="wooden-chest(0)",syle=bold,color=blue]
   n18 -> n27 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n6
   n20 -> n6
-  n21 -> n23 [label="transport-belt(4)",syle=bold,color=blue]
+  n21 -> n23 [label="iron-chest(1)",syle=bold,color=blue]
   n22 -> n7
   n23 -> n7
   n24 -> n13 [label="signal-B(218)",syle=bold,color=blue]
