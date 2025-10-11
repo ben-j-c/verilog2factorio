@@ -2483,7 +2483,7 @@ impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
 	}
 
 	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
-		self.distance(a, b)
+		self.distance(a, b) + 1.0
 	}
 }
 
