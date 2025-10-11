@@ -10,7 +10,7 @@ use clap::Parser;
 use logical_design::LogicalDesign;
 use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
 use mapped_design::MappedDesign;
-use mlua::AnyUserData;
+use mlua::{AnyUserData, Value};
 use phy::PhysicalDesign;
 use serializable_design::SerializableDesign;
 
@@ -102,12 +102,19 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let input_file = args.input_file.unwrap();
 	let lua = get_lua()?;
 	let chunk = lua.load(input_file.clone());
-	let eval = chunk.eval::<AnyUserData>();
+	let eval = chunk.eval::<Value>();
 	let eval = if let Ok(e) = eval {
 		e
 	} else {
 		println!("{eval:#?}");
 		return Ok("".to_owned());
+	};
+	let eval = match eval {
+		Value::UserData(d) => d,
+		Value::Error(e) => return Result::Err(Error::LuaError(*e)),
+		_ => {
+			return Ok(format!("Script returned: \n{eval:#?}"));
+		},
 	};
 	let blueprint_json = if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();

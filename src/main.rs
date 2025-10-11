@@ -1,11 +1,11 @@
 use clap::Parser as _;
 use v2f::{lua_flow, mapped_flow, Args};
 
-pub fn main() {
+pub fn main() -> Result<(), v2f::Error> {
 	let args = Args::parse();
 	if args.dump_phy_cfg {
 		v2f::dump_phy_cfg();
-		return;
+		return Ok(());
 	}
 	match std::env::var("V2F_ROOT") {
 		Ok(_) => {},
@@ -19,7 +19,13 @@ pub fn main() {
 	} else {
 		mapped_flow(args)
 	} {
-		Ok(json) => println!("Blueprint:\n{}\n", json),
-		Err(e) => println!("Couldn't complete compilation due to error: {:?}", e),
-	};
+		Ok(text) => {
+			println!("{text}");
+			Ok(())
+		},
+		Err(e) => {
+			println!("Couldn't complete compilation due to error.");
+			Err(e)
+		},
+	}
 }

@@ -7,6 +7,33 @@
 		{
 			"type": "lldb",
 			"request": "launch",
+			"name": "Current lua file",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=v2f",
+					"--package=v2f",
+					//"--release"
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"env": {
+				"V2F_ROOT": "${workspaceFolder}"
+			},
+			"args": [
+				"-i",
+				"${file}",
+				"-o",
+				"blueprint.json",
+			],
+			"cwd": "${fileDirname}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
 			"name": "Cargo test",
 			"cargo": {
 				"args": [
@@ -115,11 +142,11 @@
 			},
 			"args": [
 				"-i",
-				"csr.lua",
+				"pipe_ctrl.lua",
 				"-o",
 				"blueprint.json",
 			],
-			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/csr"
+			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/pipe_ctrl"
 		},
 	]
 }
