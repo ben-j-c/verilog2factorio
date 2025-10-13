@@ -896,6 +896,7 @@ impl UserData for SimStateAPI {
 			println!("\tstep <n> // step the simulation n times");
 			println!("\tregex <id> // print sim row");
 			println!("\twire_net <id> // prints nodes attached to network");
+			println!("\tdump // dump whole sim state");
 			let mut rl = rustyline::DefaultEditor::new().unwrap();
 			for readline in rl.iter("> ") {
 				match readline {
@@ -980,6 +981,8 @@ impl UserData for SimStateAPI {
 									}
 								}
 							}
+						} else if line.starts_with("dump") {
+							this.sim.read().unwrap().print();
 						}
 					},
 					Err(err) => {

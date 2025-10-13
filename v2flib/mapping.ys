@@ -1,5 +1,5 @@
 read_json {filename}
-techmap -autoproc -map {exe_dir}/techmap/v2f_narrowing.v;;
+techmap -autoproc -map {exe_dir}/techmap/v2f_simplify.v;;
 techmap -map {exe_dir}/techmap/v2f_techmap.v;;
 techmap -dont_map $adff -dont_map $adffe -dont_map $dff -dont_map $dffe -dont_map $sdff -dont_map $sdffe
 abc -sop

@@ -8,7 +8,8 @@ use std::{
 use ::vcd::Value;
 use itertools::Itertools;
 use rayon::iter::{
-	IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+	IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+	IntoParallelRefMutIterator, ParallelIterator,
 };
 
 mod decider_model;
@@ -529,6 +530,40 @@ impl SimState {
 		}
 	}
 
+	fn do_compute_step(
+		&self,
+		node: &Node,
+		new_state_red: &mut OutputState,
+		new_state_green: &mut OutputState,
+	) {
+		match &node.function {
+			NodeFunction::Arithmetic { .. } => {
+				self.compute_arithmetic_comb(node, new_state_red, new_state_green);
+			},
+			NodeFunction::Decider { .. } => {
+				self.compute_decider_comb(node, new_state_red, new_state_green);
+			},
+			NodeFunction::Constant { enabled, constants } => {
+				if !*enabled {
+					return;
+				}
+				for (signal, count) in node.output.iter().zip(constants) {
+					if *count == 0 {
+						continue;
+					}
+					if let Signal::Id(sig_id) = *signal {
+						new_state_red[sig_id] = *count;
+						new_state_green[sig_id] = *count;
+					} else {
+						assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
+					}
+				}
+			},
+			NodeFunction::Lamp { .. } => {},
+			NodeFunction::WireSum(_wire_colour) => {},
+		}
+	}
+
 	pub fn compute_combs(
 		&self,
 		new_state_red: &mut Vec<OutputState>,
@@ -536,71 +571,30 @@ impl SimState {
 	) {
 		let logd = self.logd.read().unwrap();
 
+		#[cfg(debug_assertions)]
 		logd.nodes
 			.iter()
+			.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
+			.for_each(|(node, (new_state_red, new_state_green))| {
+				self.do_compute_step(node, new_state_red, new_state_green);
+			});
+		#[cfg(not(debug_assertions))]
+		let iter = logd
+			.nodes
+			.par_iter()
 			.zip(
 				new_state_red
-					.iter_mut()
-					.zip(new_state_green.iter_mut()),
+					.par_iter_mut()
+					.zip(new_state_green.par_iter_mut()),
 			)
-			.for_each(|(node, (new_state_red, new_state_green))| {
-				//
-				match &node.function {
-				NodeFunction::Arithmetic { .. } => {
-					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
-				},
-				NodeFunction::Decider { .. } => {
-					self.compute_decider_comb(node, new_state_red, new_state_green);
-				},
-				NodeFunction::Constant { enabled, constants } => {
-					if !*enabled {
-						return;
-					}
-					for (signal, count) in node.output.iter().zip(constants) {
-						if *count == 0 {
-							continue;
-						}
-						if let Signal::Id(sig_id) = *signal {
-							new_state_red[sig_id] = *count;
-							new_state_green[sig_id] = *count;
-						} else {
-							assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
-						}
-					}
-				},
-				NodeFunction::Lamp { .. } => {},
-				NodeFunction::WireSum(_wire_colour) => {},
-			}
-			}
-		);
-		/*for node in &logd.nodes {
-			match &node.function {
-				NodeFunction::Arithmetic { .. } => {
-					self.compute_arithmetic_comb(node, new_state_red, new_state_green);
-				},
-				NodeFunction::Decider { .. } => {
-					self.compute_decider_comb(node, new_state_red, new_state_green);
-				},
-				NodeFunction::Constant { enabled, constants } => {
-					if !*enabled {
-						continue;
-					}
-					for (signal, count) in node.output.iter().zip(constants) {
-						if *count == 0 {
-							continue;
-						}
-						if let Signal::Id(sig_id) = *signal {
-							new_state_red[node.id.0][sig_id] = *count;
-							new_state_green[node.id.0][sig_id] = *count;
-						} else {
-							assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
-						}
-					}
-				},
-				NodeFunction::Lamp { .. } => continue,
-				NodeFunction::WireSum(_wire_colour) => continue,
-			}
-		}*/
+			.chunks(4096)
+			.into_par_iter()
+			.for_each(|mut c| {
+				c.iter_mut()
+					.for_each(|(node, (new_state_red, new_state_green))| {
+						self.do_compute_step(*node, *new_state_red, *new_state_green);
+					});
+			});
 	}
 
 	pub fn compute_nets(
@@ -867,7 +861,27 @@ impl SimState {
 		if reset {
 			self.reset();
 		}
+		println!(
+			"VCD Playback started. {} steps in file.",
+			vcd.last_time() - 1
+		);
+		println!("NNodes: {}", self.logd.read().unwrap().nodes.len());
+		let time_start = std::time::Instant::now();
+		let mut last_informational_stamp = std::time::Instant::now();
 		for vcd_time in 0..vcd.last_time() {
+			let now = std::time::Instant::now();
+			if now - last_informational_stamp > std::time::Duration::from_secs(5) {
+				let steps_per_second = vcd_time as f64 / (now - time_start).as_secs() as f64;
+				let steps_remaining = vcd.last_time() - vcd_time - 1;
+				println!(
+					"{}/{}. ~{:.2} seconds remaining. {:.2} sim-steps per second.",
+					vcd_time,
+					vcd.last_time() - 1,
+					steps_remaining as f64 / steps_per_second,
+					steps_per_second * propagation_delay as f64,
+				);
+				last_informational_stamp = now;
+			}
 			let mut inputs_snapshot = vec![];
 			{
 				let mut logd = self.logd.write().unwrap();
@@ -909,6 +923,10 @@ impl SimState {
 				}
 			}
 		}
+		if last_informational_stamp - time_start >= std::time::Duration::from_secs(5) {
+			println!("{}/{}", vcd.last_time(), vcd.last_time());
+		}
+		println!("VCD Playback finished.");
 		true
 	}
 
