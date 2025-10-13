@@ -595,7 +595,16 @@ impl CheckedDesign {
 			} = &exprs[0]
 			{
 				if *shift == 0 && *bit_start == 0 && (*bit_end == 32 || fanin.len() == 1) {
-					continue;
+					let fiid_cnxn = match self.node_type(fanin[0]) {
+						NodeType::CellOutput { connected_id, .. }
+						| NodeType::PortOutput { connected_id } => *connected_id,
+						_ => unreachable!(),
+					};
+					let driver = self.connected_design.node_info[fiid_cnxn].n_bits();
+					let sink = exprs[0].n_bits();
+					if driver == sink {
+						continue;
+					}
 				}
 				let fiid = self.connected_id_map[*driver_ioid];
 				assert_eq!(node.fanin.len(), 1);
