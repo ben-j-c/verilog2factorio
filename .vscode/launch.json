@@ -79,7 +79,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::swizzle_riscv_branch",
+				"tests::logical_design_tests::simple_counter",
 			],
 			"cwd": "${workspaceFolder}"
 		},

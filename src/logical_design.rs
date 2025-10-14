@@ -524,6 +524,14 @@ impl LogicalDesign {
 			self.is_wire(out_node) != self.is_wire(in_node),
 			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
 		);
+		assert!(!matches!(
+			self.nodes[out_node.0].function,
+			NodeFunction::WireSum(WireColour::Green)
+		));
+		assert!(!matches!(
+			self.nodes[in_node.0].function,
+			NodeFunction::WireSum(WireColour::Green)
+		));
 		self.nodes[out_node.0].fanout_red.push(in_node);
 		self.nodes[in_node.0].fanin_red.push(out_node);
 	}
@@ -534,6 +542,14 @@ impl LogicalDesign {
 			self.is_wire(out_node) != self.is_wire(in_node),
 			"Can only connect wires to terminals, or terminals to wires. Not T to T or W to W."
 		);
+		assert!(!matches!(
+			self.nodes[out_node.0].function,
+			NodeFunction::WireSum(WireColour::Red)
+		));
+		assert!(!matches!(
+			self.nodes[in_node.0].function,
+			NodeFunction::WireSum(WireColour::Red)
+		));
 		self.nodes[out_node.0].fanout_green.push(in_node);
 		self.nodes[in_node.0].fanin_green.push(out_node);
 	}
@@ -669,14 +685,14 @@ impl LogicalDesign {
 				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
 				NET_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
 			);
 			self.add_decider_input(
 				ic,
 				(arst, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::And,
 				NET_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
 			);
 			self.add_decider_out_input_count(ic, data, NET_RED);
 			ic
@@ -689,14 +705,14 @@ impl LogicalDesign {
 				(clk, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::FirstRow,
 				NET_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
 			);
 			self.add_decider_input(
 				mc,
 				(arst, DeciderOperator::Equal, Signal::Constant(0)),
 				DeciderRowConjDisj::And,
 				NET_GREEN,
-				NET_RED_GREEN,
+				NET_GREEN,
 			);
 			self.add_decider_out_input_count(mc, data, NET_RED);
 			mc
@@ -766,7 +782,8 @@ impl LogicalDesign {
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		let clk_buf_1 = self.add_neg(clk, clk);
 		let clk_buf_2 = self.add_nop(clk, clk);
-		let arst_buf = self.add_nop(arst, arst);
+		let arst_buf_1 = self.add_nop(arst, arst);
+		let arst_buf_2 = self.add_nop(arst, arst);
 		let (latch_in_wire_1, clk_wire_1, arst_wire_1, latch_out_1) =
 			self.add_latch_arst(input, clk, arst);
 		let (latch_in_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
@@ -775,10 +792,10 @@ impl LogicalDesign {
 		self.connect_red(latch_out_1, latch_in_wire_2);
 		self.connect_green(clk_buf_1, clk_wire_1);
 		self.connect_green(clk_buf_2, clk_wire_2);
-		self.connect_green(arst_buf, arst_wire_1);
-		self.connect_green(arst_buf, arst_wire_2);
+		self.connect_green(arst_buf_1, arst_wire_1);
+		self.connect_green(arst_buf_2, arst_wire_2);
 		let clk_wire = self.add_wire_red(vec![], vec![clk_buf_1, clk_buf_2]);
-		let arst_wire = self.add_wire_green(vec![], vec![arst_buf]);
+		let arst_wire = self.add_wire_red(vec![], vec![arst_buf_1, arst_buf_2]);
 
 		let final_out = self.add_nop(input, output);
 		self.add_wire_red(vec![latch_out_2], vec![final_out]);

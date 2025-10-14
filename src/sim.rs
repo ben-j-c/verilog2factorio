@@ -7,6 +7,7 @@ use std::{
 
 use ::vcd::Value;
 use itertools::Itertools;
+#[cfg(not(debug_assertions))]
 use rayon::iter::{
 	IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
 	IntoParallelRefMutIterator, ParallelIterator,
@@ -587,7 +588,7 @@ impl SimState {
 					.par_iter_mut()
 					.zip(new_state_green.par_iter_mut()),
 			)
-			.chunks(4096)
+			.chunks(1024)
 			.into_par_iter()
 			.for_each(|mut c| {
 				c.iter_mut()
@@ -938,6 +939,107 @@ impl SimState {
 		}
 		self.traces.clear();
 		self.trace_set.clear();
+	}
+
+	pub fn inspect(&mut self) {
+		println!("Valid commands:");
+		println!("\tlogic <id> // basic print logical node");
+		println!("\tlogd <id> // detailed print logical node");
+		println!("\tsim <id> // print sim row");
+		println!("\tstep <n> // step the simulation n times");
+		println!("\tregex <id> // print sim row");
+		println!("\twire_net <id> // prints nodes attached to network");
+		println!("\tdump // dump whole sim state");
+		let mut rl = rustyline::DefaultEditor::new().unwrap();
+		for readline in rl.iter("> ") {
+			match readline {
+				Ok(line) => {
+					let line = line.trim().to_owned();
+					if line.starts_with("log") {
+						let detailed = line.starts_with("logd");
+						let logd = self.logd.read().unwrap();
+						for v in line.split(" ").skip(1) {
+							if let Ok(v) = v.parse::<usize>() {
+								if detailed {
+									println!("{:#?}", logd.get_node(NodeId(v)))
+								} else {
+									println!("{}", logd.get_node(NodeId(v)))
+								}
+							}
+						}
+					} else if line.starts_with("sim") {
+						for v in line.split(" ").skip(1) {
+							if let Ok(v) = v.parse::<usize>() {
+								self.print_row(v);
+							}
+						}
+					} else if line.starts_with("regex") {
+						let logd = self.logd.read().unwrap();
+						let pattern = &line[6..];
+						let pattern = match regex::Regex::new(pattern) {
+							Ok(v) => v,
+							Err(e) => {
+								println!("{e}");
+								continue;
+							},
+						};
+						let mut found = false;
+						logd.for_all(|_, node| {
+							let description = if let Some(descr) = &node.description {
+								descr
+							} else {
+								return;
+							};
+
+							if pattern.is_match(description) {
+								println!("{}: {}", node.id, description);
+								found = true;
+							}
+						});
+						if !found {
+							println!("<no matches>");
+						}
+					} else if line.starts_with("step") {
+						let mut found = false;
+						for v in line.split(" ").skip(1).take(1) {
+							found = true;
+							if let Ok(v) = v.parse::<u32>() {
+								println!("Doing {v} step(s).");
+								self.step(v);
+							} else {
+								println!("Invalid step count.")
+							}
+						}
+						if found {
+							continue;
+						}
+						println!("Doing 1 step.");
+						self.step(1);
+					} else if line.starts_with("wire") {
+						let logd = self.logd.read().unwrap();
+						for v in line.split(" ").skip(1) {
+							if let Ok(v) = v.parse::<usize>() {
+								let (fanin, fanout) = self.get_attached(v);
+								println!("fanin of wire {v}");
+								for id in fanin {
+									println!("\t{}", logd.get_node(id));
+								}
+								println!("fanout of wire {v}");
+								for id in fanout {
+									println!("\t{}", logd.get_node(id));
+								}
+							}
+						}
+					} else if line.starts_with("dump") {
+						self.print();
+					}
+				},
+				Err(err) => {
+					println!("Error: {:?}", err);
+					break;
+				},
+			}
+		}
 	}
 }
 

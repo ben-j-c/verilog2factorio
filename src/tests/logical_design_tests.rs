@@ -310,7 +310,7 @@ mod test {
 		let c2 = d.add_constant(vec![Signal::Id(1)], vec![1]);
 		let l1 = d.add_lamp((Signal::Id(2), Dop::NotEqual, Signal::Constant(0)));
 		d.connect_red(c1, wire_data);
-		d.connect_red(c2, wire_clk);
+		d.connect_green(c2, wire_clk);
 		d.add_wire_red(vec![comb_out], vec![l1]);
 
 		let mut p = PhysicalDesign::new();
@@ -1020,4 +1020,76 @@ fn swizzle_riscv_branch() {
 	let outp = sim.probe_lamp_state(lamp);
 	assert_eq!(sim.probe_red_out(outp_wire), vec![(1, expected)]);
 	assert_eq!(outp, Some(true));
+}
+
+#[test]
+fn simple_counter() {
+	let mut logd = LogicalDesign::new();
+	let sig_arst = Signal::Id(0);
+	let sig_clk = Signal::Id(1);
+	let sig_q = Signal::Id(3);
+	let sig_data = Signal::Id(4);
+	let reset = logd.add_constant(vec![sig_arst], vec![0]);
+	let clock = logd.add_constant(vec![sig_clk], vec![0]);
+	let lamp_q = logd.add_lamp((sig_q, DeciderOperator::NotEqual, Signal::Constant(-1)));
+
+	let adder = logd.add_arithmetic(
+		(sig_q, ArithmeticOperator::Add, Signal::Constant(1)),
+		sig_data,
+	);
+
+	let (wire_data, wire_clk, wire_arst, comb_q, _loopback) =
+		logd.add_adff_isolated(sig_data, sig_clk, sig_arst, sig_q);
+
+	logd.connect_red(adder, wire_data);
+	logd.connect_red(clock, wire_clk);
+	logd.connect_red(reset, wire_arst);
+	logd.add_wire_red_simple(comb_q, lamp_q);
+	logd.add_wire_red_simple(comb_q, adder);
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	let del = 4;
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 1);
+	}
+	sim.step(del);
+	assert_eq!(sim.probe_red_out(comb_q), vec![]);
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 0);
+	}
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
 }
