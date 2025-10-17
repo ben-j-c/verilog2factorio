@@ -98,7 +98,7 @@ parameter A_SIGNED = 0;
 endmodule
 
 (* techmap_celltype = "$gt" *)
-module v2f_rule_lt_unsigned_to_signed(A, B, Y);
+module v2f_rule_gt_unsigned_to_signed(A, B, Y);
 parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
 	parameter A_WIDTH = 32;
@@ -121,7 +121,7 @@ parameter A_SIGNED = 0;
 endmodule
 
 (* techmap_celltype = "$le" *)
-module v2f_rule_lt_unsigned_to_signed(A, B, Y);
+module v2f_rule_le_unsigned_to_signed(A, B, Y);
 parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
 	parameter A_WIDTH = 32;
@@ -144,8 +144,8 @@ parameter A_SIGNED = 0;
 endmodule
 
 (* techmap_celltype = "$ge" *)
-module v2f_rule_lt_unsigned_to_signed(A, B, Y);
-parameter A_SIGNED = 0;
+module v2f_rule_ge_unsigned_to_signed(A, B, Y);
+	parameter A_SIGNED = 0;
 	parameter B_SIGNED = 0;
 	parameter A_WIDTH = 32;
 	parameter B_WIDTH = 32;
@@ -175,14 +175,18 @@ module v2f_rule_div_signed_to_unsigned(A, B, Y);
 	parameter Y_WIDTH = 32;
 	wire _TECHMAP_FAIL_ = A_SIGNED || B_SIGNED || A_WIDTH != 32 || B_WIDTH != 32 || Y_WIDTH != 32;
 
-	unsigned wire [31:0] n;
-	unsigned wire [31:0] d;
+	input [31:0] A;
+	input [31:0] B;
+	output [Y_WIDTH-1:0] Y;
+
+	wire [31:0] n;
+	wire [31:0] d;
 	assign n = A;
 	assign d = B;
 
-	signed reg [31:0] q_est;
-	unsigned reg [31:0] q;
-	unsigned reg [31:0] r;
+	reg signed [31:0] q_est;
+	reg signed [31:0] q;
+	reg [31:0] r;
 
 	reg [31:0] q_final;
 	assign Y = q_final;
@@ -199,20 +203,25 @@ endmodule
 module v2f_rule_mod_signed_to_unsigned(A, B, Y);
 	parameter A_SIGNED = 1;
 	parameter B_SIGNED = 1;
+	parameter Y_SIGNED = 1;
 	parameter A_WIDTH = 32;
 	parameter B_WIDTH = 32;
 	parameter Y_WIDTH = 32;
 	wire _TECHMAP_FAIL_ = A_SIGNED || B_SIGNED || A_WIDTH != 32 || B_WIDTH != 32 || Y_WIDTH != 32;
 
-	unsigned wire [31:0] n;
-	unsigned wire [31:0] d;
+	input [31:0] A;
+	input [31:0] B;
+	output [Y_WIDTH-1:0] Y;
+
+	wire [31:0] n;
+	wire [31:0] d;
 	assign n = A;
 	assign d = B;
 
-	signed reg [31:0] q_est;
-	unsigned reg [31:0] q;
-	unsigned reg [31:0] r;
-	unsigned reg [31:0] r_final;
+	reg signed [31:0] q_est;
+	reg signed [31:0] q;
+	reg [31:0] r;
+	reg [31:0] r_final;
 
 	assign Y = r_final;
 
