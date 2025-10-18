@@ -1,10 +1,8 @@
-use core::panic;
+use core::{hash, panic};
 use std::{
 	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
-	i32,
-	mem::swap,
-	usize, vec,
+	i32, usize, vec,
 };
 
 type NodeId = usize;
@@ -155,8 +153,11 @@ pub struct CheckedDesign {
 	connected_design: ConnectedDesign,
 	/// Nodes in connected_design -> nodes in this struct.
 	connected_id_map: Vec<NodeId>,
+	/// Optimization for merging constants and expressions into a combinator
 	coarse_exprs: Vec<Option<CoarseExpr>>,
 	associated_logic: RefCell<Vec<Option<logical_design::NodeId>>>,
+
+	clocks: HashS<NodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,6 +255,7 @@ impl CheckedDesign {
 			connected_id_map: vec![],
 			coarse_exprs: vec![],
 			associated_logic: RefCell::new(vec![]),
+			clocks: hash_set(),
 		}
 	}
 
@@ -933,7 +935,6 @@ impl CheckedDesign {
 		self.make_preliminary_connections();
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements();
-		//self.insert_nop_to_sanitize_ports();
 		//#[cfg(false)]
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
@@ -956,6 +957,7 @@ impl CheckedDesign {
 
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
+		self.identify_clocks(mapped_design);
 	}
 
 	fn partition_io_network(&mut self, mut local_io: Vec<NodeId>) {
@@ -1326,7 +1328,15 @@ impl CheckedDesign {
 					if !node.fanout.is_empty() {
 						let new_id =
 							logical_design.add_constant(vec![self.signals[nodeid]], vec![0]);
-						logic_map[nodeid] = Some(new_id);
+						if self.clocks.contains(&nodeid) {
+							let (wire, gate) =
+								logical_design.add_edge_detector(self.signals[nodeid]);
+							logic_map[nodeid] = Some(gate);
+							logical_design.connect_red(new_id, wire);
+						} else {
+							logic_map[nodeid] = Some(new_id);
+						}
+
 						logical_design.mark_as_port(
 							new_id,
 							Direction::Input,
@@ -2102,6 +2112,29 @@ impl CheckedDesign {
 
 	pub fn save_dot(&self, mapped_design: &MappedDesign) {
 		graph_viz::save_dot(self, mapped_design, "checked_design.dot").unwrap()
+	}
+
+	fn identify_clocks(&mut self, mapped_design: &MappedDesign) {
+		for id in 0..self.nodes.len() {
+			let node = &self.nodes[id];
+			match node.node_type {
+				NodeType::PortOutput { .. } => {
+					for sink in &node.fanout {
+						let sink = &self.nodes[*sink];
+						if let NodeType::CellInput { port, .. } = &sink.node_type {
+							if let Some(cell) = mapped_design.get_cell_option(&sink.mapped_id) {
+								let clk_pins = cell.get_clocks();
+								if clk_pins.contains(port) {
+									self.clocks.insert(node.id);
+									self.clocks.insert(node.fanin[0]);
+								}
+							}
+						}
+					}
+				},
+				_ => {},
+			}
+		}
 	}
 }
 

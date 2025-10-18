@@ -2200,6 +2200,39 @@ impl LogicalDesign {
 		(vec![a_wire, b_wire], shr_magnitude)
 	}
 
+	pub(crate) fn add_edge_detector(&mut self, clk_in: Signal) -> (NodeId, NodeId) {
+		let delay = self.add_decider();
+		let gate = self.add_decider();
+
+		self.add_decider_input(
+			delay,
+			(clk_in, DeciderOperator::NotEqual, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_out_input_count(delay, clk_in, NET_RED_GREEN);
+
+		self.add_decider_input(
+			gate,
+			(clk_in, DeciderOperator::NotEqual, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		self.add_decider_input(
+			gate,
+			(clk_in, DeciderOperator::Equal, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_RED_GREEN,
+		);
+
+		self.add_wire_green_simple(delay, gate);
+		let ret_wire = self.add_wire_red(vec![], vec![delay, gate]);
+		(ret_wire, gate)
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn have_shared_wire(&self, ldid_1: NodeId, ldid_2: NodeId) -> bool {
 		let (input, output) = self.have_shared_wire_discriminate_side(ldid_1, ldid_2);

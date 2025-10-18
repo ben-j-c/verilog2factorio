@@ -31,9 +31,12 @@ toml = "0.9.5"
 vcd = "0.7.0"
 
 [profile.perf]
-inherits = "release"
+inherits = "dev"
+lto = true
+codegen-units = 1
 debug = true
-overflow-checks = false
+strip = false
+opt-level = 1
 
 [profile.dev]
 overflow-checks = false

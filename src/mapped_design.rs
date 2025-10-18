@@ -329,6 +329,36 @@ impl Cell {
 		}
 	}
 
+	pub(crate) fn get_clocks(&self) -> Vec<String> {
+		match self.cell_type {
+			ImplementableOp::DFF
+			| ImplementableOp::SDFF
+			| ImplementableOp::SDFFE
+			| ImplementableOp::ADFFE
+			| ImplementableOp::ADFF
+			| ImplementableOp::DFFE => vec!["CLK".to_owned()],
+			ImplementableOp::Memory => {
+				let mut clocks = vec![];
+				let n_rd_ports = self.parameters["RD_PORTS"].unwrap_bin_str();
+				let n_wr_ports = self.parameters["WR_PORTS"].unwrap_bin_str();
+				for i in 0..n_rd_ports {
+					let clk = format!("RD_CLK_{i}");
+					if self.port_directions.contains_key(&clk) {
+						clocks.push(clk);
+					}
+				}
+				for i in 0..n_wr_ports {
+					let clk = format!("WR_CLK_{i}");
+					if self.port_directions.contains_key(&clk) {
+						clocks.push(clk);
+					}
+				}
+				clocks
+			},
+			_ => vec![],
+		}
+	}
+
 	pub fn get_yosys_display_name(&self, name: &str) -> String {
 		if self.attributes.get("hide_name") == Some(&"1".to_owned()) {
 			let idx = name.rfind("$").unwrap_or_default();

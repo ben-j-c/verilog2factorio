@@ -7,7 +7,6 @@ use std::{
 
 use ::vcd::Value;
 use itertools::Itertools;
-#[cfg(not(debug_assertions))]
 use rayon::iter::{
 	IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
 	IntoParallelRefMutIterator, ParallelIterator,
@@ -588,7 +587,7 @@ impl SimState {
 					.par_iter_mut()
 					.zip(new_state_green.par_iter_mut()),
 			)
-			.chunks(1024)
+			.chunks(4096)
 			.into_par_iter()
 			.for_each(|mut c| {
 				c.iter_mut()
