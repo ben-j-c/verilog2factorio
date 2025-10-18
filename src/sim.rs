@@ -717,11 +717,11 @@ impl SimState {
 					.par_iter_mut()
 					.zip(new_state_green.par_iter_mut()),
 			)
-			.chunks(64)
+			.chunks(256)
 			.for_each(|mut c| {
 				for (netid, (new_state_red, new_state_green)) in c.iter_mut() {
 					if *netid == &NetId::default() {
-						return;
+						continue;
 					}
 					let net = &self.network[netid.0];
 					let wire_state = match net.colour {

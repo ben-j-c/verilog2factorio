@@ -1710,9 +1710,6 @@ impl LogicalDesign {
 	///
 	/// Returns the id for that new combinator.
 	pub fn add_decider(&mut self) -> NodeId {
-		if self.nodes.len() == 239 {
-			print!("");
-		}
 		self.add_node(
 			NodeFunction::Decider {
 				expressions: vec![],
