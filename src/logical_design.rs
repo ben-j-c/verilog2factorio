@@ -1034,7 +1034,28 @@ impl LogicalDesign {
 					NET_NONE,
 				);
 			}
-			self.add_decider_out_input_count(a_case, a_signal, NET_RED_GREEN);
+			match a_signal {
+				Signal::Constant(c) => {
+					for b_sig in b {
+						if let Signal::Id(sig) = *b_sig {
+							if sig == first_unused_signal {
+								first_unused_signal += 1;
+								break;
+							}
+						}
+					}
+					self.add_decider_out_constant(
+						a_case,
+						first_unused_signal.try_into().expect("pmux too big"),
+						c,
+						NET_RED,
+					);
+				},
+				_ => {
+					self.add_decider_out_input_count(a_case, a_signal, NET_RED_GREEN);
+				},
+			}
+
 			self.add_wire_red(vec![b_muxes[0], a_case], vec![]);
 			#[cfg(debug_assertions)]
 			{
@@ -1689,6 +1710,9 @@ impl LogicalDesign {
 	///
 	/// Returns the id for that new combinator.
 	pub fn add_decider(&mut self) -> NodeId {
+		if self.nodes.len() == 239 {
+			print!("");
+		}
 		self.add_node(
 			NodeFunction::Decider {
 				expressions: vec![],
