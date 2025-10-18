@@ -13,7 +13,7 @@
 					"build",
 					"--bin=v2f",
 					"--package=v2f",
-					//"--release"
+					"--release"
 				],
 				"filter": {
 					"name": "v2f",
@@ -108,14 +108,14 @@
 			"name": "debug riscv",
 			"cargo": {
 				"args": [
-					"run",
+					"build",
 					"--example",
 					"riscv",
-					"--",
-					"--no-run"
 				]
 			},
 			"args": [
+				"--example",
+				"riscv",
 				"--nocapture",
 				"--show-output",
 			],

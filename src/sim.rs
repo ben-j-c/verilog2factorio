@@ -89,9 +89,13 @@ pub struct Trace {
 }
 
 pub struct SimState {
+	/// Indexed by network id
 	network: Vec<WireNetwork>,
+	/// Indexed by Logical id
+	network_ownership: Vec<NetId>,
 	logd: Arc<std::sync::RwLock<LogicalDesign>>,
 	step_number: usize,
+	/// Indexed by Logical id
 	state: Vec<SimStateRow>,
 
 	traces: Vec<Trace>,
@@ -109,6 +113,7 @@ impl SimState {
 	pub fn new(logd: Arc<RwLock<LogicalDesign>>) -> Self {
 		let mut ret = Self {
 			network: vec![],
+			network_ownership: vec![],
 			logd,
 			step_number: 0,
 			state: vec![],
@@ -123,6 +128,7 @@ impl SimState {
 		let logd = self.logd.read().unwrap();
 		let state_len = self.state.len();
 		for _ in logd.nodes.iter().skip(state_len) {
+			self.network_ownership.push(NetId::default());
 			self.state.push(SimStateRow::default());
 			self.traces.push(Trace {
 				red: vec![],
@@ -164,6 +170,9 @@ impl SimState {
 					fanout.insert(*foid);
 					*self.state[foid.0].netmap.output_mut(colour) = Some(network_id);
 				}
+			}
+			for wire in &network_wires {
+				self.network_ownership[wire.0] = network_id;
 			}
 			self.network.push(WireNetwork {
 				fanin: fanin.into_iter().sorted().collect_vec(),
@@ -597,6 +606,7 @@ impl SimState {
 			});
 	}
 
+	#[cfg(false)]
 	pub fn compute_nets(
 		&self,
 		new_state_red: &mut Vec<OutputState>,
@@ -623,6 +633,148 @@ impl SimState {
 				}
 			}
 		}
+	}
+
+	#[cfg(false)]
+	pub fn compute_nets(
+		&self,
+		new_state_red: &mut Vec<OutputState>,
+		new_state_green: &mut Vec<OutputState>,
+	) {
+		let mut network_states = vec![OutputState::default(); self.network.len()];
+
+		network_states
+			.par_iter_mut()
+			.enumerate()
+			.by_uniform_blocks(128)
+			.for_each(|(idx, new_state)| {
+				let net = &self.network[idx];
+				for fiid in &net.fanin {
+					let fanin_state = match net.colour {
+						WireColour::Red => &new_state_red[fiid.0],
+						WireColour::Green => &new_state_green[fiid.0],
+					};
+					for (sigid, x) in fanin_state.data.iter() {
+						new_state[*sigid] += x;
+					}
+				}
+			});
+
+		self.network_ownership
+			.par_iter()
+			.zip(
+				new_state_red
+					.par_iter_mut()
+					.zip(new_state_green.par_iter_mut()),
+			)
+			.by_uniform_blocks(128)
+			.for_each(|(netid, (new_state_red, new_state_green))| {
+				if netid == &NetId::default() {
+					return;
+				}
+				let net = &self.network[netid.0];
+				let wire_state = match net.colour {
+					WireColour::Red => new_state_red,
+					WireColour::Green => new_state_green,
+				};
+				for (sigid, x) in network_states[netid.0].data.iter() {
+					wire_state[*sigid] = *x
+				}
+			});
+	}
+
+	#[cfg(true)]
+	pub fn compute_nets(
+		&self,
+		new_state_red: &mut Vec<OutputState>,
+		new_state_green: &mut Vec<OutputState>,
+	) {
+		let mut network_states = vec![OutputState::default(); self.network.len()];
+
+		network_states
+			.par_iter_mut()
+			.enumerate()
+			.chunks(256)
+			.for_each(|mut c| {
+				for (idx, new_state) in c.iter_mut() {
+					let net = &self.network[*idx];
+					for fiid in &net.fanin {
+						let fanin_state = match net.colour {
+							WireColour::Red => &new_state_red[fiid.0],
+							WireColour::Green => &new_state_green[fiid.0],
+						};
+						for (sigid, x) in fanin_state.data.iter() {
+							new_state[*sigid] += x;
+						}
+					}
+				}
+			});
+
+		self.network_ownership
+			.par_iter()
+			.zip(
+				new_state_red
+					.par_iter_mut()
+					.zip(new_state_green.par_iter_mut()),
+			)
+			.chunks(64)
+			.for_each(|mut c| {
+				for (netid, (new_state_red, new_state_green)) in c.iter_mut() {
+					if *netid == &NetId::default() {
+						return;
+					}
+					let net = &self.network[netid.0];
+					let wire_state = match net.colour {
+						WireColour::Red => new_state_red,
+						WireColour::Green => new_state_green,
+					};
+					for (sigid, x) in network_states[netid.0].data.iter() {
+						wire_state[*sigid] = *x
+					}
+				}
+			});
+	}
+
+	#[cfg(false)]
+	pub fn compute_nets(
+		&self,
+		new_state_red: &mut Vec<OutputState>,
+		new_state_green: &mut Vec<OutputState>,
+	) {
+		let mut network_states = vec![OutputState::default(); self.network.len()];
+
+		network_states
+			.iter_mut()
+			.enumerate()
+			.for_each(|(idx, new_state)| {
+				let net = &self.network[idx];
+				for fiid in &net.fanin {
+					let fanin_state = match net.colour {
+						WireColour::Red => &new_state_red[fiid.0],
+						WireColour::Green => &new_state_green[fiid.0],
+					};
+					for (sigid, x) in fanin_state.data.iter() {
+						new_state[*sigid] += x;
+					}
+				}
+			});
+
+		self.network_ownership
+			.iter()
+			.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
+			.for_each(|(netid, (new_state_red, new_state_green))| {
+				if netid == &NetId::default() {
+					return;
+				}
+				let net = &self.network[netid.0];
+				let wire_state = match net.colour {
+					WireColour::Red => new_state_red,
+					WireColour::Green => new_state_green,
+				};
+				for (sigid, x) in network_states[netid.0].data.iter() {
+					wire_state[*sigid] = *x
+				}
+			});
 	}
 
 	pub fn print(&self) {
@@ -870,7 +1022,7 @@ impl SimState {
 		let mut last_informational_stamp = std::time::Instant::now();
 		for vcd_time in 0..vcd.last_time() {
 			let now = std::time::Instant::now();
-			if now - last_informational_stamp > std::time::Duration::from_secs(5) {
+			if now - last_informational_stamp > std::time::Duration::from_secs(2) {
 				let steps_per_second = vcd_time as f64 / (now - time_start).as_secs() as f64;
 				let steps_remaining = vcd.last_time() - vcd_time - 1;
 				println!(

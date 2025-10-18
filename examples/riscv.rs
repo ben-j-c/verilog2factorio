@@ -15,6 +15,7 @@ fn main() {
 		.flatten()
 		.collect_vec();
 	for path in tb_dir {
+		println!("Entering {}", path.display());
 		env::set_current_dir(&path).expect(&format!("Failed to descend into {path:?}"));
 		for input_file in std::fs::read_dir(".")
 			.expect("Failed to read directory.")
@@ -22,6 +23,7 @@ fn main() {
 			.filter(|p| p.path().is_file() && p.path().extension() == Some("lua".as_ref()))
 			.map(|p| p.path())
 		{
+			println!("Executing {}", input_file.display());
 			let args = Args {
 				input_file: Some(input_file),
 				dump_phy_cfg: false,
