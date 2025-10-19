@@ -1112,7 +1112,7 @@ impl SimState {
 						for v in line.split(" ").skip(1) {
 							if let Ok(v) = v.parse::<usize>() {
 								if detailed {
-									println!("{:#?}", logd.get_node(NodeId(v)))
+									println!("{:?}", logd.get_node(NodeId(v)))
 								} else {
 									println!("{}", logd.get_node(NodeId(v)))
 								}

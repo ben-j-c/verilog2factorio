@@ -329,7 +329,7 @@ impl From<usize> for NodeId {
 }
 
 /// The internal representation of a design. No warranty on changing these directly.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Node {
 	pub id: NodeId,
 	pub function: NodeFunction,
@@ -2618,6 +2618,103 @@ impl Display for Node {
 			write!(f, " | G: {:?} -> {:?}", self.fanin_green, self.fanout_green)?;
 		}
 		Ok(())
+	}
+}
+impl Debug for Node {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let colour_map = |rg: (bool, bool)| match rg {
+			(true, true) => "BOTH",
+			(true, false) => "RED",
+			(false, true) => "GREEN",
+			(false, false) => "NONE",
+		};
+		writeln!(f, "Node {{")?;
+		writeln!(f, "    id: {:?},", self.id)?;
+		writeln!(f, "    fanin_red: {:?},", self.fanin_red)?;
+		writeln!(f, "    fanout_red: {:?},", self.fanout_red)?;
+		writeln!(f, "    fanin_green: {:?},", self.fanin_green)?;
+		writeln!(f, "    fanout_green: {:?},", self.fanout_green)?;
+		writeln!(f, "    output: {:?}", self.output)?;
+		writeln!(f, "    description: {:?}", self.description)?;
+		match &self.function {
+			NodeFunction::Arithmetic {
+				op,
+				input_1,
+				input_2,
+				input_left_network,
+				input_right_network,
+			} => {
+				writeln!(f, "    Arithmetic {{")?;
+				writeln!(
+					f,
+					"        expr: ({:?} {} {:?}),",
+					input_1,
+					op.resolve_string(),
+					input_2
+				)?;
+				writeln!(
+					f,
+					"        input_left_network: {:},",
+					colour_map(*input_left_network)
+				)?;
+				writeln!(
+					f,
+					"        input_right_network: {:}",
+					colour_map(*input_right_network)
+				)?;
+				writeln!(f, "    }}")?;
+			},
+			NodeFunction::Decider {
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				output_network,
+				use_input_count,
+				constants,
+			} => {
+				writeln!(f, "    Decider {{")?;
+				writeln!(f, "        expressions: [")?;
+				for i in 0..expressions.len() {
+					let c5 = colour_map(input_left_networks[i]);
+					let c6 = colour_map(input_right_networks[i]);
+					writeln!(
+						f,
+						"            {{ row: {:<10} {:<10} {:<10} {:<10}, nets: {:} {:}}},",
+						format!("{:?}", expression_conj_disj[i]),
+						format!("{:?}", expressions[i].0),
+						format!("{:?}", expressions[i].1),
+						format!("{:?}", expressions[i].2),
+						c5,
+						c6
+					)?;
+				}
+				writeln!(f, "        ],")?;
+				writeln!(
+					f,
+					"        output_network: {:?},",
+					output_network.iter().copied().map(colour_map).collect_vec()
+				)?;
+				writeln!(f, "        use_input_count: {:?},", use_input_count)?;
+				writeln!(f, "        constants: {:?}", constants)?;
+				writeln!(f, "    }}")?;
+			},
+			NodeFunction::Constant { enabled, constants } => {
+				writeln!(f, "    Constant {{")?;
+				writeln!(f, "        enabled: {:?},", enabled)?;
+				writeln!(f, "        constants: {:?}", constants)?;
+				writeln!(f, "    }}")?;
+			},
+			NodeFunction::Lamp { expression } => {
+				writeln!(f, "    Lamp {{")?;
+				writeln!(f, "        expression: {:?}", expression)?;
+				writeln!(f, "    }}")?;
+			},
+			NodeFunction::WireSum(wire_colour) => {
+				writeln!(f, "    WireSum {{ colour: {:?} }}", wire_colour)?;
+			},
+		};
+		write!(f, "}}")
 	}
 }
 
