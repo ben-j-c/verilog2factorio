@@ -1,10 +1,5 @@
-FROM mcr.microsoft.com/vscode/devcontainers/rust:latest
-
-RUN apt-get update && \
-	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-	git metis lua5.4 liblua5.4-0 liblua5.4-dev iverilog pkg-config gperf \
-	build-essential bison flex libreadline-dev gawk tcl-dev libffi-dev \
-	git graphviz xdot python3 libboost-system-dev libboost-python-dev \
-	libboost-filesystem-dev zlib1g-dev
-
+FROM peaboff/yosys:0.52
 ENV CARGO_TERM_COLOR=always
+ENV YOSYS_HOME=/core/yosys
+
+RUN cargo build --release

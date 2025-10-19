@@ -3,7 +3,7 @@
 git submodule update --init --recursive
 
 if [ ! $? -eq 0 ] ; then
-	git clone --depth 1 --branch v0.52  git@github.com:YosysHQ/yosys.git
+	git clone --depth 1 --branch v0.52  https://github.com/YosysHQ/yosys.git
 	cd yosys
 	git submodule update --init --recursive
 	cd ..

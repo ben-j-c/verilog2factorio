@@ -3,7 +3,6 @@
 	"build": {
 		"dockerfile": "dockerfile"
 	},
-	"postCreateCommand": ".devcontainer/onPostCreate.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
