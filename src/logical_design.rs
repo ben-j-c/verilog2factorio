@@ -562,9 +562,6 @@ impl LogicalDesign {
 		expr: (Signal, ArithmeticOperator, Signal),
 		output: Signal,
 	) -> NodeId {
-		if self.nodes.len() == 410 {
-			print!("");
-		}
 		self.add_node(
 			NodeFunction::Arithmetic {
 				op: expr.1,
@@ -651,6 +648,10 @@ impl LogicalDesign {
 			self.add_decider_out_input_count(ic, data, NET_RED);
 			ic
 		};
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(in_control, "in_control".to_owned());
+		}
 
 		let mem_cell = {
 			let mc = self.add_decider();
@@ -664,6 +665,10 @@ impl LogicalDesign {
 			self.add_decider_out_input_count(mc, data, NET_RED);
 			mc
 		};
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(mem_cell, "mem_cell".to_owned());
+		}
 
 		let clk_wire = self.add_wire_green(vec![], vec![in_control, mem_cell]);
 		self.add_wire_red(vec![in_control, mem_cell], vec![mem_cell]);
@@ -797,8 +802,26 @@ impl LogicalDesign {
 		let clk_wire = self.add_wire_red(vec![], vec![clk_buf_1, clk_buf_2]);
 		let arst_wire = self.add_wire_red(vec![], vec![arst_buf_1, arst_buf_2]);
 
+		let input = match input {
+			Signal::Everything => Signal::Each,
+			_ => input,
+		};
 		let final_out = self.add_nop(input, output);
 		self.add_wire_red(vec![latch_out_2], vec![final_out]);
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(clk_buf_1, "clk_buf_1".to_owned());
+			self.set_description_node(clk_buf_2, "clk_buf_2".to_owned());
+			self.set_description_node(arst_buf_1, "arst_buf_1".to_owned());
+			self.set_description_node(arst_buf_2, "arst_buf_2".to_owned());
+			self.set_description_node(latch_in_wire_1, "latch_in_wire_1".to_owned());
+			self.set_description_node(latch_in_wire_2, "latch_in_wire_2".to_owned());
+			self.set_description_node(latch_out_1, "latch_out_1".to_owned());
+			self.set_description_node(latch_out_2, "latch_out_2".to_owned());
+			self.set_description_node(clk_wire, "clk_wire".to_owned());
+			self.set_description_node(arst_wire, "arst_wire".to_owned());
+			self.set_description_node(final_out, "adff_q".to_owned());
+		}
 		(latch_in_wire_1, clk_wire, arst_wire, final_out, latch_out_2)
 	}
 
@@ -811,13 +834,10 @@ impl LogicalDesign {
 		output: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		let (d_wire_internal, clk_wire, arst_wire, q, loopback) =
-			self.add_adff_isolated(input, clk, arst, output);
+			self.add_adff_isolated(Signal::Everything, clk, arst, output);
 		let muxab = self.add_mux_internal::<2>(input, en);
-		self.add_wire_green(vec![], vec![]);
 
-		#[allow(unused)]
 		let en_buf = self.add_nop(en, en);
-		#[allow(unused)]
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
 		#[allow(unused)]
 		let select = self.add_wire_green_simple(en_buf, muxab[0]);
@@ -839,7 +859,7 @@ impl LogicalDesign {
 			self.set_description_node(muxab[0], "mux_a".to_owned());
 			self.set_description_node(muxab[1], "mux_b".to_owned());
 		}
-		(d_wire, clk_wire, arst_wire, en_wire, q)
+		(d_wire, clk_wire, en_wire, arst_wire, q)
 	}
 
 	pub(crate) fn add_dffe(
@@ -1128,6 +1148,7 @@ impl LogicalDesign {
 		);
 		self.add_decider_out_input_count(inp_b, b, NET_RED_GREEN);
 		let lhs = self.add_wire_red(vec![], vec![inp_a, inp_b]);
+		self.add_wire_red(vec![inp_a, inp_b], vec![]);
 		let outp = self.add_nop(Signal::Each, y);
 		self.add_wire_red_simple(inp_a, outp);
 		(lhs, lhs, lhs, outp)
@@ -2003,6 +2024,14 @@ impl LogicalDesign {
 		}
 	}
 
+	pub fn get_constant_enabled(&mut self, nodeid: NodeId) -> bool {
+		let node = &mut self.nodes[nodeid.0];
+		match &mut node.function {
+			NodeFunction::Constant { enabled, .. } => *enabled,
+			_ => panic!("Tried to read node {:?} as a constant. {:?}", nodeid, node),
+		}
+	}
+
 	/// A pattern for a lookup table. ehhhhh too lazy to spec it now. Raise an issue if you want me to.
 	pub fn add_lut(
 		&mut self,
@@ -2248,6 +2277,7 @@ impl LogicalDesign {
 			NET_GREEN,
 			NET_RED_GREEN,
 		);
+		self.add_decider_out_input_count(gate, clk_in, NET_RED);
 
 		self.add_wire_green_simple(delay, gate);
 		let ret_wire = self.add_wire_red(vec![], vec![delay, gate]);
@@ -2540,6 +2570,13 @@ impl LogicalDesign {
 
 	pub fn get_port_signal(&self, id: NodeId) -> Option<Signal> {
 		self.ports.iter().find(|v| v.id == id).map(|v| v.signal)
+	}
+
+	pub fn get_keepnet<S>(&self, name: S) -> Option<(NodeId, Signal, NodeId)>
+	where
+		S: AsRef<str>,
+	{
+		todo!()
 	}
 }
 

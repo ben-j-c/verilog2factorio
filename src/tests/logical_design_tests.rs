@@ -2,6 +2,7 @@ use std::{
 	cell::RefCell,
 	fs::File,
 	io::BufReader,
+	ops::Rem,
 	rc::Rc,
 	sync::{Arc, RwLock},
 };
@@ -1062,6 +1063,133 @@ fn simple_counter() {
 		{
 			let mut logd = logd.write().unwrap();
 			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 1);
+	}
+	sim.step(del);
+	assert_eq!(sim.probe_red_out(comb_q), vec![]);
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 0);
+	}
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
+}
+
+#[test]
+fn simple_counter_adffe() {
+	let mut logd = LogicalDesign::new();
+	let sig_arst = Signal::Id(0);
+	let sig_clk = Signal::Id(1);
+	let sig_en = Signal::Id(2);
+	let sig_q = Signal::Id(3);
+	let sig_data = Signal::Id(4);
+	let reset = logd.add_constant(vec![sig_arst], vec![0]);
+	let clock = logd.add_constant(vec![sig_clk], vec![0]);
+	let en = logd.add_constant(vec![sig_en], vec![1]);
+	let lamp_q = logd.add_lamp((sig_q, DeciderOperator::NotEqual, Signal::Constant(-1)));
+
+	let adder = logd.add_arithmetic(
+		(sig_q, ArithmeticOperator::Add, Signal::Constant(1)),
+		sig_data,
+	);
+
+	let (wire_data, wire_clk, wire_en, wire_arst, comb_q) =
+		logd.add_adffe(sig_data, sig_clk, sig_en, sig_arst, sig_q);
+
+	logd.connect_red(adder, wire_data);
+	logd.connect_red(clock, wire_clk);
+	logd.connect_red(en, wire_en);
+	logd.connect_red(reset, wire_arst);
+	logd.add_wire_red_simple(comb_q, lamp_q);
+	logd.add_wire_red_simple(comb_q, adder);
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	let del = 5;
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 1);
+	}
+	sim.step(del);
+	assert_eq!(sim.probe_red_out(comb_q), vec![]);
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 0);
+	}
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+		}
+
+		sim.step(del);
+	}
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 1);
+	}
+	sim.step(del);
+	{
+		let mut logd = logd.write().unwrap();
+		logd.set_ith_output_count(reset, 0, 0);
+	}
+	sim.step(del);
+	for i in 0..100 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 1);
+		}
+		sim.step(del);
+		assert_eq!(sim.probe_lamp_state(lamp_q), Some(true));
+		assert_eq!(sim.probe_red_out(comb_q), vec![(sig_q.id(), i / 2 + 1)]);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clock, 0, 0);
+			logd.set_ith_output_count(en, 0, i.rem(2));
 		}
 
 		sim.step(del);

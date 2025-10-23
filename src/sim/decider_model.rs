@@ -43,8 +43,10 @@ impl SimState {
 		for sig_id in 0..n_ids() {
 			let count = self.get_seen_signal_count(node.id, sig_id, network);
 			if let Some(constant) = constant {
-				output_state[sig_id] += constant;
-			} else {
+				if count != 0 {
+					output_state[sig_id] += constant;
+				}
+			} else if count != 0 {
 				output_state[sig_id] += count;
 			}
 		}
@@ -95,19 +97,27 @@ impl SimState {
 			if is_each {
 				for sig_id in sat_vec {
 					if let Some(c) = constant {
-						output_signals[sig_id] += c;
+						if c != 0 {
+							output_signals[sig_id] += c;
+						}
 					} else {
-						output_signals[sig_id] +=
-							self.get_seen_signal_count(node.id, sig_id, network);
+						let count = self.get_seen_signal_count(node.id, sig_id, network);
+						if count != 0 {
+							output_signals[sig_id] += count;
+						}
 					}
 				}
 			} else {
 				for _sig_id in sat_vec {
 					if let Some(c) = constant {
-						output_signals[output_id] += c;
+						if c != 0 {
+							output_signals[output_id] += c;
+						}
 					} else {
-						output_signals[output_id] +=
-							self.get_seen_signal_count(node.id, output_id, network)
+						let count = self.get_seen_signal_count(node.id, output_id, network);
+						if count != 0 {
+							output_signals[output_id] += count;
+						}
 					}
 				}
 			}
@@ -124,10 +134,14 @@ impl SimState {
 				if has_each_output {
 					// Todo handle if the fucker has an Each on some other output (:
 				} else if let Some(c) = constant {
-					output_signals[output_id] += c;
+					if c != 0 {
+						output_signals[output_id] += c;
+					}
 				} else {
-					output_signals[output_id] +=
-						self.get_seen_signal_count(node.id, output_id, network)
+					let count = self.get_seen_signal_count(node.id, output_id, network);
+					if count != 0 {
+						output_signals[output_id] += count;
+					}
 				}
 			}
 		}

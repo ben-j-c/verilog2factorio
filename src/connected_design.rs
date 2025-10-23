@@ -4,7 +4,7 @@ use std::vec;
 
 use itertools::Itertools;
 
-use crate::mapped_design::{Bit, Direction, Integer};
+use crate::mapped_design::{Bit, Direction, FromBinStr, Integer};
 use crate::mapped_design::{BitSliceOps, MappedDesign};
 
 type NodeId = usize;
@@ -29,6 +29,7 @@ pub struct ConnectedDesign {
 #[derive(Debug)]
 pub enum NodeIo {
 	Port {
+		direction: Direction,
 		mapped_id: String,
 		terminal_number: usize,
 		bits: Vec<Bit>,
@@ -177,6 +178,7 @@ impl ConnectedDesign {
 			if port.direction == Direction::Input || port.direction == Direction::Inout {
 				let ioid = io_map.len();
 				io_map.push(NodeIo::Port {
+					direction: port.direction,
 					mapped_id: mapped_id.to_owned(),
 					terminal_number: 1,
 					bits: port.bits.clone(),
@@ -190,6 +192,7 @@ impl ConnectedDesign {
 			if port.direction == Direction::Output || port.direction == Direction::Inout {
 				let ioid = io_map.len();
 				io_map.push(NodeIo::Port {
+					direction: port.direction,
 					mapped_id: mapped_id.to_owned(),
 					terminal_number: 0,
 					bits: port.bits.clone(),
@@ -201,19 +204,41 @@ impl ConnectedDesign {
 				});
 			}
 		});
+		for (netname, net) in mapped_design.iter_netnames() {
+			if let Some(keep_str) = net.attributes.get("keep") {
+				if keep_str.from_bin_str() != Some(1) {
+					continue;
+				}
+			} else {
+				continue;
+			}
+			let ioid = io_map.len();
+			io_map.push(NodeIo::Port {
+				direction: Direction::Output,
+				mapped_id: netname.to_owned(),
+				terminal_number: 0,
+				bits: net.bits.clone(),
+			});
+			net.bits.iter().for_each(|b| {
+				if let Bit::Id(bitid) = b {
+					bit_map[bitid.0 as usize][0].push(ioid);
+				}
+			});
+		}
 		let mut fanout_vec = vec![vec![]; io_map.len()];
 		let mut fanin_vec = vec![vec![]; io_map.len()];
 		let mut expr_vec = vec![vec![]; io_map.len()];
 		for (ioid, io) in io_map.iter().enumerate() {
 			let (bits, is_driver, is_sink, port_number) = match io {
 				NodeIo::Port {
-					mapped_id,
+					direction,
 					terminal_number: port_number,
+					bits,
 					..
 				} => (
-					&mapped_design.get_port(mapped_id).bits,
-					mapped_design.get_port(mapped_id).direction != Direction::Output,
-					mapped_design.get_port(mapped_id).direction != Direction::Input,
+					bits,
+					*direction != Direction::Output,
+					*direction != Direction::Input,
 					port_number,
 				),
 				NodeIo::Cell {

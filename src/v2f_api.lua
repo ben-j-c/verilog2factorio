@@ -19,7 +19,7 @@
 ---@field save_svg fun(self: SimStateAPI, filename: string)
 ---@field probe fun(self: SimStateAPI, loc: TerminalSide|Terminal): SignalTable
 ---@field probe_lamp_state fun(self: SimStateAPI, lamp: Lamp): boolean
----@field add_trace fun(self: SimStateAPI)
+---@field add_trace fun(self: SimStateAPI, node: Arithmetic|Decider|Lamp|Constant|number)
 ---@field inspect fun(self: SimStateAPI)
 ---@field apply_vcd fun(self: SimStateAPI, filename: string, inputs_lua: table, outputs_lua: table, propagation_delay: integer, reset: boolean): boolean
 

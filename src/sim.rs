@@ -1046,6 +1046,7 @@ impl SimState {
 			}
 			self.step(propagation_delay);
 			{
+				let mut good = true;
 				for (wire_name, (signal, id)) in &outputs {
 					let val = vcd.get_value(wire_name, vcd_time);
 					if let Some(v) = &val {
@@ -1056,22 +1057,40 @@ impl SimState {
 					}
 					let expected_count: i32 = convert_to_signal_count(&val);
 					let seen_signals = self.probe_input(*id, NET_RED_GREEN);
-					for (sig, actual_count) in seen_signals {
+
+					let mut found = false;
+					for (sig, actual_count) in seen_signals.clone() {
 						if sig == signal.id() {
 							if actual_count == expected_count {
+								found = true;
 								continue;
 							}
-							println!("At time {vcd_time}:");
-							println!("Expected {expected_count}, got {actual_count}.");
-							println!("Found unexpected value for output '{}'", wire_name);
-							println!("NodeId: {id}");
-							println!("Inputs:");
-							for (name, count) in &inputs_snapshot {
-								println!("\t{} = {}", name, count);
+							found = true;
+							if good {
+								println!("At time {vcd_time}:");
 							}
-							return false;
+							println!("Expected {expected_count}, got {actual_count}.");
+							println!("\tFound unexpected value for output '{}'", wire_name);
+							println!("\tNodeId: {id}");
+							good = false;
 						}
 					}
+					if !found && expected_count != 0 {
+						if good {
+							println!("At time {vcd_time}:");
+						}
+						println!("Expected {expected_count}, got 0.");
+						println!("\tFound unexpected value for output '{}'", wire_name);
+						println!("\tNodeId: {id}");
+						good = false;
+					}
+				}
+				if !good {
+					println!("Inputs:");
+					for (name, count) in &inputs_snapshot {
+						println!("\t{} = {}", name, count);
+					}
+					return false;
 				}
 			}
 		}
@@ -1101,6 +1120,7 @@ impl SimState {
 		println!("\tregex <id> // print sim row");
 		println!("\twire_net <id> // prints nodes attached to network");
 		println!("\tdump // dump whole sim state");
+		println!("\ttoggle // toggle a constant comb.");
 		let mut rl = rustyline::DefaultEditor::new().unwrap();
 		for readline in rl.iter("> ") {
 			match readline {
@@ -1183,6 +1203,15 @@ impl SimState {
 						}
 					} else if line.starts_with("dump") {
 						self.print();
+					} else if line.starts_with("t") {
+						for v in line.split(" ").skip(1) {
+							if let Ok(v) = v.parse::<usize>() {
+								let mut logd = self.logd.write().unwrap();
+								let en = !logd.get_constant_enabled(NodeId(v));
+								logd.set_constant_enabled(NodeId(v), en);
+								println!("Setting {} to {}", v, en);
+							}
+						}
 					}
 				},
 				Err(err) => {
@@ -1349,7 +1378,12 @@ impl Display for SimState {
 impl Display for SimStateRow {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if !self.red.data.is_empty() {
-			let mut data = self.red.data.iter().collect_vec();
+			let mut data = self
+				.red
+				.data
+				.iter()
+				.filter(|(_k, v)| **v != 0)
+				.collect_vec();
 			data.sort_by(|(id1, _), (id2, _)| id1.cmp(id2));
 			write!(
 				f,
@@ -1360,7 +1394,12 @@ impl Display for SimStateRow {
 			)?;
 		}
 		if !self.green.data.is_empty() {
-			let mut data = self.green.data.iter().collect_vec();
+			let mut data = self
+				.green
+				.data
+				.iter()
+				.filter(|(_k, v)| **v != 0)
+				.collect_vec();
 			data.sort_by(|(id1, _), (id2, _)| id1.cmp(id2));
 			write!(
 				f,

@@ -203,16 +203,16 @@ pub struct Memory {
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Net {
-	hide_name: i32,
+	pub hide_name: i32,
 	#[serde(default)]
-	attributes: HashM<AttributeName, Attribute>,
-	bits: Vec<Bit>,
+	pub attributes: HashM<AttributeName, Attribute>,
+	pub bits: Vec<Bit>,
 	#[serde(default)]
-	offset: isize,
+	pub offset: isize,
 	#[serde(default)]
-	upto: i32,
+	pub upto: i32,
 	#[serde(default)]
-	signed: i32,
+	pub signed: i32,
 }
 
 impl Cell {
@@ -507,6 +507,17 @@ impl MappedDesign {
 			if let Some(is_top) = module.attributes.get("top") {
 				if is_top.from_bin_str() == Some(1) {
 					return module.attributes["src"].clone();
+				}
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
+
+	pub(crate) fn iter_netnames(&self) -> impl Iterator<Item = (&str, &Net)> {
+		for module in self.modules.values() {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					return module.netnames.iter().map(|(k, v)| (k.as_ref(), v));
 				}
 			}
 		}

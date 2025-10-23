@@ -1,0 +1,5 @@
+#!/bin/bash
+echo "Making vcd."
+rm *tb.vcd 2> /dev/null
+iverilog  -I ../../core/riscv -o tb_obj *tb.v
+vvp tb_obj

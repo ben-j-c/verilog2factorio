@@ -800,17 +800,26 @@ impl UserData for LogicalDesignAPI {
 
 impl UserData for PhysicalDesignAPI {}
 
-fn verify_is_combinator(this: &SimStateAPI, data: &AnyUserData) -> Result<NodeId, mlua::Error> {
-	let (nodeid, logd) = if let Ok(x) = data.borrow::<Decider>() {
-		(x.id, x.logd.clone())
-	} else if let Ok(x) = data.borrow::<Arithmetic>() {
-		(x.id, x.logd.clone())
-	} else if let Ok(x) = data.borrow::<Lamp>() {
-		(x.id, x.logd.clone())
-	} else if let Ok(x) = data.borrow::<Constant>() {
-		(x.id, x.logd.clone())
-	} else {
-		return Err(Error::runtime("Got non-combinator as an input."));
+fn verify_is_combinator(_this: &SimStateAPI, data: &Value) -> Result<NodeId, mlua::Error> {
+	let nodeid = match data {
+		Value::Integer(i) => NodeId(*i as usize),
+		Value::UserData(data) => {
+			let (nodeid, _logd) = if let Ok(x) = data.borrow::<Decider>() {
+				(x.id, x.logd.clone())
+			} else if let Ok(x) = data.borrow::<Arithmetic>() {
+				(x.id, x.logd.clone())
+			} else if let Ok(x) = data.borrow::<Lamp>() {
+				(x.id, x.logd.clone())
+			} else if let Ok(x) = data.borrow::<Constant>() {
+				(x.id, x.logd.clone())
+			} else {
+				return Err(Error::runtime("Got non-combinator as an input."));
+			};
+			nodeid
+		},
+		_ => {
+			return Err(Error::runtime("Got non-combinator as an input."));
+		},
 	};
 	//if logd.as_ptr() != this.logd.as_ptr() {
 	//	return Err(Error::runtime(
@@ -864,13 +873,13 @@ impl UserData for SimStateAPI {
 			}
 			Ok(ret)
 		});
-		methods.add_method("add_trace", |_, this, data: AnyUserData| {
+		methods.add_method("add_trace", |_, this, data: Value| {
 			let nodeid = verify_is_combinator(this, &data)?;
 			this.sim.write().unwrap().add_trace(nodeid);
 			Ok(())
 		});
 		methods.add_method("probe_lamp_state", |_, this, data: AnyUserData| {
-			let nodeid = verify_is_combinator(this, &data)?;
+			let nodeid = verify_is_combinator(this, &Value::UserData(data.clone()))?;
 			if !data.is::<Lamp>() {
 				return Err(Error::runtime("Tried to probe a non-lamp as a lamp."));
 			}

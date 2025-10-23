@@ -17,7 +17,7 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::{hash_set, index_of, HashS},
+	util::{hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
 
@@ -158,6 +158,8 @@ pub struct CheckedDesign {
 	associated_logic: RefCell<Vec<Option<logical_design::NodeId>>>,
 
 	clocks: HashS<NodeId>,
+
+	keepnets: HashM<usize, NodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,7 +168,7 @@ enum NodeType {
 	CellOutput { port: String, connected_id: usize },
 	PortInput { connected_id: usize },
 	PortOutput { connected_id: usize },
-	PortBody,
+	PortBody { is_keepnet: bool },
 	CellBody { cell_type: BodyType },
 	Pruned,
 }
@@ -204,7 +206,8 @@ impl NodeType {
 			NodeType::CellOutput { .. } => "CellOutput",
 			NodeType::PortInput { .. } => "PortInput",
 			NodeType::PortOutput { .. } => "PortOutput",
-			NodeType::PortBody => "PortBody",
+			NodeType::PortBody { is_keepnet: false } => "PortBody",
+			NodeType::PortBody { is_keepnet: true } => "PortBodyKeepnet",
 			NodeType::CellBody { .. } => "CellBody",
 			NodeType::Pruned => "Pruned",
 		}
@@ -256,6 +259,7 @@ impl CheckedDesign {
 			coarse_exprs: vec![],
 			associated_logic: RefCell::new(vec![]),
 			clocks: hash_set(),
+			keepnets: hash_map(),
 		}
 	}
 
@@ -273,7 +277,7 @@ impl CheckedDesign {
 			NodeType::CellOutput { connected_id, .. } => Some(connected_id),
 			NodeType::PortInput { connected_id, .. } => Some(connected_id),
 			NodeType::PortOutput { connected_id, .. } => Some(connected_id),
-			NodeType::PortBody => None,
+			NodeType::PortBody { .. } => None,
 			NodeType::CellBody { .. } => None,
 			NodeType::Pruned => unreachable!(),
 		};
@@ -309,10 +313,10 @@ impl CheckedDesign {
 			(NodeType::CellInput { .. }, NodeType::CellBody { .. }) => {},
 			(NodeType::CellOutput { .. }, NodeType::CellInput { .. }) => {},
 			(NodeType::CellOutput { .. }, NodeType::PortInput { .. }) => {},
-			(NodeType::PortInput { .. }, NodeType::PortBody) => {},
+			(NodeType::PortInput { .. }, NodeType::PortBody { .. }) => {},
 			(NodeType::PortOutput { .. }, NodeType::CellInput { .. }) => {},
 			(NodeType::PortOutput { .. }, NodeType::PortInput { .. }) => {},
-			(NodeType::PortBody, NodeType::PortOutput { .. }) => {},
+			(NodeType::PortBody { .. }, NodeType::PortOutput { .. }) => {},
 			(NodeType::CellBody { .. }, NodeType::CellOutput { .. }) => {},
 			_ => assert!(false),
 		};
@@ -345,9 +349,20 @@ impl CheckedDesign {
 
 	fn initialize_nodes(&mut self, mapped_design: &MappedDesign) {
 		mapped_design.for_all_top_level_io(|_, name, _port| {
-			let id = self.new_node(name, NodeType::PortBody);
+			let id = self.new_node(name, NodeType::PortBody { is_keepnet: false });
 			self.nodes[id].keep = true;
 		});
+		for (netname, net) in mapped_design.iter_netnames() {
+			if let Some(keep_str) = net.attributes.get("keep") {
+				if keep_str.from_bin_str() != Some(1) {
+					continue;
+				}
+			} else {
+				continue;
+			}
+			let id = self.new_node(netname, NodeType::PortBody { is_keepnet: true });
+			self.nodes[id].keep = true;
+		}
 		mapped_design.for_all_cells(|_, name, cell| {
 			let id = self.new_node(
 				name,
@@ -367,7 +382,7 @@ impl CheckedDesign {
 			let node = &self.nodes[nodeid];
 			let mapped_id = node.mapped_id.clone();
 			match self.node_type(nodeid) {
-				NodeType::PortBody => {
+				NodeType::PortBody { is_keepnet: false } => {
 					let mapped_port = mapped_design.get_port(&node.mapped_id);
 					if mapped_port.direction == Direction::Output {
 						let id = self.new_node(
@@ -391,6 +406,18 @@ impl CheckedDesign {
 						);
 						self.connect(nodeid, id);
 					}
+				},
+				NodeType::PortBody { is_keepnet: true } => {
+					// Keepnets are just outputs
+					let id = self.new_node(
+						&mapped_id,
+						NodeType::PortInput {
+							connected_id: self
+								.connected_design
+								.get_node_id(&mapped_id, &"A".to_owned()),
+						},
+					);
+					self.connect(id, nodeid);
 				},
 				NodeType::CellBody { .. } => {
 					let cell = mapped_design.get_cell(&mapped_id);
@@ -737,7 +764,7 @@ impl CheckedDesign {
 		let mut signal_choices = vec![Signal::None; self.nodes.len()];
 		let mut fallback_id = 0;
 		for node in &self.nodes {
-			if node.node_type == NodeType::PortBody {
+			if matches!(node.node_type, NodeType::PortBody { .. }) {
 				let mut choice = Signal::None;
 				if let Some(fiid) = node.fanin.first() {
 					let attached = self.get_attached_nodes(*fiid);
@@ -848,7 +875,7 @@ impl CheckedDesign {
 				},
 				NodeType::PortInput { .. }
 				| NodeType::PortOutput { .. }
-				| NodeType::PortBody
+				| NodeType::PortBody { .. }
 				| NodeType::CellBody { .. } => {
 					continue;
 				},
@@ -906,7 +933,7 @@ impl CheckedDesign {
 						assert_eq!(signal_choices[node.id], signal_choices[*foid]);
 					}
 				},
-				NodeType::PortBody => {
+				NodeType::PortBody { .. } => {
 					assert!(signal_choices[node.id].is_some());
 					assert!(matches!(signal_choices[node.id], Signal::Id(_)));
 					for foid in &node.fanout {
@@ -1007,7 +1034,7 @@ impl CheckedDesign {
 				NodeType::CellOutput { .. } | NodeType::PortOutput { .. } => {
 					connectivity[idx].push(id_to_idx[&node.fanin[0]]);
 				},
-				NodeType::CellBody { .. } | NodeType::PortBody => {
+				NodeType::CellBody { .. } | NodeType::PortBody { .. } => {
 					for fiid in &node.fanin {
 						if id_to_idx.contains_key(fiid) {
 							connectivity[idx].push(id_to_idx[fiid]);
@@ -1116,7 +1143,7 @@ impl CheckedDesign {
 				}
 				true
 			},
-			NodeType::PortBody => false,
+			NodeType::PortBody { .. } => false,
 			NodeType::CellBody { .. } => false,
 			NodeType::Pruned => false,
 		}
@@ -1152,7 +1179,7 @@ impl CheckedDesign {
 
 	fn get_local_cell_io_network(&self, nodeid: NodeId) -> Vec<NodeId> {
 		match self.node_type(nodeid) {
-			NodeType::CellBody { .. } | NodeType::PortBody => {
+			NodeType::CellBody { .. } | NodeType::PortBody { .. } => {
 				return vec![];
 			},
 			_ => {},
@@ -1181,7 +1208,7 @@ impl CheckedDesign {
 						queue.insert(*foid);
 					}
 				},
-				NodeType::PortBody | NodeType::CellBody { .. } => {
+				NodeType::PortBody { .. } | NodeType::CellBody { .. } => {
 					panic!("Implementer is a fucking moron.")
 				},
 				NodeType::Pruned => {},
@@ -1192,7 +1219,7 @@ impl CheckedDesign {
 
 	fn get_attached_nodes(&self, nodeid: NodeId) -> Vec<NodeId> {
 		match self.node_type(nodeid) {
-			NodeType::CellBody { .. } | NodeType::PortBody => {
+			NodeType::CellBody { .. } | NodeType::PortBody { .. } => {
 				return vec![];
 			},
 			_ => {},
@@ -1222,7 +1249,7 @@ impl CheckedDesign {
 					queue.extend(self.nodes[curid].fanout.iter());
 					queue.extend(self.nodes[self.nodes[curid].fanin[0]].fanin.iter());
 				},
-				NodeType::CellBody { .. } | NodeType::PortBody => {
+				NodeType::CellBody { .. } | NodeType::PortBody { .. } => {
 					panic!("Implementer is a fucking moron")
 				},
 				NodeType::Pruned => {},
@@ -1324,7 +1351,7 @@ impl CheckedDesign {
 						);
 					}
 				},
-				NodeType::PortBody => {
+				NodeType::PortBody { .. } => {
 					if !node.fanout.is_empty() {
 						let new_id =
 							logical_design.add_constant(vec![self.signals[nodeid]], vec![0]);
@@ -1483,11 +1510,28 @@ impl CheckedDesign {
 				),
 				NodeType::PortOutput { .. } => logical_design
 					.append_description(logic_map[nodeid].unwrap(), node.mapped_id.as_str()),
-				NodeType::PortBody => {},
+				NodeType::PortBody { .. } => {},
 				NodeType::CellBody { .. } => {},
 			}
 		}
 		self.associated_logic.replace(logic_map);
+		let mut bad_design = false;
+		for node in &logical_design.nodes {
+			if node.is_arithmetic() || node.is_decider() {
+				if node.fanout_empty() {
+					println!("ERROR: dangling combinator. Node:\n {node:?}");
+					bad_design = true;
+				}
+			}
+			if node.is_constant() {
+				if node.fanout_empty() {
+					println!("WARN: dangling constant. Node:\n {node:?}");
+				}
+			}
+		}
+		if bad_design {
+			panic!("Shoudln't proceed due to bad logical design construction.");
+		}
 	}
 
 	fn apply_multipart_op(
@@ -2136,6 +2180,34 @@ impl CheckedDesign {
 			}
 		}
 	}
+
+	fn mark_keepnets(&self, mapped_design: &MappedDesign) {
+		let mut bit_to_net = hash_map();
+		for (netname, net) in mapped_design.iter_netnames() {
+			if !net.attributes.contains_key("keep") {
+				continue;
+			}
+			for bit in &net.bits {
+				match bit {
+					crate::mapped_design::Bit::Id(bit_id) => {
+						bit_to_net.insert(bit_id.0, (netname, net.bits.clone()));
+					},
+					_ => {
+						println!("WARNING: {} has constant drivers.", netname)
+					},
+				}
+			}
+		}
+		for id in 0..self.nodes.len() {
+			let node = &self.nodes[id];
+			match node.node_type {
+				NodeType::CellOutput { connected_id, .. } => {
+					//
+				},
+				_ => {},
+			}
+		}
+	}
 }
 
 mod graph_viz {
@@ -2187,7 +2259,7 @@ mod graph_viz {
 				NodeType::CellOutput { .. } => "rarrow",
 				NodeType::PortInput { .. } => "larrow",
 				NodeType::PortOutput { .. } => "rarrow",
-				NodeType::PortBody => "box",
+				NodeType::PortBody { .. } => "box",
 				NodeType::CellBody { .. } => "box",
 				NodeType::Pruned => "point",
 			};
@@ -2206,6 +2278,16 @@ mod graph_viz {
 			for dst_id in &src_node.fanout {
 				if matches!(design.node_type(*dst_id), NodeType::Pruned) {
 					continue;
+				}
+				let dst_node = &design.nodes[*dst_id];
+				match &dst_node.node_type {
+					NodeType::CellInput { port, .. }
+						if port.to_lowercase().contains("clk")
+							|| port.to_lowercase().contains("arst") =>
+					{
+						continue;
+					},
+					_ => {},
 				}
 
 				let src_id_str = format!("n{}", src_node.id);

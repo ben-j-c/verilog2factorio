@@ -1,0 +1,58 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n0[shape=box,label="clk_i
+2"]
+  n1[shape=box,label="rst_i
+5"]
+  n2[shape=box,label="q_o
+6"]
+  n3[shape=box,label="data_i
+7"]
+  n4[shape=box,label="en_i
+8"]
+  n5[shape=box,label="$13
+$adffe"]
+  n6[shape=rarrow,label="clk_i
+2"]
+  n7[shape=rarrow,label="rst_i
+5"]
+  n8[shape=larrow,label="q_o
+36"]
+  n9[shape=rarrow,label="data_i
+7"]
+  n10[shape=rarrow,label="en_i
+8"]
+  n11[shape=larrow,label="$13
+$adffe
+34
+D"]
+  n12[shape=larrow,label="$13
+$adffe
+23
+CLK"]
+  n13[shape=larrow,label="$13
+$adffe
+32
+EN"]
+  n14[shape=larrow,label="$13
+$adffe
+24
+ARST"]
+  n15[shape=rarrow,label="$13
+$adffe
+25
+Q"]
+  n0 -> n6
+  n1 -> n7
+  n3 -> n9
+  n4 -> n10
+  n5 -> n15
+  n8 -> n2
+  n9 -> n11 [label="storage-tank(3)",syle=bold,color=blue]
+  n10 -> n13 [label="transport-belt(4)",syle=bold,color=blue]
+  n11 -> n5
+  n12 -> n5
+  n13 -> n5
+  n14 -> n5
+  n15 -> n8 [label="steel-chest(2)",syle=bold,color=blue]
+}
