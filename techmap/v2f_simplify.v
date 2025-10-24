@@ -232,3 +232,33 @@ module v2f_rule_mod_signed_to_unsigned(A, B, Y);
 		r_final = ($signed(r) >= d) ? r - d : r;
 	end
 endmodule
+
+(* techmap_celltype = "$adffe" *)
+module v2f_rule_adffe_narrow(CLK, ARST, EN, D, Q);
+	parameter WIDTH = 32;
+	parameter CLK_POLARITY = 1'b1;
+	parameter EN_POLARITY = 1'b1;
+	parameter ARST_POLARITY = 1'b1;
+	parameter ARST_VALUE = 0;
+
+	wire _TECHMAP_FAIL_ = WIDTH <= 32;
+
+	input CLK, ARST, EN;
+	input [WIDTH-1:0] D;
+	output reg [WIDTH-1:0] Q;
+	wire pos_clk = CLK == CLK_POLARITY;
+	wire pos_arst = ARST == ARST_POLARITY;
+
+	genvar i;
+	generate
+		for (i = 0; i < WIDTH; i = i + 32) begin
+			localparam limit = WIDTH < (i+1)*32 ? WIDTH : (i+1)*32;
+			always @(posedge pos_clk, posedge pos_arst) begin
+				if (pos_arst)
+					Q[limit-1:i*32] <= ARST_VALUE;
+				else if (EN == EN_POLARITY)
+					Q[limit-1:i*32] <= D;
+			end
+		end
+	endgenerate
+endmodule
