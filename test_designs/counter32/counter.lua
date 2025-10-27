@@ -1,4 +1,4 @@
-name = "adffe"
+name = "counter"
 module = name
 module_file = "./" .. module .. ".v"
 vcd_file = "." .. name .. "_tb.vcd"

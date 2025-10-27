@@ -1,4 +1,4 @@
-name = "adffe"
+name = "pmux"
 module = name
 module_file = "./" .. module .. ".v"
 vcd_file = "." .. name .. "_tb.vcd"
@@ -15,7 +15,7 @@ end
 
 outputs = {}
 for index, value in pairs(logd:out_ports()) do
-	outputs["tb." .. index] = value
+	outputs["tb.dut." .. index] = value
 end
 
 if not os.execute("../makevcd") then

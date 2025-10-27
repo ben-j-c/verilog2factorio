@@ -1,10 +1,10 @@
 {
   "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
   "modules": {
-    "adffe": {
+    "counter": {
       "attributes": {
         "top": "00000000000000000000000000000001",
-        "src": "./adffe.v:3.1-17.10"
+        "src": "./counter.v:3.1-16.10"
       },
       "ports": {
         "clk_i": {
@@ -19,28 +19,48 @@
           "direction": "input",
           "bits": [ 4 ]
         },
-        "data_i": {
-          "direction": "input",
-          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ]
-        },
         "q_o": {
           "direction": "output",
-          "bits": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ]
+          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ]
         }
       },
       "cells": {
-        "$auto$ff.cc:266:slice$13": {
+        "$add$./counter.v:13$2": {
+          "hide_name": 1,
+          "type": "$add",
+          "parameters": {
+            "A_SIGNED": "00000000000000000000000000000000",
+            "A_WIDTH": "00000000000000000000000000100000",
+            "B_SIGNED": "00000000000000000000000000000000",
+            "B_WIDTH": "00000000000000000000000000000001",
+            "Y_WIDTH": "00000000000000000000000000100000"
+          },
+          "attributes": {
+            "src": "./counter.v:13.11-13.22"
+          },
+          "port_directions": {
+            "A": "input",
+            "B": "input",
+            "Y": "output"
+          },
+          "connections": {
+            "A": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
+            "B": [ "1" ],
+            "Y": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ]
+          }
+        },
+        "$auto$ff.cc:266:slice$14": {
           "hide_name": 1,
           "type": "$adffe",
           "parameters": {
             "ARST_POLARITY": "00000000000000000000000000000001",
-            "ARST_VALUE": "00000000000000000000000000001010",
+            "ARST_VALUE": "00000000000000000000000000000000",
             "CLK_POLARITY": "00000000000000000000000000000001",
             "EN_POLARITY": "00000000000000000000000000000001",
             "WIDTH": "00000000000000000000000000100000"
           },
           "attributes": {
-            "src": "./adffe.v:10.2-16.5"
+            "src": "./counter.v:9.2-15.5"
           },
           "port_directions": {
             "ARST": "input",
@@ -52,46 +72,46 @@
           "connections": {
             "ARST": [ 3 ],
             "CLK": [ 2 ],
-            "D": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
+            "D": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ],
             "EN": [ 4 ],
-            "Q": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ]
+            "Q": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ]
           }
         }
       },
       "netnames": {
+        "$add$./counter.v:13$2_Y": {
+          "hide_name": 1,
+          "bits": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ],
+          "attributes": {
+            "src": "./counter.v:13.11-13.22"
+          }
+        },
         "clk_i": {
           "hide_name": 0,
           "bits": [ 2 ],
           "attributes": {
-            "src": "./adffe.v:4.8-4.13"
-          }
-        },
-        "data_i": {
-          "hide_name": 0,
-          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
-          "attributes": {
-            "src": "./adffe.v:7.15-7.21"
+            "src": "./counter.v:4.8-4.13"
           }
         },
         "en_i": {
           "hide_name": 0,
           "bits": [ 4 ],
           "attributes": {
-            "src": "./adffe.v:6.8-6.12"
+            "src": "./counter.v:6.8-6.12"
           }
         },
         "q_o": {
           "hide_name": 0,
-          "bits": [ 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68 ],
+          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
           "attributes": {
-            "src": "./adffe.v:8.20-8.23"
+            "src": "./counter.v:7.20-7.23"
           }
         },
         "rst_i": {
           "hide_name": 0,
           "bits": [ 3 ],
           "attributes": {
-            "src": "./adffe.v:5.8-5.13"
+            "src": "./counter.v:5.8-5.13"
           }
         }
       }
@@ -719,7 +739,7 @@
         }
       },
       "cells": {
-        "$mul$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:45$2": {
+        "$mul$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:45$3": {
           "hide_name": 1,
           "type": "$mul",
           "parameters": {
@@ -745,7 +765,7 @@
         }
       },
       "netnames": {
-        "$mul$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:45$2_Y": {
+        "$mul$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:45$3_Y": {
           "hide_name": 1,
           "bits": [ 4 ],
           "attributes": {
@@ -810,7 +830,7 @@
         }
       },
       "cells": {
-        "$ternary$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:294$7": {
+        "$ternary$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:294$8": {
           "hide_name": 1,
           "type": "$mux",
           "parameters": {
@@ -834,7 +854,7 @@
         }
       },
       "netnames": {
-        "$ternary$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:294$7_Y": {
+        "$ternary$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:294$8_Y": {
           "hide_name": 1,
           "bits": [ 7, 8 ],
           "attributes": {
@@ -1374,7 +1394,7 @@
         }
       },
       "cells": {
-        "$shl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:160$3": {
+        "$shl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:160$4": {
           "hide_name": 1,
           "type": "$shl",
           "parameters": {
@@ -1400,7 +1420,7 @@
         }
       },
       "netnames": {
-        "$shl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:160$3_Y": {
+        "$shl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:160$4_Y": {
           "hide_name": 1,
           "bits": [ 4 ],
           "attributes": {
@@ -1459,7 +1479,7 @@
         }
       },
       "cells": {
-        "$shr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:193$6": {
+        "$shr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:193$7": {
           "hide_name": 1,
           "type": "$shr",
           "parameters": {
@@ -1485,7 +1505,7 @@
         }
       },
       "netnames": {
-        "$shr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:193$6_Y": {
+        "$shr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:193$7_Y": {
           "hide_name": 1,
           "bits": [ 4 ],
           "attributes": {
@@ -1544,7 +1564,7 @@
         }
       },
       "cells": {
-        "$sshl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:171$4": {
+        "$sshl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:171$5": {
           "hide_name": 1,
           "type": "$sshl",
           "parameters": {
@@ -1570,7 +1590,7 @@
         }
       },
       "netnames": {
-        "$sshl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:171$4_Y": {
+        "$sshl$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:171$5_Y": {
           "hide_name": 1,
           "bits": [ 4 ],
           "attributes": {
@@ -1629,7 +1649,7 @@
         }
       },
       "cells": {
-        "$sshr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:182$5": {
+        "$sshr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:182$6": {
           "hide_name": 1,
           "type": "$sshr",
           "parameters": {
@@ -1655,7 +1675,7 @@
         }
       },
       "netnames": {
-        "$sshr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:182$5_Y": {
+        "$sshr$/home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v:182$6_Y": {
           "hide_name": 1,
           "bits": [ 4 ],
           "attributes": {

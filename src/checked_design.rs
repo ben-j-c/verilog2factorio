@@ -1355,6 +1355,7 @@ impl CheckedDesign {
 					if !node.fanout.is_empty() {
 						let new_id =
 							logical_design.add_constant(vec![self.signals[nodeid]], vec![0]);
+						logical_design.set_description_node(new_id, node.mapped_id.clone());
 						if self.clocks.contains(&nodeid) {
 							let (wire, gate) =
 								logical_design.add_edge_detector(self.signals[nodeid]);
@@ -1527,6 +1528,24 @@ impl CheckedDesign {
 				if node.fanout_empty() {
 					println!("WARN: dangling constant. Node:\n {node:?}");
 				}
+			}
+		}
+		for node in &logical_design.nodes {
+			for foid in &node.fanout_red {
+				let node2 = &logical_design.nodes[foid.0];
+				assert!(node2.fanin_red.contains(&node.id));
+			}
+			for foid in &node.fanout_green {
+				let node2 = &logical_design.nodes[foid.0];
+				assert!(node2.fanin_green.contains(&node.id));
+			}
+			for foid in &node.fanin_red {
+				let node2 = &logical_design.nodes[foid.0];
+				assert!(node2.fanout_red.contains(&node.id));
+			}
+			for foid in &node.fanin_green {
+				let node2 = &logical_design.nodes[foid.0];
+				assert!(node2.fanout_green.contains(&node.id));
 			}
 		}
 		if bad_design {
@@ -1816,13 +1835,30 @@ impl CheckedDesign {
 				(vec![wire_data, wire_clk, wire_srst, wire_en], vec![comb_q])
 			},
 			ImplementableOp::ADFFE => {
-				let (wire_data, wire_clk, wire_en, wire_arst, comb_q) = logical_design
-					.add_adffe(sig_in[0], sig_in[1], sig_in[2], sig_in[3], sig_out[0]);
+				let reset_value = mapped_cell.unwrap().parameters["ARST_VALUE"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let (wire_data, wire_clk, wire_en, wire_arst, comb_q) = logical_design.add_adffe(
+					sig_in[0],
+					sig_in[1],
+					sig_in[2],
+					sig_in[3],
+					sig_out[0],
+					reset_value,
+				);
 				(vec![wire_data, wire_clk, wire_en, wire_arst], vec![comb_q])
 			},
 			ImplementableOp::ADFF => {
-				let (dw, cw, aw, qc, _lb) =
-					logical_design.add_adff_isolated(sig_in[0], sig_in[1], sig_in[2], sig_out[0]);
+				let reset_value = mapped_cell.unwrap().parameters["ARST_VALUE"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let (dw, cw, aw, qc, _lb) = logical_design.add_adff_isolated(
+					sig_in[0],
+					sig_in[1],
+					sig_in[2],
+					sig_out[0],
+					reset_value,
+				);
 				(vec![dw, cw, aw], vec![qc])
 			},
 			ImplementableOp::DFFE => {

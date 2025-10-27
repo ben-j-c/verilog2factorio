@@ -17,30 +17,30 @@ $adffe"]
   n7[shape=rarrow,label="rst_i
 5"]
   n8[shape=larrow,label="q_o
-36"]
+42"]
   n9[shape=rarrow,label="data_i
 7"]
   n10[shape=rarrow,label="en_i
 8"]
   n11[shape=larrow,label="$13
 $adffe
-34
+40
 D"]
   n12[shape=larrow,label="$13
 $adffe
-23
+29
 CLK"]
   n13[shape=larrow,label="$13
 $adffe
-32
+38
 EN"]
   n14[shape=larrow,label="$13
 $adffe
-24
+30
 ARST"]
   n15[shape=rarrow,label="$13
 $adffe
-25
+31
 Q"]
   n0 -> n6
   n1 -> n7

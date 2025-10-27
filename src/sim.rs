@@ -172,6 +172,9 @@ impl SimState {
 				}
 			}
 			for wire in &network_wires {
+				if self.network_ownership[wire.0] != NetId::default() {
+					panic!("Seen the same wire in multiple different networks");
+				}
 				self.network_ownership[wire.0] = network_id;
 			}
 			self.network.push(WireNetwork {
@@ -181,6 +184,7 @@ impl SimState {
 				colour,
 			});
 		}
+		assert_eq!(self.network_ownership[1165], self.network_ownership[1166]);
 	}
 
 	pub fn add_trace(&mut self, node: NodeId) {
@@ -1045,6 +1049,40 @@ impl SimState {
 				}
 			}
 			self.step(propagation_delay);
+			#[cfg(false)]
+			{
+				{
+					let logd = self.logd.read().unwrap();
+					println!("\nSTART-------------------{vcd_time}-----------------------");
+					for x in 0..self.state.len() {
+						println!("{}", logd.get_node(NodeId(x)));
+						self.print_row(x);
+					}
+				}
+				if vcd_time == 14 {
+					for i in 0..propagation_delay {
+						self.step(1);
+						{
+							let logd = self.logd.read().unwrap();
+							println!("\nSTEP-------------------{i}-----------------------");
+							for x in 0..self.state.len() {
+								println!("{}", logd.get_node(NodeId(x)));
+								self.print_row(x);
+							}
+						}
+					}
+				} else {
+					self.step(propagation_delay);
+				}
+				{
+					let logd = self.logd.read().unwrap();
+					println!("\nEND--------------------{vcd_time}-----------------------");
+					for x in 0..self.state.len() {
+						println!("{}", logd.get_node(NodeId(x)));
+						self.print_row(x);
+					}
+				}
+			}
 			{
 				let mut good = true;
 				for (wire_name, (signal, id)) in &outputs {
@@ -1202,7 +1240,11 @@ impl SimState {
 							}
 						}
 					} else if line.starts_with("dump") {
-						self.print();
+						let logd = self.logd.read().unwrap();
+						for x in 0..self.state.len() {
+							println!("{}", logd.get_node(NodeId(x)));
+							self.print_row(x);
+						}
 					} else if line.starts_with("t") {
 						for v in line.split(" ").skip(1) {
 							if let Ok(v) = v.parse::<usize>() {

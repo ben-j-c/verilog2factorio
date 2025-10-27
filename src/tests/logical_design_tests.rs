@@ -1040,7 +1040,7 @@ fn simple_counter() {
 	);
 
 	let (wire_data, wire_clk, wire_arst, comb_q, _loopback) =
-		logd.add_adff_isolated(sig_data, sig_clk, sig_arst, sig_q);
+		logd.add_adff_isolated(sig_data, sig_clk, sig_arst, sig_q, 0);
 
 	logd.connect_red(adder, wire_data);
 	logd.connect_red(clock, wire_clk);
@@ -1114,7 +1114,7 @@ fn simple_counter_adffe() {
 	);
 
 	let (wire_data, wire_clk, wire_en, wire_arst, comb_q) =
-		logd.add_adffe(sig_data, sig_clk, sig_en, sig_arst, sig_q);
+		logd.add_adffe(sig_data, sig_clk, sig_en, sig_arst, sig_q, 0);
 
 	logd.connect_red(adder, wire_data);
 	logd.connect_red(clock, wire_clk);

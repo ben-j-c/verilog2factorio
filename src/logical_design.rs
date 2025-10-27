@@ -23,7 +23,7 @@
 //! See [LogicalDesign] for more details on how to build designs.
 
 use std::{
-	collections::{BTreeSet, HashSet},
+	collections::{BTreeSet, HashSet, LinkedList},
 	fmt::{Debug, Display},
 	hash::Hash,
 	i32,
@@ -784,6 +784,7 @@ impl LogicalDesign {
 		clk: Signal,
 		arst: Signal,
 		output: Signal,
+		reset_value: i32,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		let clk_buf_1 = self.add_neg(clk, clk);
 		let clk_buf_2 = self.add_nop(clk, clk);
@@ -793,6 +794,48 @@ impl LogicalDesign {
 			self.add_latch_arst(input, clk, arst);
 		let (latch_in_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
 			self.add_latch_arst(input, clk, arst);
+
+		if reset_value != 0 {
+			let reset_emitter = self.add_decider();
+			self.add_decider_input(
+				reset_emitter,
+				(arst, DeciderOperator::Equal, Signal::Constant(1)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_GREEN,
+			);
+			let input = match input {
+				Signal::Everything => match output {
+					Signal::Everything | Signal::Each => {
+						panic!("Cant support reset value with vector dff")
+					},
+					_ => output,
+				},
+				_ => input,
+			};
+			self.add_decider_out_constant(reset_emitter, input, reset_value, NET_RED_GREEN);
+			self.add_wire_green_simple(arst_buf_2, reset_emitter);
+			self.add_wire_red(vec![reset_emitter, latch_out_2], vec![]);
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(reset_emitter, "reset_emitter_2".to_owned());
+			}
+			let reset_emitter = self.add_decider();
+			self.add_decider_input(
+				reset_emitter,
+				(arst, DeciderOperator::Equal, Signal::Constant(1)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_GREEN,
+			);
+			self.add_decider_out_constant(reset_emitter, input, reset_value, NET_RED_GREEN);
+			self.add_wire_green_simple(arst_buf_2, reset_emitter);
+			self.add_wire_red(vec![reset_emitter, latch_out_1], vec![]);
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(reset_emitter, "reset_emitter_1".to_owned());
+			}
+		}
 
 		self.connect_red(latch_out_1, latch_in_wire_2);
 		self.connect_green(clk_buf_1, clk_wire_1);
@@ -832,9 +875,10 @@ impl LogicalDesign {
 		en: Signal,
 		arst: Signal,
 		output: Signal,
+		reset_value: i32,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		let (d_wire_internal, clk_wire, arst_wire, q, loopback) =
-			self.add_adff_isolated(Signal::Everything, clk, arst, output);
+			self.add_adff_isolated(input, clk, arst, output, reset_value);
 		let muxab = self.add_mux_internal::<2>(input, en);
 
 		let en_buf = self.add_nop(en, en);
@@ -1381,6 +1425,7 @@ impl LogicalDesign {
 						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
+						0,
 					),
 					ResetSpec::Disabled => {
 						if let Some(en) = p.en {
@@ -1633,6 +1678,7 @@ impl LogicalDesign {
 						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
+						0,
 					),
 					ResetSpec::Disabled => {
 						if let Some(en) = p.en {
@@ -2273,7 +2319,7 @@ impl LogicalDesign {
 		self.add_decider_input(
 			gate,
 			(clk_in, DeciderOperator::Equal, Signal::Constant(0)),
-			DeciderRowConjDisj::FirstRow,
+			DeciderRowConjDisj::And,
 			NET_GREEN,
 			NET_RED_GREEN,
 		);
@@ -2437,43 +2483,44 @@ impl LogicalDesign {
 		} else {
 			self.get_wire_colour(nodeid)
 		};
-		let mut retval = vec![];
-		let mut queue = BTreeSet::new();
-		let mut seen = HashSet::new();
-		queue.insert((nodeid, false));
+		let mut retval = hash_set();
+		let mut queue = LinkedList::new();
+		let mut seen = hash_set();
+		queue.push_back((nodeid, false));
 		while !queue.is_empty() {
-			let (curid, direction) = queue.pop_first().unwrap();
-			if !seen.insert(curid) {
+			let (curid, direction) = queue.pop_front().unwrap();
+			if seen.contains(&(curid, direction)) {
 				continue;
 			}
+			seen.insert((curid, direction));
 			let node = self.get_node(curid);
 			match node.function {
 				NodeFunction::WireSum(wire_colour) => {
-					retval.push(curid);
+					retval.insert(curid);
 					if wire_colour == colour {
 						for foid in node.iter_fanout(colour) {
-							queue.insert((*foid, false));
+							queue.push_back((*foid, false));
 						}
 						for fiid in node.iter_fanin(colour) {
-							queue.insert((*fiid, true));
+							queue.push_back((*fiid, true));
 						}
 					}
 				},
 				_ => match direction {
 					true => {
 						for foid in node.iter_fanout(colour) {
-							queue.insert((*foid, false));
+							queue.push_back((*foid, false));
 						}
 					},
 					false => {
 						for fiid in node.iter_fanin(colour) {
-							queue.insert((*fiid, true));
+							queue.push_back((*fiid, true));
 						}
 					},
 				},
 			}
 		}
-		retval
+		retval.into_iter().collect_vec()
 	}
 
 	pub fn set_description_node<S: Into<String>>(&mut self, id: NodeId, desc: S) {
