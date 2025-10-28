@@ -96,6 +96,10 @@ impl Bit {
 			Bit::Id(_) => panic!("Unwrapped a connection as a constant."),
 		}
 	}
+
+	fn is_non_zero(&self) -> bool {
+		matches!(self, Bit::Id(_) | Bit::One)
+	}
 }
 
 pub trait Integer: Copy + PartialOrd + Sized {
@@ -904,7 +908,7 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 		new_connections.insert(format!("S{}", idx), vec![*bit]);
 		new_directions.insert(format!("S{}", idx), Direction::Input);
 	}
-	let full_case = pre_mapped
+	let mut full_case = pre_mapped
 		.attributes
 		.get("full_case")
 		.map(|full_case| {
@@ -912,6 +916,9 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 			val.unwrap_or_default() > 0
 		})
 		.unwrap_or_default();
+	if full_case {
+		full_case = !pre_mapped.connections["A"].iter().any(|b| b.is_non_zero())
+	}
 	let s_width = pre_mapped.parameters["S_WIDTH"].unwrap_bin_str();
 	if !full_case {
 		new_connections.insert("A".to_string(), pre_mapped.connections["A"].clone());

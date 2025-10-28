@@ -184,7 +184,7 @@ impl SimState {
 				colour,
 			});
 		}
-		assert_eq!(self.network_ownership[1165], self.network_ownership[1166]);
+		//assert_eq!(self.network_ownership[1165], self.network_ownership[1166]);
 	}
 
 	pub fn add_trace(&mut self, node: NodeId) {
