@@ -1838,6 +1838,15 @@ impl CheckedDesign {
 				let reset_value = mapped_cell.unwrap().parameters["ARST_VALUE"]
 					.from_bin_str()
 					.unwrap() as i32;
+				let arst_polarity = mapped_cell.unwrap().parameters["ARST_POLARITY"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let clk_polarity = mapped_cell.unwrap().parameters["CLK_POLARITY"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let en_polarity = mapped_cell.unwrap().parameters["EN_POLARITY"]
+					.from_bin_str()
+					.unwrap() as i32;
 				let (wire_data, wire_clk, wire_en, wire_arst, comb_q) = logical_design.add_adffe(
 					sig_in[0],
 					sig_in[1],
@@ -1845,11 +1854,20 @@ impl CheckedDesign {
 					sig_in[3],
 					sig_out[0],
 					reset_value,
+					en_polarity == 0,
+					clk_polarity == 0,
+					arst_polarity == 0,
 				);
 				(vec![wire_data, wire_clk, wire_en, wire_arst], vec![comb_q])
 			},
 			ImplementableOp::ADFF => {
 				let reset_value = mapped_cell.unwrap().parameters["ARST_VALUE"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let arst_polarity = mapped_cell.unwrap().parameters["ARST_POLARITY"]
+					.from_bin_str()
+					.unwrap() as i32;
+				let clk_polarity = mapped_cell.unwrap().parameters["CLK_POLARITY"]
 					.from_bin_str()
 					.unwrap() as i32;
 				let (dw, cw, aw, qc, _lb) = logical_design.add_adff_isolated(
@@ -1858,6 +1876,8 @@ impl CheckedDesign {
 					sig_in[2],
 					sig_out[0],
 					reset_value,
+					clk_polarity == 0,
+					arst_polarity == 0,
 				);
 				(vec![dw, cw, aw], vec![qc])
 			},

@@ -307,10 +307,9 @@ impl SimState {
 	pub fn step(&mut self, steps: u32) {
 		self.update_logical_design();
 		let n_nodes = self.logd.read().unwrap().nodes.len();
+		let mut new_state_red = vec![OutputState::default(); n_nodes];
+		let mut new_state_green = vec![OutputState::default(); n_nodes];
 		for _ in 0..steps {
-			let mut new_state_red = vec![OutputState::default(); n_nodes];
-			let mut new_state_green = vec![OutputState::default(); n_nodes];
-
 			self.compute_combs(&mut new_state_red, &mut new_state_green);
 			self.compute_nets(&mut new_state_red, &mut new_state_green);
 
@@ -320,6 +319,12 @@ impl SimState {
 			}
 			self.step_number += 1;
 			self.capture_trace();
+			for row in &mut new_state_red {
+				row.data.clear();
+			}
+			for row in &mut new_state_green {
+				row.data.clear();
+			}
 		}
 	}
 
@@ -698,7 +703,7 @@ impl SimState {
 		network_states
 			.par_iter_mut()
 			.enumerate()
-			.chunks(256)
+			.chunks(1024)
 			.for_each(|mut c| {
 				for (idx, new_state) in c.iter_mut() {
 					let net = &self.network[*idx];
@@ -721,7 +726,7 @@ impl SimState {
 					.par_iter_mut()
 					.zip(new_state_green.par_iter_mut()),
 			)
-			.chunks(256)
+			.chunks(512)
 			.for_each(|mut c| {
 				for (netid, (new_state_red, new_state_green)) in c.iter_mut() {
 					if *netid == &NetId::default() {

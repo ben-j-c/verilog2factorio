@@ -682,19 +682,23 @@ impl LogicalDesign {
 		data: Signal,
 		clk: Signal,
 		arst: Signal,
+		negative_clk_polarity: bool,
+		negative_arst_polarity: bool,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
+		let clock_polarity = Signal::Constant(if negative_clk_polarity { 1 } else { 0 });
+		let arst_polarity = Signal::Constant(if negative_arst_polarity { 1 } else { 0 });
 		let in_control = {
 			let ic = self.add_decider();
 			self.add_decider_input(
 				ic,
-				(clk, DeciderOperator::GreaterThan, Signal::Constant(0)),
+				(clk, DeciderOperator::NotEqual, clock_polarity),
 				DeciderRowConjDisj::FirstRow,
 				NET_GREEN,
 				NET_GREEN,
 			);
 			self.add_decider_input(
 				ic,
-				(arst, DeciderOperator::Equal, Signal::Constant(0)),
+				(arst, DeciderOperator::Equal, arst_polarity),
 				DeciderRowConjDisj::And,
 				NET_GREEN,
 				NET_GREEN,
@@ -707,14 +711,14 @@ impl LogicalDesign {
 			let mc = self.add_decider();
 			self.add_decider_input(
 				mc,
-				(clk, DeciderOperator::Equal, Signal::Constant(0)),
+				(clk, DeciderOperator::Equal, clock_polarity),
 				DeciderRowConjDisj::FirstRow,
 				NET_GREEN,
 				NET_GREEN,
 			);
 			self.add_decider_input(
 				mc,
-				(arst, DeciderOperator::Equal, Signal::Constant(0)),
+				(arst, DeciderOperator::Equal, arst_polarity),
 				DeciderRowConjDisj::And,
 				NET_GREEN,
 				NET_GREEN,
@@ -785,15 +789,27 @@ impl LogicalDesign {
 		arst: Signal,
 		output: Signal,
 		reset_value: i32,
+		negative_clk_polarity: bool,
+		negative_arst_polarity: bool,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
 		let clk_buf_1 = self.add_neg(clk, clk);
 		let clk_buf_2 = self.add_nop(clk, clk);
 		let arst_buf_1 = self.add_nop(arst, arst);
 		let arst_buf_2 = self.add_nop(arst, arst);
-		let (latch_in_wire_1, clk_wire_1, arst_wire_1, latch_out_1) =
-			self.add_latch_arst(input, clk, arst);
-		let (latch_in_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
-			self.add_latch_arst(input, clk, arst);
+		let (latch_in_wire_1, clk_wire_1, arst_wire_1, latch_out_1) = self.add_latch_arst(
+			input,
+			clk,
+			arst,
+			negative_clk_polarity,
+			negative_arst_polarity,
+		);
+		let (latch_in_wire_2, clk_wire_2, arst_wire_2, latch_out_2) = self.add_latch_arst(
+			input,
+			clk,
+			arst,
+			negative_clk_polarity,
+			negative_arst_polarity,
+		);
 
 		if reset_value != 0 {
 			let reset_emitter = self.add_decider();
@@ -876,19 +892,33 @@ impl LogicalDesign {
 		arst: Signal,
 		output: Signal,
 		reset_value: i32,
+		negative_en_polarity: bool,
+		negative_clk_polarity: bool,
+		negative_arst_polarity: bool,
 	) -> (NodeId, NodeId, NodeId, NodeId, NodeId) {
-		let (d_wire_internal, clk_wire, arst_wire, q, loopback) =
-			self.add_adff_isolated(input, clk, arst, output, reset_value);
+		let (d_wire_internal, clk_wire, arst_wire, q, loopback) = self.add_adff_isolated(
+			input,
+			clk,
+			arst,
+			output,
+			reset_value,
+			negative_clk_polarity,
+			negative_arst_polarity,
+		);
 		let muxab = self.add_mux_internal::<2>(input, en);
 
+		// Clock signal can leak onto the enable if not buffered
 		let en_buf = self.add_nop(en, en);
 		let en_wire = self.add_wire_red(vec![], vec![en_buf]);
 		#[allow(unused)]
 		let select = self.add_wire_green_simple(en_buf, muxab[0]);
 
-		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
+		// Wire up the input mux to either the loopback or data. Enable polarity handled here.
+		let data_mux_idx = if negative_en_polarity { 0 } else { 1 };
+		let loop_mux_idx = if negative_en_polarity { 1 } else { 0 };
+		let d_wire = self.add_wire_red(vec![], vec![muxab[data_mux_idx]]);
 		self.connect_red(muxab[0], d_wire_internal);
-		self.add_wire_red_simple(loopback, muxab[0]);
+		self.add_wire_red_simple(loopback, muxab[loop_mux_idx]);
 		#[cfg(debug_assertions)]
 		{
 			self.set_description_node(d_wire_internal, "d_wire_internal".to_owned());
@@ -1426,6 +1456,9 @@ impl LogicalDesign {
 						rst,
 						p.data,
 						0,
+						false, //TODO: Exract from MappedDesign
+						false,
+						false,
 					),
 					ResetSpec::Disabled => {
 						if let Some(en) = p.en {
@@ -1679,6 +1712,9 @@ impl LogicalDesign {
 						rst,
 						p.data,
 						0,
+						false, //TODO: Exract from MappedDesign
+						false,
+						false,
 					),
 					ResetSpec::Disabled => {
 						if let Some(en) = p.en {

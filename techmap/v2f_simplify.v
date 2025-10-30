@@ -28,7 +28,6 @@ module v2f_rule_32x32_64_mul_narrowing (A, B, Y);
 	wire [15:0] c2;
 	assign {c2, Y[47:32]} = {16'b0, HH[15:0]} + {16'b0, HL[31:16]} + {16'b0, LH[31:16]} + {16'b0, c1};
 	assign Y[63:48] = HH[31:16] + c2;
-	assign Y[63:48] = HH[31:16] + c2;
 endmodule
 
 
@@ -46,32 +45,30 @@ module v2f_rule_64x64_64_mul_narrowing (A, B, Y);
 
 	wire _TECHMAP_FAIL_ = A_WIDTH != 64 || B_WIDTH != 64 || Y_WIDTH != 64;
 
-	wire [31:0] prod [15:0];
+	wire [31:0] prod [31:0];
 
 	generate
 		genvar i;
 		genvar j;
 		for (i = 0; i < 4; i = i + 1) begin
 			for (j = 0; j < 4; j = j + 1) begin
-				assign prod[i*4 + j] = A[16*(i+1) - 1:16*i] * B[16*(j+1) - 1:16*j];
+				assign prod[i*4 + j] = {16'b0, A[16*(i+1) - 1:16*i]} * {16'b0, B[16*(j+1) - 1:16*j]};
 			end
 		end
 	endgenerate
 
-	wire [31:0] sum0;
-	wire [31:0] sum1;
-	wire [31:0] sum2;
-	wire [31:0] sum3;
-
-	assign sum0 = prod[0];
-	assign sum1 = prod[1] + prod[4] + sum0[31:0];
-	assign sum2 = prod[2] + prod[5] + prod[8] + sum1[31:0];
-	assign sum3 = prod[3] + prod[6] + prod[9] + prod[12] + sum2[31:0];
+	wire [31:0] sum0 = prod[0];
+	wire [31:0] sum1 = {16'b0, prod[1][15:0]}  + {16'b0, prod[4][15:0]}  + {16'b0, sum0[31:16]};
+	wire [31:0] sum2 = {16'b0, prod[1][31:16]} + {16'b0, prod[4][31:16]} + {16'b0, sum1[31:16]};
+	wire [31:0] sum3 = {16'b0, prod[2][15:0]}  + {16'b0, prod[5][15:0]}  + {16'b0, prod[8][15:0]}  + sum2;
+	wire [31:0] sum4 = {16'b0, prod[2][31:16]} + {16'b0, prod[5][31:16]} + {16'b0, prod[8][31:16]} + {16'b0, sum3[31:16]};
+	wire [31:0] sum5 = {16'b0, prod[3][15:0]}  + {16'b0, prod[6][15:0]}  + {16'b0, prod[9][15:0]}  + {16'b0, prod[12][15:0]} + sum4;
+	//wire [31:0] sum6 = prod[3][31:16] + prod[6][31:16] + prod[9][31:16] + prod[12][31:16] + sum5[31:16];
 
 	assign Y[15:00] = sum0[15:0];
 	assign Y[31:16] = sum1[15:0];
-	assign Y[47:32] = sum2[15:0];
-	assign Y[63:48] = sum3[15:0];
+	assign Y[47:32] = sum3[15:0];
+	assign Y[63:48] = sum5[15:0];
 endmodule
 
 (* techmap_celltype = "$lt" *)
@@ -226,7 +223,7 @@ module v2f_rule_mod_signed_to_unsigned(A, B, Y);
 	assign Y = r_final;
 
 	always @(*) begin
-		q_est = $signed(n >> 1) / $signed(d);
+		q_est = (n >> 1) / d;
 		q = q_est * 2;
 		r = n - q * d;
 		r_final = ($signed(r) >= d) ? r - d : r;
