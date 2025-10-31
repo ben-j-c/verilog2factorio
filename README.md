@@ -17,24 +17,12 @@ The easiest way to get started is to make a Codespace for your designs. This tak
 
 It takes ~5 minutes to boot up and get your environment ready. Once it boots fully you can follow your preferred mode of usage.
 
-## Codespace
+## After environment is ready
 
-### Lua API
-
-1. Open [an experimentation pad](./src/main.rs)
-2. Write some code
-3. Press the run button
-
-### Rust API
-
-1. Open [an experimentation pad](./src/main.rs)
-2. Write some code
-3. Press the run button
-
-### Verilog
-1. Open [an experimentation pad](./src/main.rs)
-2. Write some code
-3. Press the run button
+Once you have your local docker dev-container, you can create a new lua file
+and run it by clicking "Run and Debug" > "Current lua file." This should 
+cause the rust code to be compiled for the first time. So long as you
+dont update or modify, this is a one time cost.
 
 ## Bare Metal
 To install the dependencies, run
