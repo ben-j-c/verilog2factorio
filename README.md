@@ -17,14 +17,17 @@ The easiest way to get started is to make a Codespace for your designs. This tak
 
 It takes ~5 minutes to boot up and get your environment ready. Once it boots fully you can follow your preferred mode of usage.
 
-## After environment is ready
+## Mode of usage
 
-Once you have your local docker dev-container, you can create a new lua file
-and run it by clicking "Run and Debug" > "Current lua file." This should 
-cause the rust code to be compiled for the first time. So long as you
-dont update or modify, this is a one time cost.
+Once you have your environment running, you can create a new lua file
+and run it by clicking `"Run and Debug" > "Current lua file"`. This will 
+cause the project to compile, so the first run may take ~30 seconds to start.
 
-## Bare Metal
+Subsequent runs should start instantly.
+
+# Bare Metal
+An alternative to docker is to just setup the software manually.
+
 To install the dependencies, run
 ```bash
 sudo apt install metis lua5.4 liblua5.4-0 liblua5.4-dev pkg-config gperf build-essential bison flex libreadline-dev gawk tcl-dev libffi-dev git graphviz xdot pkg-config python3 libboost-system-dev libboost-python-dev libboost-filesystem-dev zlib1g-dev
