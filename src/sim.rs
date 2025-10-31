@@ -100,6 +100,9 @@ pub struct SimState {
 
 	traces: Vec<Trace>,
 	trace_set: Vec<NodeId>,
+
+	new_state_red: Vec<OutputState>,
+	new_state_green: Vec<OutputState>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -119,6 +122,8 @@ impl SimState {
 			state: vec![],
 			traces: vec![],
 			trace_set: vec![],
+			new_state_green: vec![],
+			new_state_red: vec![],
 		};
 		ret.update_logical_design();
 		ret
@@ -307,8 +312,13 @@ impl SimState {
 	pub fn step(&mut self, steps: u32) {
 		self.update_logical_design();
 		let n_nodes = self.logd.read().unwrap().nodes.len();
-		let mut new_state_red = vec![OutputState::default(); n_nodes];
-		let mut new_state_green = vec![OutputState::default(); n_nodes];
+		let mut new_state_red = vec![];
+		let mut new_state_green = vec![];
+		self.new_state_red.resize(n_nodes, OutputState::default());
+		self.new_state_green.resize(n_nodes, OutputState::default());
+		std::mem::swap(&mut self.new_state_red, &mut new_state_red);
+		std::mem::swap(&mut self.new_state_green, &mut new_state_green);
+
 		for _ in 0..steps {
 			self.compute_combs(&mut new_state_red, &mut new_state_green);
 			self.compute_nets(&mut new_state_red, &mut new_state_green);
@@ -326,6 +336,8 @@ impl SimState {
 				row.data.clear();
 			}
 		}
+		std::mem::swap(&mut self.new_state_red, &mut new_state_red);
+		std::mem::swap(&mut self.new_state_green, &mut new_state_green);
 	}
 
 	fn execute_arith_op(left: i32, op: ArithmeticOperator, right: i32) -> i32 {
@@ -1112,7 +1124,7 @@ impl SimState {
 							if good {
 								println!("At time {vcd_time}:");
 							}
-							println!("Expected {expected_count}, got {actual_count}.");
+							println!("Expected 0x{expected_count:X}, got 0x{actual_count:X}.");
 							println!("\tFound unexpected value for output '{}'", wire_name);
 							println!("\tNodeId: {id}");
 							good = false;
@@ -1122,7 +1134,7 @@ impl SimState {
 						if good {
 							println!("At time {vcd_time}:");
 						}
-						println!("Expected {expected_count}, got 0.");
+						println!("Expected 0x{expected_count:x}, got 0.");
 						println!("\tFound unexpected value for output '{}'", wire_name);
 						println!("\tNodeId: {id}");
 						good = false;
@@ -1131,7 +1143,7 @@ impl SimState {
 				if !good {
 					println!("Inputs:");
 					for (name, count) in &inputs_snapshot {
-						println!("\t{} = {}", name, count);
+						println!("\t{} = 0x{:X}", name, count);
 					}
 					return false;
 				}
