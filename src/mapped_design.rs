@@ -89,6 +89,14 @@ impl Bit {
 		}
 	}
 
+	pub fn id(&self) -> Option<&BitId> {
+		if let Bit::Id(id) = self {
+			Some(id)
+		} else {
+			None
+		}
+	}
+
 	pub fn bool_unwrap(&self) -> bool {
 		match self {
 			Bit::Zero => false,
@@ -436,6 +444,13 @@ impl MappedDesign {
 				}
 			}
 		});
+		for (_, net) in self.iter_netnames() {
+			for bit in &net.bits {
+				if let Bit::Id(id) = bit {
+					max_bit = max_bit.max(id.0)
+				}
+			}
+		}
 		max_bit
 	}
 
@@ -504,6 +519,17 @@ impl MappedDesign {
 			}
 		}
 		panic!("No module was identified as the top level design");
+	}
+
+	pub fn is_port<'a>(&'a self, port_name: &str) -> bool {
+		for module in self.modules.values() {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() == Some(1) {
+					return matches!(module.ports.get(port_name), Some(_));
+				}
+			}
+		}
+		false
 	}
 
 	pub(crate) fn get_top_source(&self) -> String {

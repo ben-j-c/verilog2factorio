@@ -46,9 +46,13 @@ impl VCD {
 	}
 
 	pub fn has_var<S: AsRef<str>>(&self, var: S) -> bool {
-		self.header
-			.find_var(&var.as_ref().split(".").collect_vec())
-			.is_some()
+		let mut path = var.as_ref().split(".").map(str::to_owned).collect_vec();
+		for p in &mut path {
+			if p.starts_with("$") {
+				*p = "\\".to_owned() + p;
+			}
+		}
+		self.header.find_var(&path).is_some()
 	}
 
 	pub fn get_value<S: AsRef<str>>(&self, var: S, time: u64) -> Option<Vec<Value>> {

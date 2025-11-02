@@ -100,6 +100,7 @@ impl PartialEq for SignalTable {
 pub(crate) struct RTL {
 	filename: PathBuf,
 	top_mod: String,
+	promote_all_nets_to_ports: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -314,6 +315,37 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 	}
 }
 
+fn method_sim_yosys(filename_in: &str, filename_out: &str) -> Result<(), mlua::Error> {
+	method_check_yosys()?;
+	let exe_dir = get_v2f_root()?;
+	if !exe_dir.is_dir() {
+		return Err(Error::RuntimeError("Can't locate V2F_ROOT".to_string()));
+	}
+	{
+		let mut sim_script = File::open(exe_dir.join("v2flib/sim.ys"))?;
+		let mut buf = Vec::new();
+		sim_script.read_to_end(&mut buf)?;
+		let sim_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
+		let sim_script_text = sim_script_text
+			.replace("{input_vcd}", filename_in)
+			.replace("{output_vcd}", filename_out);
+		let mut rtl_script_final = File::create("sim.ys")?;
+		rtl_script_final.write_all(sim_script_text.as_bytes())?;
+		rtl_script_final.flush()?;
+	}
+
+	let rtl_output = std::process::Command::new(get_yosys_exe()?)
+		.arg("--quiet")
+		.arg("--quiet")
+		.arg("--scriptfile")
+		.arg("sim.ys")
+		.output()?;
+	if !rtl_output.status.success() {
+		return Err(Error::runtime("Failed to sim RTL."));
+	}
+	Ok(())
+}
+
 fn method_load_rtl<P>(
 	filenames: &[P],
 	top_mod: String,
@@ -387,16 +419,14 @@ where
 	Ok(RTL {
 		filename: filename_out,
 		top_mod,
+		promote_all_nets_to_ports: false,
 	})
 }
 
-fn method_map_rtl<P>(filename: P, top_mod: &String) -> Result<LogicalDesignAPI, mlua::Error>
-where
-	P: AsRef<Path>,
-{
-	let filename_out = get_derivative_file_name(&filename, "_map.json")?;
+fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
+	let filename_out = get_derivative_file_name(&rtl.filename, "_map.json")?;
 	method_check_yosys()?;
-	let filename: &Path = filename.as_ref();
+	let filename: &Path = rtl.filename.as_ref();
 	if !filename.is_file() {
 		return Err(Error::RuntimeError(format!(
 			"{:?} is not a file.",
@@ -419,7 +449,7 @@ where
 			.replace("{filename}", filename.to_str().unwrap())
 			.replace("{filename_out}", filename_out.to_str().unwrap())
 			.replace("{exe_dir}", exe_dir.to_str().unwrap())
-			.replace("{top_mod}", top_mod);
+			.replace("{top_mod}", &rtl.top_mod);
 		let mut mappingscript_final = File::create("mapping.ys")?;
 		mappingscript_final.write_all(mapping_script_text.as_bytes())?;
 		mappingscript_final.flush()?;
@@ -443,6 +473,7 @@ where
 	let mapped_design: MappedDesign =
 		serde_json::from_reader(reader).map_err(|_| Error::runtime("failed to map design."))?;
 	let mut checked_design = CheckedDesign::new();
+	checked_design.promote_all_nets_to_ports = rtl.promote_all_nets_to_ports;
 	checked_design.build_from(&mapped_design);
 	let mut logd = LogicalDesign::new();
 	logd.build_from(&checked_design, &mapped_design);
@@ -922,7 +953,7 @@ impl UserData for SimStateAPI {
 					for pair in inputs_lua.pairs::<String, Constant>() {
 						let (net, comb) = pair?;
 						if !vcd.has_var(&net) {
-							return runtime_err(format!("{net} is not a known variable."));
+							return runtime_err(format!("{net} is not a known input variable."));
 						}
 						//if comb.logd.as_ptr() != this.logd.as_ptr() {
 						//	return runtime_err(format!(
@@ -939,7 +970,8 @@ impl UserData for SimStateAPI {
 					for pair in outputs_lua.pairs::<String, Lamp>() {
 						let (net, comb) = pair?;
 						if !vcd.has_var(&net) {
-							return runtime_err(format!("{net} is not a known variable."));
+							println!("WARN: {net} is not a known output variable in VCD.");
+							continue;
 						}
 						//if comb.logd.as_ptr() != this.logd.as_ptr() {
 						//	return runtime_err(format!(
@@ -1023,9 +1055,15 @@ impl FromLua for Decider {
 
 impl UserData for RTL {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method("to_design", |_, this: &RTL, _: ()| {
-			method_map_rtl(&this.filename, &this.top_mod)
+		methods.add_method("to_design", |_, this: &RTL, _: ()| method_map_rtl(this));
+		methods.add_method_mut("set_net_promotion", |_, this: &mut RTL, status: bool| {
+			this.promote_all_nets_to_ports = status;
+			Ok(())
 		});
+		methods.add_method(
+			"yosys_sim",
+			|_, this: &RTL, (fin, fout): (String, String)| method_sim_yosys(&fin, &fout),
+		);
 	}
 }
 
@@ -1199,7 +1237,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 
 	lua.globals().set(
 		"yosys_map_rtl",
-		lua.create_function(|_, rtl: RTL| method_map_rtl(rtl.filename, &rtl.top_mod))?,
+		lua.create_function(|_, rtl: RTL| method_map_rtl(&rtl))?,
 	)?;
 
 	lua.globals().set(

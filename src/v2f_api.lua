@@ -117,6 +117,8 @@ function get_empty_design() end
 
 ---@class RTL
 ---@field to_design fun(self: RTL): LogicalDesignAPI
+---@field set_net_promotion fun(self: RTL, status: boolean)
+---@field yosys_sim fun(self: RTL, filename_in: string, filename_out: string)
 
 --- Take verilog code and map it to RTL. Right now RTL doesn't do much.
 ---@param filename string|string[]

@@ -1,8 +1,6 @@
-use core::{hash, panic};
 use std::{
 	cell::RefCell,
 	collections::{BTreeSet, HashSet, LinkedList},
-	i32, usize, vec,
 };
 
 type NodeId = usize;
@@ -159,7 +157,8 @@ pub struct CheckedDesign {
 
 	clocks: HashS<NodeId>,
 
-	keepnets: HashM<usize, NodeId>,
+	// Flags
+	pub promote_all_nets_to_ports: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,7 +258,7 @@ impl CheckedDesign {
 			coarse_exprs: vec![],
 			associated_logic: RefCell::new(vec![]),
 			clocks: hash_set(),
-			keepnets: hash_map(),
+			promote_all_nets_to_ports: false,
 		}
 	}
 
@@ -353,13 +352,19 @@ impl CheckedDesign {
 			self.nodes[id].keep = true;
 		});
 		for (netname, net) in mapped_design.iter_netnames() {
-			if let Some(keep_str) = net.attributes.get("keep") {
-				if keep_str.from_bin_str() != Some(1) {
+			if !self.promote_all_nets_to_ports {
+				if let Some(keep_str) = net.attributes.get("keep") {
+					if keep_str.from_bin_str() != Some(1) {
+						continue;
+					}
+				} else {
 					continue;
 				}
-			} else {
+			}
+			if mapped_design.is_port(netname) {
 				continue;
 			}
+
 			let id = self.new_node(netname, NodeType::PortBody { is_keepnet: true });
 			self.nodes[id].keep = true;
 		}
@@ -956,6 +961,7 @@ impl CheckedDesign {
 	}
 
 	pub fn build_from(&mut self, mapped_design: &MappedDesign) {
+		self.connected_design.promote_all_nets_to_ports = self.promote_all_nets_to_ports;
 		self.connected_design.build_from(mapped_design);
 		self.connected_id_map = vec![usize::MAX; self.connected_design.max_id() + 1];
 		self.initialize_nodes(mapped_design);

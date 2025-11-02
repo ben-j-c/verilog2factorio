@@ -1104,19 +1104,13 @@ impl SimState {
 				let mut good = true;
 				for (wire_name, (signal, id)) in &outputs {
 					let val = vcd.get_value(wire_name, vcd_time);
-					if let Some(v) = &val {
-						if v.iter().any(|b| matches!(b, Value::X | Value::Z)) {
-							println!("WARN: {wire_name} has an X or Z. This can match anything. Regs should be initialized to 0.");
-							continue;
-						}
-					}
 					let expected_count: i32 = convert_to_signal_count(&val);
 					let seen_signals = self.probe_input(*id, NET_RED_GREEN);
 
 					let mut found = false;
 					for (sig, actual_count) in seen_signals.clone() {
 						if sig == signal.id() {
-							if actual_count == expected_count {
+							if Self::compare_vcd_val_to_i32(actual_count, &val) {
 								found = true;
 								continue;
 							}
@@ -1124,13 +1118,14 @@ impl SimState {
 							if good {
 								println!("At time {vcd_time}:");
 							}
+							//println!("{val:?}");
 							println!("Expected 0x{expected_count:X}, got 0x{actual_count:X}.");
 							println!("\tFound unexpected value for output '{}'", wire_name);
 							println!("\tNodeId: {id}");
 							good = false;
 						}
 					}
-					if !found && expected_count != 0 {
+					if !found && !Self::compare_vcd_val_to_i32(0, &val) {
 						if good {
 							println!("At time {vcd_time}:");
 						}
@@ -1154,6 +1149,22 @@ impl SimState {
 		}
 		println!("VCD Playback finished.");
 		true
+	}
+
+	pub fn compare_vcd_val_to_i32(actual: i32, expected: &Option<Vec<Value>>) -> bool {
+		let mut actual: u32 = actual as u32;
+		if expected.is_none() {
+			return true;
+		}
+		let expected = expected.as_ref().unwrap().iter().rev();
+		for val in expected {
+			let bit = actual & 1;
+			actual >>= 1;
+			if matches!(val, Value::V0) && bit == 1 || matches!(val, Value::V1) && bit == 0 {
+				return false;
+			}
+		}
+		actual == 0
 	}
 
 	pub fn reset(&mut self) {

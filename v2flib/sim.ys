@@ -1,0 +1,2 @@
+script rtl.ys
+sim -scope tb -a -q -r {input_vcd} -vcd {output_vcd}

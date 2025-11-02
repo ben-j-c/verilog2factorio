@@ -24,6 +24,8 @@ pub struct ConnectedDesign {
 	/// terminal_name -> (terminal_number, terminal_direction)
 	pub terminal_name2typeid: HashMap<String, (usize, Direction)>,
 	pub terminal_typeid2direction: Vec<Direction>,
+
+	pub promote_all_nets_to_ports: bool,
 }
 
 #[derive(Debug)]
@@ -124,6 +126,7 @@ impl ConnectedDesign {
 			mapped_id_to_terminal: HashMap::new(),
 			terminal_name2typeid: HashMap::new(),
 			terminal_typeid2direction: vec![],
+			promote_all_nets_to_ports: false,
 		}
 	}
 
@@ -205,11 +208,16 @@ impl ConnectedDesign {
 			}
 		});
 		for (netname, net) in mapped_design.iter_netnames() {
-			if let Some(keep_str) = net.attributes.get("keep") {
-				if keep_str.from_bin_str() != Some(1) {
+			if !self.promote_all_nets_to_ports {
+				if let Some(keep_str) = net.attributes.get("keep") {
+					if keep_str.from_bin_str() != Some(1) {
+						continue;
+					}
+				} else {
 					continue;
 				}
-			} else {
+			}
+			if mapped_design.is_port(netname) {
 				continue;
 			}
 			let ioid = io_map.len();
@@ -262,15 +270,19 @@ impl ConnectedDesign {
 				let mut required_constant = vec![None; bits.len()];
 				let mut target_ioid = vec![None; bits.len()];
 				for (bit_number, bit) in bits.iter().enumerate() {
-					if bit.is_connection() {
-						let (ioid_driver, bit_number_driver) =
-							self.get_driver(&bit_map, &io_map, ioid, bit_number);
+					let driver_opt = self.get_driver(&bit_map, &io_map, ioid, bit_number);
+					if bit.is_connection() && driver_opt.is_some() {
+						let (ioid_driver, bit_number_driver) = driver_opt.unwrap();
 						required_shift[bit_number] =
 							(bit_number as i32) - (bit_number_driver as i32);
 						required_driver_bit_number[bit_number] = Some(bit_number_driver);
 						target_ioid[bit_number] = Some(ioid_driver);
 					} else {
-						required_constant[bit_number] = Some(bit.bool_unwrap());
+						if bit.is_constant() {
+							required_constant[bit_number] = Some(bit.bool_unwrap());
+						} else {
+							required_constant[bit_number] = Some(false);
+						}
 						required_shift[bit_number] = bit_number as i32;
 					}
 				}
@@ -291,7 +303,7 @@ impl ConnectedDesign {
 				assert!(is_driver);
 				for (bit_number, bit) in bits.iter().enumerate() {
 					assert_eq!(
-						self.get_driver(&bit_map, &io_map, ioid, bit_number),
+						self.get_driver_unwrap(&bit_map, &io_map, ioid, bit_number),
 						(ioid, bit_number)
 					);
 					let attached_ports = &bit_map[bit.id_unwrap().0 as usize];
@@ -354,7 +366,7 @@ impl ConnectedDesign {
 		self.terminal_name2typeid[terminal_name].0
 	}
 
-	fn get_driver(
+	fn get_driver_unwrap(
 		&self,
 		bit_map: &Vec<Vec<Vec<NodeId>>>,
 		io_map: &Vec<NodeIo>,
@@ -363,6 +375,23 @@ impl ConnectedDesign {
 	) -> (usize, usize) {
 		let io_entry = &io_map[ioid];
 		let bit_id = io_entry.bit(bit_number).id_unwrap().0;
+		match self.get_driver(bit_map, io_map, ioid, bit_number) {
+			Some(v) => v,
+			None => panic!(
+				"Can't find driver for bit {bit_id} in the design. I.e., I think its floating."
+			),
+		}
+	}
+
+	fn get_driver(
+		&self,
+		bit_map: &Vec<Vec<Vec<NodeId>>>,
+		io_map: &Vec<NodeIo>,
+		ioid: NodeId,
+		bit_number: usize,
+	) -> Option<(usize, usize)> {
+		let io_entry = &io_map[ioid];
+		let bit_id = io_entry.bit(bit_number).id()?.0;
 		let attached = &bit_map[bit_id as usize];
 		let ioid_driver = match attached
 			.iter()
@@ -374,9 +403,7 @@ impl ConnectedDesign {
 			.map(|(_, ioid_driver)| *ioid_driver.first().unwrap())
 		{
 			Some(v) => v,
-			None => panic!(
-				"Can't find driver for bit {bit_id} in the design. I.e., I think its floating."
-			),
+			None => return None,
 		};
 		let bits_driver = match &io_map[ioid_driver] {
 			NodeIo::Port { bits, .. } => bits,
@@ -384,10 +411,10 @@ impl ConnectedDesign {
 		};
 		for (bit_number_driver, bit_driver) in bits_driver.iter().enumerate() {
 			if *bit_driver == io_entry.bit(bit_number) {
-				return (ioid_driver, bit_number_driver);
+				return Some((ioid_driver, bit_number_driver));
 			}
 		}
-		unreachable!();
+		None
 	}
 }
 
