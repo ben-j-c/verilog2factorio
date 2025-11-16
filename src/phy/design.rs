@@ -15,11 +15,11 @@ use std::{
 	vec,
 };
 
-use crate::logical_design::{NodeId, NET_GREEN, NET_RED};
+use crate::logical_design::{NodeFunction, NodeId, NET_GREEN, NET_RED};
 use crate::mapped_design::Direction;
 use crate::ndarr::Arr2;
 use crate::phy::placement::*;
-use crate::sim::SimState;
+use crate::sim::{NetId, SimState, WireNetwork};
 use crate::util::{self, hash_map, hash_set, HashM, HashS};
 use crate::{
 	logical_design::{self as ld, LogicalDesign, WireColour},
@@ -84,7 +84,6 @@ pub struct PhyNode {
 	pub foreign_routes: Vec<PhyId>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Wire {
 	pub id: WireId,
@@ -94,7 +93,6 @@ pub struct Wire {
 	pub terminal2_id: TerminalId,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum WireHopType {
 	Small,
@@ -105,7 +103,6 @@ pub enum WireHopType {
 	Lamp,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PhysicalDesign {
 	nodes: Vec<PhyNode>,
@@ -130,6 +127,9 @@ pub struct PhysicalDesign {
 	user_partition_size: Option<usize>,
 
 	route_cache: HashM<(usize, bool), (Vec<SpaceIndex>, Vec<PhyId>)>,
+
+	networks: Vec<WireNetwork>,
+	network_map: Vec<Option<NetId>>,
 
 	failed_routes: Vec<(usize, usize)>,
 }
@@ -157,6 +157,9 @@ impl PhysicalDesign {
 			user_partition_margin: None,
 			user_partition_size: None,
 			route_cache: hash_map(),
+
+			network_map: vec![],
+			networks: vec![],
 
 			failed_routes: vec![],
 		}
@@ -2110,6 +2113,51 @@ impl PhysicalDesign {
 		}
 	}
 
+	fn compute_networks(&mut self, logd: &LogicalDesign) {
+		self.network_map = vec![None; logd.nodes.len()];
+		self.networks = vec![];
+		for node in logd.nodes.iter() {
+			let colour = if let NodeFunction::WireSum(colour) = node.function {
+				colour
+			} else {
+				continue;
+			};
+			if let Some(_existing_network) = self.network_map[node.id.0] {
+				continue;
+			}
+			let network_wires = logd.get_wire_network(node.id);
+			assert!(
+				!network_wires.is_empty(),
+				"A \"wire\" network was found with no wires."
+			);
+			assert!(
+				network_wires.contains(&node.id),
+				"Wire not in it's own network!"
+			);
+			let network_id = NetId(self.networks.len());
+			let mut fanin = hash_set();
+			let mut fanout = hash_set();
+			for wire in &network_wires {
+				let wire_node = &logd.nodes[wire.0];
+				for fiid in wire_node.iter_fanin(colour) {
+					fanin.insert(*fiid);
+				}
+				for foid in wire_node.iter_fanout(colour) {
+					fanout.insert(*foid);
+				}
+			}
+			for wire in &network_wires {
+				self.network_map[wire.0] = Some(network_id);
+			}
+			self.networks.push(WireNetwork {
+				fanin: fanin.into_iter().sorted().collect_vec(),
+				fanout: fanout.into_iter().sorted().collect_vec(),
+				wires: network_wires,
+				colour,
+			});
+		}
+	}
+
 	fn global_freeze_and_route(
 		&mut self,
 		logical: &LogicalDesign,
@@ -2126,6 +2174,8 @@ impl PhysicalDesign {
 			adjacency_to_edges_global_edges(partition_global_connectivity, local_to_global);
 		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(1..=10);
 		let mut success = false;
+
+		self.compute_networks(logical);
 		for margin in margin_range {
 			println!("Starting routing with margin {margin}");
 			success = true;
@@ -2337,6 +2387,34 @@ impl PhysicalDesign {
 		Result::Ok(ret)
 	}
 
+	fn route_to_seen(
+		&mut self,
+		src: NodeId,
+		dst: &HashS<NodeId>,
+		logd: &LogicalDesign,
+		colour: WireColour,
+	) {
+	}
+
+	fn route_net(&mut self, net_idx: usize, logd: &LogicalDesign) {
+		let net = self.networks[net_idx].clone();
+		let mut seen = HashS::default();
+
+		for fanin_id in &net.fanin {
+			for fanout_id in &net.fanout {
+				seen.insert(*fanout_id);
+				self.route_to_seen(*fanin_id, &seen, logd, net.colour);
+				seen.insert(*fanin_id);
+			}
+		}
+	}
+
+	fn route_nets(&mut self, logd: &LogicalDesign) {
+		for net_idx in 0..self.networks.len() {
+			self.route_net(net_idx, logd);
+		}
+	}
+
 	fn get_neighbors(&self, index: &SpaceIndex, _goal: &SpaceIndex) -> SpaceIter {
 		let min_x = (index.0 as isize - 9).max(0) as usize;
 		let min_y = (index.1 as isize - 9).max(0) as usize;
@@ -2477,13 +2555,21 @@ impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
 	}
 
 	fn distance(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
-		let dx = b.0.abs_diff(a.0) as f32;
-		let dy = b.1.abs_diff(a.1) as f32;
-		(dx * dx + dy * dy).sqrt()
+		let mut dx = b.0.abs_diff(a.0) as f32;
+		let mut dy = b.1.abs_diff(a.1) as f32;
+		if (dx <= 5.0 && dy <= 5.0) {
+			return 0.0;
+		}
+		dx -= 5.0;
+		dy -= 5.0;
+		dx = dx.max(0.0);
+		dy = dy.max(0.0);
+		let dist = (dx * dx + dy * dy).sqrt();
+		(dist / 9.0).round() + 1.0
 	}
 
 	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
-		self.distance(a, b) + 1.0
+		self.distance(a, b)
 	}
 }
 

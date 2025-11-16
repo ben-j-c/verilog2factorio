@@ -1,11 +1,11 @@
 use std::{
-	cell::RefCell,
 	fs::File,
 	io::BufReader,
 	ops::Rem,
-	rc::Rc,
 	sync::{Arc, RwLock},
 };
+
+use itertools::Itertools;
 
 use crate::{
 	checked_design::CheckedDesign, connected_design::CoarseExpr, logical_design::*,
@@ -131,6 +131,7 @@ pub(crate) fn get_large_memory_test_design(n: usize) -> LogicalDesign {
 			en: None,
 			rst: ResetSpec::Disabled,
 			transparent: false,
+			clk_polarity: Polarity::Positive,
 		}],
 		data,
 		None,
@@ -163,6 +164,7 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 			en: None,
 			rst: ResetSpec::Disabled,
 			transparent: false,
+			clk_polarity: Polarity::Positive,
 		}],
 		data,
 		Some(256),
@@ -182,11 +184,7 @@ pub(crate) fn get_large_dense_memory_test_design(n: usize) -> LogicalDesign {
 
 #[cfg(test)]
 mod test {
-	use std::{
-		cell::RefCell,
-		rc::Rc,
-		sync::{Arc, RwLock},
-	};
+	use std::sync::{Arc, RwLock};
 
 	use crate::{
 		phy::PhysicalDesign, serializable_design::SerializableDesign, signal_lookup_table,
@@ -372,6 +370,7 @@ mod test {
 				en: None,
 				rst: ResetSpec::Disabled,
 				transparent: false,
+				clk_polarity: Polarity::Positive,
 			}],
 			data,
 			None,
@@ -403,6 +402,7 @@ mod test {
 				en: None,
 				rst: ResetSpec::Disabled,
 				transparent: false,
+				clk_polarity: Polarity::Positive,
 			}],
 			data,
 			Some(10),
@@ -438,6 +438,7 @@ mod test {
 				en: None,
 				rst: ResetSpec::Disabled,
 				transparent: false,
+				clk_polarity: Polarity::Positive,
 			}],
 			data,
 			Some(10),
@@ -507,6 +508,7 @@ mod test {
 				en: Some(Sig::Id(3)),
 				rst: ResetSpec::Disabled,
 				transparent: false,
+				clk_polarity: Polarity::Positive,
 			}],
 			vec![
 				MemoryWritePort {
@@ -514,12 +516,14 @@ mod test {
 					data: Sig::Id(5),
 					clk: sig_red,
 					en: Some(Sig::Id(6)),
+					clk_polarity: Polarity::Positive,
 				},
 				MemoryWritePort {
 					addr: Sig::Id(7),
 					data: Sig::Id(8),
 					clk: sig_red,
 					en: Some(Sig::Id(9)),
+					clk_polarity: Polarity::Positive,
 				},
 			],
 			1,
@@ -1220,5 +1224,196 @@ fn simple_counter_adffe() {
 		}
 
 		sim.step(del);
+	}
+}
+
+#[test]
+fn byte_select() {
+	let mut logd = LogicalDesign::new();
+
+	let d1 = logd.add_constant(vec![Signal::Id(0)], vec![0x11223344]);
+	let d0 = logd.add_constant(vec![Signal::Id(1)], vec![0xAABBCCDDu32 as i32]);
+	let select = logd.add_constant(vec![Signal::Id(2)], vec![0]);
+	let lamp = logd.add_lamp((
+		Signal::Id(0),
+		DeciderOperator::NotEqual,
+		Signal::Constant(0),
+	));
+
+	let (i1_comb, i0_comb, sel, data_comb) = logd.add_byte_select_write(Signal::Id(2));
+	logd.add_wire_red_simple(d1, i1_comb);
+	logd.add_wire_red_simple(d0, i0_comb);
+	logd.add_wire_red_simple(select, sel);
+	logd.add_wire_red_simple(data_comb, lamp);
+
+	{
+		let mut phy = PhysicalDesign::new();
+		phy.build_from(&logd);
+		let mut serd = SerializableDesign::new();
+		serd.build_from(&phy, &logd);
+		let blueprint_json = serde_json::to_string(&serd).unwrap();
+		println!("\n{}", blueprint_json);
+	}
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+
+	for i in 0..16 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(select, 0, i);
+		}
+		sim.step(5);
+		sim.step(5);
+		let val = sim.probe_input(lamp, NET_RED_GREEN);
+		assert_eq!(val.len(), 1);
+		assert_eq!(val[0].0, 0);
+		let val = val[0].1;
+		let b0 = val & 0xff;
+		let b1 = (val & 0xff00) >> 8;
+		let b2 = (val & 0xff0000) >> 16;
+		let b3 = (val as u32 & 0xff000000) >> 24;
+		if i & 1 > 0 {
+			assert_eq!(b0, 0x44);
+		} else {
+			assert_eq!(b0, 0xDD);
+		}
+		if i & 2 > 0 {
+			assert_eq!(b1, 0x33);
+		} else {
+			assert_eq!(b1, 0xCC);
+		}
+		if i & 4 > 0 {
+			assert_eq!(b2, 0x22);
+		} else {
+			assert_eq!(b2, 0xBB);
+		}
+		if i & 8 > 0 {
+			assert_eq!(b3, 0x11);
+		} else {
+			assert_eq!(b3, 0xAA);
+		}
+	}
+}
+
+#[test]
+fn print() {
+	println!("{}", LogicalDesign::new());
+	println!("{:?}", Signal::Id(123));
+	println!("{}", Signal::Constant(123));
+	println!("{}", Signal::Anything);
+	println!("{}", Signal::Each);
+	println!("{}", Signal::Everything);
+	println!("{}", Signal::None);
+}
+
+#[test]
+fn parser1() {
+	let mut logd = LogicalDesign::new();
+	let decider = logd.add_decider();
+	logd.set_decider_inputs(
+		decider,
+		"
+		signal-a[] != signal-b[G]
+		|| red-wire[RG] > 0
+		|| green-wire < 0
+				&& signal-0 >= Id(25)
+				&& signal-k <= signal-dot",
+	);
+	let node = logd.get_node(decider);
+	assert!(node.is_decider());
+	let func = node.function.unwrap_decider();
+	let a = signal_lookup_table::lookup_sig("signal-a");
+	let b = signal_lookup_table::lookup_sig("signal-b");
+	let red_wire = signal_lookup_table::lookup_sig("red-wire");
+	let green_wire = signal_lookup_table::lookup_sig("green-wire");
+	let signal_0 = signal_lookup_table::lookup_sig("signal-0");
+	let signal_k = signal_lookup_table::lookup_sig("signal-k");
+	let signal_dot = signal_lookup_table::lookup_sig("signal-dot");
+	use DeciderOperator::*;
+	assert_eq!(
+		func.0,
+		&vec![
+			(a, NotEqual, b),
+			(red_wire, GreaterThan, Signal::Constant(0)),
+			(green_wire, LessThan, Signal::Constant(0)),
+			(signal_0, GreaterThanEqual, Signal::Id(25)),
+			(signal_k, LessThanEqual, signal_dot),
+		]
+	);
+	use DeciderRowConjDisj::*;
+	assert_eq!(func.1, &vec![FirstRow, Or, Or, And, And]);
+}
+
+#[test]
+fn demux() {
+	const DENSITY: i32 = 4;
+	let mut logd = LogicalDesign::new();
+	let addr = signal_lookup_table::lookup_sig("signal-a");
+	let byte_select = signal_lookup_table::lookup_sig("signal-b");
+
+	let lamp = logd.add_lamp((
+		Signal::Anything,
+		DeciderOperator::NotEqual,
+		Signal::Constant(0),
+	));
+	let addr_const = logd.add_constant(vec![addr], vec![0]);
+	let byte_select_const = logd.add_constant(vec![byte_select], vec![15]);
+	let v_data = 0x77AABBCC;
+	let data_const = logd.add_constant(vec![Signal::Id(0)], vec![v_data]);
+
+	let demux = logd.add_demux_memory_with_byte_select(addr, byte_select, DENSITY as usize);
+	println!("{:?}", demux);
+	logd.add_wire_red_simple(demux.row_in, lamp);
+
+	let row_out = logd.add_constant(
+		(0..DENSITY).map(|i| Signal::Id(i)).collect_vec(),
+		(0..DENSITY).map(|i| i + 10).collect_vec(),
+	);
+	logd.connect_red(row_out, demux.mux1_out_wire);
+
+	logd.connect_green(addr_const, demux.addr_low_wire_g);
+	logd.connect_red(byte_select_const, demux.byte_select_wire);
+	logd.connect_red(data_const, demux.data_in_wire);
+
+	{
+		let mut phy = PhysicalDesign::new();
+		phy.build_from(&logd);
+		let mut serd = SerializableDesign::new();
+		serd.build_from(&phy, &logd);
+		let blueprint_json = serde_json::to_string(&serd).unwrap();
+		println!("\n{}", blueprint_json);
+	}
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(10);
+
+	let masks: [u32; 16] = [
+		0x00000000, 0x000000ff, 0x0000ff00, 0x0000ffff, 0x00ff0000, 0x00ff00ff, 0x00ffff00,
+		0x00ffffff, 0xff000000, 0xff0000ff, 0xff00ff00, 0xff00ffff, 0xffff0000, 0xffff00ff,
+		0xffffff00, 0xffffffff,
+	];
+
+	for addr_sel in 0..DENSITY {
+		for b_sel in 0..16 {
+			{
+				let mut logd = logd.write().unwrap();
+				logd.set_ith_output_count(addr_const, 0, addr_sel);
+				logd.set_ith_output_count(byte_select_const, 0, b_sel);
+			}
+			sim.step(10);
+			let val = sim.probe_input(lamp, NET_RED_GREEN);
+			let v0 = (addr_sel + 10) as u32 & (masks[b_sel as usize] ^ 0xFFFFFFFF);
+			let v1 = v_data as u32 & masks[b_sel as usize];
+			assert_eq!(val.len(), DENSITY as usize);
+			for (id, val_id) in val {
+				if id == addr_sel {
+					assert_eq!(val_id, (v0 | v1) as i32);
+				} else {
+					assert_eq!(val_id, id + 10);
+				}
+			}
+		}
 	}
 }

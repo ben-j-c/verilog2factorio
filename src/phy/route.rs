@@ -3,8 +3,6 @@ use std::{
 	hash::Hash,
 };
 
-use itertools::Itertools;
-
 struct Heuristic<X>
 where
 	X: TopologyIndex,

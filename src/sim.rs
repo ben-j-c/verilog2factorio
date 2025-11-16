@@ -27,16 +27,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-struct WireNetwork {
-	fanin: Vec<NodeId>,
-	#[allow(dead_code)]
-	fanout: Vec<NodeId>,
-	wires: Vec<NodeId>,
-	colour: WireColour,
+pub(crate) struct WireNetwork {
+	pub(crate) fanin: Vec<NodeId>,
+	pub(crate) fanout: Vec<NodeId>,
+	pub(crate) wires: Vec<NodeId>,
+	pub(crate) colour: WireColour,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NetId(usize);
+pub struct NetId(pub usize);
 
 impl Default for NetId {
 	fn default() -> Self {
@@ -53,14 +52,14 @@ struct NetMapEntry {
 }
 
 impl NetMapEntry {
-	fn input(&self, colour: WireColour) -> &Option<NetId> {
+	pub(crate) fn input(&self, colour: WireColour) -> &Option<NetId> {
 		match colour {
 			WireColour::Red => &self.input_red,
 			WireColour::Green => &self.input_green,
 		}
 	}
 
-	fn input_mut(&mut self, colour: WireColour) -> &mut Option<NetId> {
+	pub(crate) fn input_mut(&mut self, colour: WireColour) -> &mut Option<NetId> {
 		match colour {
 			WireColour::Red => &mut self.input_red,
 			WireColour::Green => &mut self.input_green,
@@ -68,14 +67,14 @@ impl NetMapEntry {
 	}
 
 	#[allow(dead_code)]
-	fn output(&self, colour: WireColour) -> &Option<NetId> {
+	pub(crate) fn output(&self, colour: WireColour) -> &Option<NetId> {
 		match colour {
 			WireColour::Red => &self.output_red,
 			WireColour::Green => &self.output_green,
 		}
 	}
 
-	fn output_mut(&mut self, colour: WireColour) -> &mut Option<NetId> {
+	pub(crate) fn output_mut(&mut self, colour: WireColour) -> &mut Option<NetId> {
 		match colour {
 			WireColour::Red => &mut self.output_red,
 			WireColour::Green => &mut self.output_green,
@@ -189,7 +188,6 @@ impl SimState {
 				colour,
 			});
 		}
-		//assert_eq!(self.network_ownership[1165], self.network_ownership[1166]);
 	}
 
 	pub fn add_trace(&mut self, node: NodeId) {
@@ -503,6 +501,8 @@ impl SimState {
 				let left = self.get_seen_output_state(node.id, input_left_network);
 				let right = if let Signal::Id(id) = input_2 {
 					self.get_seen_signal_count(node.id, id, input_right_network)
+				} else if let Signal::Constant(c) = input_2 {
+					c
 				} else {
 					0
 				};
@@ -520,6 +520,8 @@ impl SimState {
 			(false, true) => {
 				let left = if let Signal::Id(id) = input_1 {
 					self.get_seen_signal_count(node.id, id, input_left_network)
+				} else if let Signal::Constant(c) = input_1 {
+					c
 				} else {
 					0
 				};

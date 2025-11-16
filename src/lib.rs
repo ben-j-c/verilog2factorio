@@ -10,7 +10,7 @@ use clap::Parser;
 use logical_design::LogicalDesign;
 use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
 use mapped_design::MappedDesign;
-use mlua::{AnyUserData, Value};
+use mlua::Value;
 use phy::PhysicalDesign;
 use serializable_design::SerializableDesign;
 

@@ -11,7 +11,7 @@ use crate::{
 	connected_design::{CoarseExpr, ConnectedDesign},
 	logical_design::{
 		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
-		ResetSpec, Signal, NET_RED_GREEN,
+		Polarity, ResetSpec, Signal, NET_RED_GREEN,
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
@@ -1636,6 +1636,21 @@ impl CheckedDesign {
 				let cell = mapped_cell.unwrap();
 				let n_rd_ports = cell.parameters["RD_PORTS"].unwrap_bin_str();
 				let n_wr_ports = cell.parameters["WR_PORTS"].unwrap_bin_str();
+				let rd_clk_polarity = cell.parameters["RD_CLK_POLARITY"]
+					.chars()
+					.map(|c| match c {
+						'0' => Polarity::Negative,
+						_ => Polarity::Positive,
+					})
+					.collect_vec();
+
+				let wr_clk_polarity = cell.parameters["WR_CLK_POLARITY"]
+					.chars()
+					.map(|c| match c {
+						'0' => Polarity::Negative,
+						_ => Polarity::Positive,
+					})
+					.collect_vec();
 
 				let mut rd_ports = vec![];
 				for i in 0..n_rd_ports {
@@ -1673,6 +1688,7 @@ impl CheckedDesign {
 						en: en_idx.map(|idx| sig_in[idx]),
 						rst: rst_spec,
 						transparent: false,
+						clk_polarity: rd_clk_polarity[i],
 					});
 				}
 
@@ -1736,6 +1752,7 @@ impl CheckedDesign {
 							data: sig_in[data_idx],
 							clk: sig_in[clk_idx],
 							en: en_idx.map(|idx| sig_in[idx]),
+							clk_polarity: wr_clk_polarity[i],
 						});
 					}
 					let (rd_ports, wr_ports) = logical_design.add_ram(

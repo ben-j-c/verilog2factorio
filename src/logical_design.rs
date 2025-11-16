@@ -22,8 +22,10 @@
 //!
 //! See [LogicalDesign] for more details on how to build designs.
 
+pub mod decider_parser;
+
 use std::{
-	collections::{BTreeSet, HashSet, LinkedList},
+	collections::LinkedList,
 	fmt::{Debug, Display},
 	hash::Hash,
 	i32,
@@ -41,6 +43,7 @@ use crate::{
 	signal_lookup_table,
 	util::{hash_set, HashS},
 };
+use chumsky::Parser;
 
 pub const NET_RED_GREEN: (bool, bool) = (true, true);
 pub const NET_RED: (bool, bool) = (true, false);
@@ -65,7 +68,7 @@ pub enum ArithmeticOperator {
 
 // Supported Decider Combinator operations as in the game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,
@@ -417,10 +420,38 @@ pub enum ResetSpec {
 	Disabled,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Polarity {
+	Positive,
+	Negative,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MemoryCellConnections {
+	row_out: NodeId,
+	row_in_wire: NodeId,
+	row_in_comb: NodeId,
+	clk_pos_wire: NodeId,
+	clk_neg_wire: NodeId,
+	arst_wire_1: NodeId,
+	arst_wire_2: NodeId,
+	en_wire: NodeId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MemoryDemuxFeedback {
+	pub(crate) mux1_out_wire: NodeId,
+	pub(crate) data_in_wire: NodeId,
+	pub(crate) addr_low_wire_g: NodeId,
+	pub(crate) byte_select_wire: NodeId,
+	pub(crate) row_in: NodeId,
+}
+
 pub struct MemoryReadPort {
 	pub addr: Signal,
 	pub data: Signal,
 	pub clk: Option<Signal>,
+	pub clk_polarity: Polarity,
 	pub en: Option<Signal>,
 	pub rst: ResetSpec,
 	pub transparent: bool,
@@ -431,6 +462,7 @@ pub struct MemoryWritePort {
 	pub data: Signal,
 	pub clk: Signal,
 	pub en: Option<Signal>,
+	pub clk_polarity: Polarity,
 }
 
 #[derive(Debug)]
@@ -884,6 +916,101 @@ impl LogicalDesign {
 		(latch_in_wire_1, clk_wire, arst_wire, final_out, latch_out_2)
 	}
 
+	fn add_adffe_program_mem_cell(
+		&mut self,
+		clk: Signal,
+		en: Signal,
+		arst: Signal,
+		reset_value: &[i32],
+		density: usize,
+	) -> MemoryCellConnections {
+		let (data_wire_1, clk_wire_1, arst_wire_1, latch_out_1) =
+			self.add_latch_arst(Signal::Everything, clk, arst, false, false);
+		let (data_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
+			self.add_latch_arst(Signal::Everything, clk, arst, false, false);
+
+		let reset_emitter = self.add_decider();
+		self.add_decider_input(
+			reset_emitter,
+			(arst, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_GREEN,
+		);
+		for i in 0..density {
+			let reset_value = reset_value[i];
+			self.add_decider_out_constant(
+				reset_emitter,
+				Signal::Id(i as i32),
+				reset_value,
+				NET_RED,
+			);
+		}
+		self.add_wire_red(vec![reset_emitter, latch_out_2], vec![]);
+		let reset_emitter = self.add_decider();
+		self.add_decider_input(
+			reset_emitter,
+			(arst, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_GREEN,
+		);
+		for i in 0..density {
+			let reset_value = reset_value[i];
+			self.add_decider_out_constant(
+				reset_emitter,
+				Signal::Id(i as i32),
+				reset_value,
+				NET_RED_GREEN,
+			);
+		}
+		self.add_wire_red(vec![reset_emitter, latch_out_1], vec![]);
+		self.connect_red(latch_out_1, data_wire_2);
+
+		let mux_0 = self.add_decider();
+		self.add_decider_input(
+			mux_0,
+			(en, DeciderOperator::Equal, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_GREEN,
+		);
+		self.add_decider_out_input_count(mux_0, Signal::Everything, NET_RED);
+		let mux_1 = self.add_decider();
+		self.add_decider_input(
+			mux_1,
+			(en, DeciderOperator::Equal, Signal::Constant(1)),
+			DeciderRowConjDisj::FirstRow,
+			NET_GREEN,
+			NET_GREEN,
+		);
+		self.add_decider_out_input_count(mux_1, Signal::Everything, NET_RED);
+		self.connect_red(mux_0, data_wire_1);
+		self.add_wire_red(vec![mux_0, mux_1], vec![]);
+		self.add_wire_green(vec![], vec![mux_0, mux_1]);
+		self.add_wire_red_simple(latch_out_1, mux_0);
+
+		let row_out = latch_out_2;
+		let row_in_wire = self.add_wire_red(vec![], vec![mux_1]);
+		let row_in_comb = mux_1;
+		let clk_pos_wire = clk_wire_2;
+		let clk_neg_wire = clk_wire_1;
+		let arst_wire_1 = arst_wire_1;
+		let arst_wire_2 = arst_wire_2;
+		let en_wire = self.add_wire_green(vec![], vec![mux_0]);
+
+		MemoryCellConnections {
+			row_out,
+			row_in_wire,
+			row_in_comb,
+			clk_pos_wire,
+			clk_neg_wire,
+			arst_wire_1,
+			arst_wire_2,
+			en_wire,
+		}
+	}
+
 	pub(crate) fn add_adffe(
 		&mut self,
 		input: Signal,
@@ -1191,6 +1318,92 @@ impl LogicalDesign {
 		inputs
 	}
 
+	fn add_mux_memory(&mut self, s: Signal, n: i32) -> NodeId {
+		assert!(n > 1, "Invalid mux.");
+		let mut inputs = Vec::with_capacity(n as usize);
+		for i in 0..n {
+			let inp = self.add_decider();
+			inputs.push(inp);
+			self.add_decider_input(
+				inp,
+				(s, DeciderOperator::Equal, Signal::Constant(i)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_input_count(inp, Signal::Id(i), NET_RED);
+			if i > 0 {
+				self.add_wire_red(vec![inp, inputs[(i - 1) as usize]], vec![]);
+				self.add_wire_red(vec![], vec![inp, inputs[(i - 1) as usize]]);
+				self.add_wire_green(vec![], vec![inp, inputs[(i - 1) as usize]]);
+			}
+		}
+		inputs[0]
+	}
+
+	pub(crate) fn add_demux_memory_with_byte_select(
+		&mut self,
+		addr: Signal,
+		byte_select: Signal,
+		density: usize,
+	) -> MemoryDemuxFeedback {
+		let mux2 = self.add_mux_memory(addr, density as i32);
+		let (i1_comb, i0_comb, sel_comb, data_comb) = self.add_byte_select_write(byte_select);
+		self.add_wire_red_simple(mux2, i0_comb);
+		let data_in_wire = self.add_wire_red(vec![], vec![i1_comb]);
+		let byte_sel_comb = self.add_nop(byte_select, byte_select);
+		self.add_wire_red_simple(byte_sel_comb, sel_comb);
+		let mut dmux_currents = vec![];
+		let mut dmux_news = vec![];
+		for i in 0..density as i32 {
+			let dmux_current = self.add_decider();
+			#[cfg(debug_assertions)]
+			self.set_description_node(dmux_current, format!("dmux_current {i}"));
+			self.set_decider_inputs(dmux_current, format!("{addr:?}[G] != {i}"));
+			self.add_decider_out_input_count(dmux_current, Signal::Id(i), NET_RED);
+			let dmux_new = self.add_decider();
+			#[cfg(debug_assertions)]
+			self.set_description_node(dmux_new, format!("dmux_new {i}"));
+			self.set_decider_inputs(dmux_new, format!("{addr:?}[G] == {i}"));
+			self.add_decider_out_input_count(dmux_new, Signal::Id(i), NET_RED);
+			if i != 0 {
+				self.add_wire_red(vec![dmux_current, *dmux_currents.last().unwrap()], vec![]);
+				self.add_wire_red(vec![], vec![dmux_current, *dmux_currents.last().unwrap()]);
+				self.add_wire_green(vec![], vec![dmux_current, *dmux_currents.last().unwrap()]);
+
+				self.add_wire_red(vec![dmux_new, *dmux_news.last().unwrap()], vec![]);
+				self.add_wire_red(vec![], vec![dmux_new, *dmux_news.last().unwrap()]);
+				self.add_wire_green(vec![], vec![dmux_new, *dmux_news.last().unwrap()]);
+			}
+			dmux_currents.push(dmux_current);
+			dmux_news.push(dmux_new);
+		}
+		self.add_wire_red(vec![dmux_currents[0], dmux_news[0]], vec![]);
+
+		let const_all = self.add_constant(
+			(0..density).map(|i| Signal::Id(i as i32)).collect_vec(),
+			(0..density).map(|_| 1).collect_vec(),
+		);
+		let mult = self.add_arithmetic_with_net(
+			(Signal::Each, ArithmeticOperator::Mult, Signal::Id(0)),
+			Signal::Each,
+			NET_GREEN,
+			NET_RED,
+		);
+		self.add_wire_green_simple(const_all, mult);
+		self.add_wire_red_simple(data_comb, mult);
+		self.add_wire_red_simple(mult, dmux_news[0]);
+
+		MemoryDemuxFeedback {
+			mux1_out_wire: self.add_wire_red(vec![], vec![dmux_currents[0], mux2]),
+			data_in_wire,
+			addr_low_wire_g: self
+				.add_wire_green(vec![], vec![dmux_currents[0], dmux_news[0], mux2]),
+			byte_select_wire: self.add_wire_red(vec![], vec![byte_sel_comb]),
+			row_in: dmux_currents[0],
+		}
+	}
+
 	pub(crate) fn add_mux(
 		&mut self,
 		a: Signal,
@@ -1226,6 +1439,440 @@ impl LogicalDesign {
 		let outp = self.add_nop(Signal::Each, y);
 		self.add_wire_red_simple(inp_a, outp);
 		(lhs, lhs, lhs, outp)
+	}
+
+	pub(crate) fn add_byte_select_write(
+		&mut self,
+		select_packed: Signal,
+	) -> (NodeId, NodeId, NodeId, NodeId) {
+		let b0_pos = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x000000ff),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b1_pos = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x0000ff00),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b2_pos = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x00ff0000),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b3_pos = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0xff000000u32 as i32),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b0_neg = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x000000ff),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b1_neg = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x0000ff00),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b2_neg = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0x00ff0000),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		let b3_neg = self.add_arithmetic_with_net(
+			(
+				Signal::Each,
+				ArithmeticOperator::And,
+				Signal::Constant(0xff000000u32 as i32),
+			),
+			Signal::Id(0),
+			NET_RED,
+			NET_RED_GREEN,
+		);
+		self.add_wire_red(vec![], vec![b0_pos, b1_pos]);
+		self.add_wire_red(vec![], vec![b1_pos, b2_pos]);
+		self.add_wire_red(vec![], vec![b2_pos, b3_pos]);
+		self.add_wire_red(vec![], vec![b0_neg, b1_neg]);
+		self.add_wire_red(vec![], vec![b1_neg, b2_neg]);
+		self.add_wire_red(vec![], vec![b2_neg, b3_neg]);
+
+		let bytes_pos = [b0_pos, b1_pos, b2_pos, b3_pos];
+		let bytes_neg = [b0_neg, b1_neg, b2_neg, b3_neg];
+
+		let select = [
+			self.add_arithmetic(
+				(select_packed, ArithmeticOperator::And, Signal::Constant(1)),
+				select_packed,
+			),
+			self.add_arithmetic(
+				(select_packed, ArithmeticOperator::And, Signal::Constant(2)),
+				select_packed,
+			),
+			self.add_arithmetic(
+				(select_packed, ArithmeticOperator::And, Signal::Constant(4)),
+				select_packed,
+			),
+			self.add_arithmetic(
+				(select_packed, ArithmeticOperator::And, Signal::Constant(8)),
+				select_packed,
+			),
+		];
+		let mut mux_pos = vec![];
+		for _ in 0..4 {
+			let mux_line = self.add_decider();
+			self.add_decider_input(
+				mux_line,
+				(
+					select_packed,
+					DeciderOperator::NotEqual,
+					Signal::Constant(0),
+				),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_input_count(mux_line, Signal::Id(0), NET_RED);
+			mux_pos.push(mux_line);
+		}
+
+		let mut mux_neg = vec![];
+		for _ in 0..4 {
+			let mux_line = self.add_decider();
+			self.add_decider_input(
+				mux_line,
+				(select_packed, DeciderOperator::Equal, Signal::Constant(0)),
+				DeciderRowConjDisj::FirstRow,
+				NET_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_input_count(mux_line, Signal::Id(0), NET_RED);
+			mux_neg.push(mux_line);
+		}
+		for i in 1..4 {
+			self.add_wire_red(vec![mux_pos[i], mux_pos[i - 1]], vec![]);
+		}
+		for i in 1..4 {
+			self.add_wire_red(vec![mux_neg[i], mux_neg[i - 1]], vec![]);
+		}
+		self.add_wire_red(vec![mux_neg[0], mux_pos[0]], vec![]);
+
+		for i in 0..4 {
+			self.add_wire_red_simple(bytes_pos[i], mux_pos[i]);
+			self.add_wire_red_simple(bytes_neg[i], mux_neg[i]);
+		}
+		for i in 1..4 {
+			self.add_wire_red(vec![], vec![bytes_pos[i], bytes_pos[i - 1]]);
+			self.add_wire_red(vec![], vec![bytes_neg[i], bytes_neg[i - 1]]);
+		}
+		for i in 0..4 {
+			self.add_wire_green_simple(select[i], mux_pos[i]);
+			self.add_wire_green_simple(select[i], mux_neg[i]);
+		}
+		for i in 1..4 {
+			self.add_wire_red(vec![], vec![select[i], select[i - 1]]);
+		}
+		(bytes_pos[0], bytes_neg[0], select[0], mux_pos[0])
+	}
+
+	pub(crate) fn add_ram_resetable_dense(
+		&mut self,
+		arst: Signal,
+		byte_select: Signal,
+		read_ports: Vec<MemoryReadPort>,
+		write_port: MemoryWritePort,
+		mut reset_values: Vec<i32>,
+	) -> (Vec<MemoryPortReadFilled>, MemoryPortWriteFilled, NodeId) {
+		const DENSITY: usize = 256;
+		const LOW_BITS: i32 = 0xFF;
+		reset_values.resize((reset_values.len() / DENSITY * DENSITY).max(1), 0);
+		let size = reset_values.len();
+		let n_rows = size / DENSITY;
+
+		assert!(!read_ports.is_empty());
+
+		let clk = signal_lookup_table::lookup_sig("signal-C");
+		let en = signal_lookup_table::lookup_sig("signal-E");
+
+		// Make physical memory cells.
+		let mut memory_cells = Vec::with_capacity(n_rows);
+		for row in 0..n_rows {
+			memory_cells.push(self.add_adffe_program_mem_cell(
+				clk,
+				en,
+				arst,
+				&reset_values[row * DENSITY..row * DENSITY + DENSITY],
+				DENSITY,
+			));
+		}
+
+		// Address decoding write enable.
+		let mut wr_enable_decode = Vec::with_capacity(n_rows);
+		for row in 0..n_rows {
+			let phy_addr_start = row * DENSITY;
+			let phy_addr_end = phy_addr_start + DENSITY;
+			let one_hot = self.add_decider();
+			{
+				self.add_decider_input(
+					one_hot,
+					(
+						write_port.addr,
+						DeciderOperator::GreaterThanEqual,
+						Signal::Constant(phy_addr_start as i32),
+					),
+					DeciderRowConjDisj::FirstRow,
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				self.add_decider_input(
+					one_hot,
+					(
+						write_port.addr,
+						DeciderOperator::LessThan,
+						Signal::Constant(phy_addr_end as i32),
+					),
+					DeciderRowConjDisj::And,
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				if let Some(en_signal) = write_port.en {
+					self.add_decider_input(
+						one_hot,
+						(en_signal, DeciderOperator::Equal, Signal::Constant(1)),
+						DeciderRowConjDisj::And,
+						NET_RED_GREEN,
+						NET_RED_GREEN,
+					);
+				}
+			}
+			self.add_decider_out_constant(one_hot, Signal::Id(1), 1, NET_RED);
+			wr_enable_decode.push(one_hot);
+		}
+
+		// Decode wr address -> enable
+		for row in 0..n_rows {
+			let mcell = memory_cells[row];
+			self.connect_green(wr_enable_decode[row], mcell.en_wire);
+		}
+		// Daisy-chain data in.
+		for row in 1..n_rows {
+			let mcell0 = memory_cells[row - 1];
+			let mcell1 = memory_cells[row];
+			self.add_wire_red(vec![], vec![mcell1.row_in_comb, mcell0.row_in_comb]);
+		}
+
+		// row_out -> mux1
+		let mut mux1s_write = vec![];
+		for row in 0..n_rows {
+			let phy_addr_start = row * DENSITY;
+			let phy_addr_end = phy_addr_start + DENSITY;
+			let mux = self.add_decider();
+			mux1s_write.push(mux);
+			let addr = write_port.addr;
+			self.set_decider_inputs(
+				mux,
+				format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end}",),
+			);
+			self.add_decider_out_input_count(mux, Signal::Everything, NET_RED);
+		}
+
+		for row in 0..n_rows {
+			let mcell = memory_cells[row];
+			self.add_wire_red_simple(mcell.row_out, mux1s_write[row]);
+		}
+		//let mux2_write = self.add_mux_memory(write_port.addr, DENSITY as i32);
+		for row in 1..n_rows {
+			// Addr wire
+			self.add_wire_green(vec![], vec![mux1s_write[row - 1], mux1s_write[row]]);
+			// Data out wire
+			self.add_wire_red(vec![mux1s_write[row - 1], mux1s_write[row]], vec![]);
+		}
+
+		let (wr_addr_wire, addr_low) = {
+			let nop = self.add_nop(write_port.addr, write_port.addr);
+			let low_bits = self.add_arithmetic(
+				(
+					write_port.addr,
+					ArithmeticOperator::And,
+					Signal::Constant(LOW_BITS),
+				),
+				write_port.addr,
+			);
+			self.add_wire_green_simple(nop, mux1s_write[0]);
+			self.add_wire_red(vec![], vec![nop, low_bits]);
+			(self.add_wire_red(vec![], vec![nop]), low_bits)
+		};
+		let demux = self.add_demux_memory_with_byte_select(write_port.addr, byte_select, DENSITY);
+		{
+			self.connect_green(addr_low, demux.addr_low_wire_g);
+			self.connect_red(mux1s_write[0], demux.mux1_out_wire);
+			self.add_wire_red_simple(demux.row_in, memory_cells[0].row_in_comb);
+		}
+
+		// Now for reading side
+		let mut rd_addr_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_data_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_en_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_clk_ret = Vec::with_capacity(read_ports.len());
+		let mut rd_rst_ret = Vec::with_capacity(read_ports.len());
+
+		let mut mux1s = vec![Vec::with_capacity(size as usize); read_ports.len()];
+		for row in 0..n_rows {
+			let phy_addr_start = row * DENSITY;
+			let phy_addr_end = phy_addr_start + DENSITY;
+			for (i, rdport) in read_ports.iter().enumerate() {
+				let mux = self.add_decider();
+				mux1s[i].push(mux);
+				let addr = rdport.addr;
+				self.set_decider_inputs(
+					mux,
+					format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end}",),
+				);
+				self.add_decider_out_input_count(mux, Signal::Everything, NET_RED);
+			}
+		}
+
+		// Wiring up read side.
+		let mut mux2s = vec![];
+		for i in 0..read_ports.len() {
+			mux2s.push(self.add_mux_memory(en, DENSITY as i32));
+			// Make buffering and bit selection
+			let nop = self.add_nop(read_ports[i].addr, read_ports[i].addr);
+			let low_bits = self.add_arithmetic(
+				(
+					read_ports[i].addr,
+					ArithmeticOperator::And,
+					Signal::Constant(LOW_BITS),
+				),
+				read_ports[i].addr,
+			);
+			self.add_wire_green_simple(nop, mux1s[i][0]);
+			self.add_wire_green_simple(low_bits, mux2s[i]);
+			self.add_wire_red(vec![], vec![nop, low_bits]); // Tie inputs
+			let address_wire = self.add_wire_red(vec![], vec![nop]);
+			rd_addr_ret.push(address_wire);
+			// Daisy chain up port address muxes
+			for row in 1..n_rows as usize {
+				self.add_wire_green(vec![], vec![mux1s[i][row - 1], mux1s[i][row]]);
+				self.add_wire_green(vec![mux1s[i][row - 1], mux1s[i][row]], vec![]);
+			}
+			self.add_wire_red_simple(mux1s[i][0], mux2s[i]);
+			// First goes to the row directly, subsequent ports goes to the previous port
+			if i == 0 {
+				self.add_wire_red_simple(memory_cells[i].row_out, mux1s[i][0]);
+			} else {
+				self.add_wire_red(vec![], vec![mux1s[i - 1][0], mux1s[i][0]]);
+			}
+			// Connecting mux2s to buffering happens in the read buffering loop.
+		}
+
+		// read buffering
+		for (i, p) in read_ports.iter().enumerate() {
+			if let Some(clk) = p.clk {
+				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
+					ResetSpec::Sync(rst) => self.add_sdffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)),
+						rst,
+						p.data,
+					),
+					ResetSpec::Async(rst) => self.add_adffe(
+						p.data,
+						clk,
+						p.en.unwrap_or(Signal::Constant(1)),
+						rst,
+						p.data,
+						0,
+						false, //TODO: Exract from MappedDesign
+						false,
+						false,
+					),
+					ResetSpec::Disabled => {
+						if let Some(en) = p.en {
+							let (d_wire, clk_wire, en_wire, q) =
+								self.add_dffe(p.data, clk, en, p.data);
+							(d_wire, clk_wire, en_wire, NodeId(usize::MAX), q)
+						} else {
+							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
+							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
+						}
+					},
+				};
+				if p.en.is_some() {
+					rd_en_ret.push(Some(en_wire));
+				} else {
+					rd_en_ret.push(None);
+				}
+				rd_clk_ret.push(Some(clk_wire));
+				rd_data_ret.push(q);
+				self.connect_red(mux2s[i], d_wire);
+				if p.rst != ResetSpec::Disabled {
+					rd_rst_ret.push(Some(rst_wire));
+				} else {
+					rd_rst_ret.push(None);
+				}
+			} else {
+				rd_clk_ret.push(None);
+				rd_rst_ret.push(None);
+				rd_en_ret.push(None);
+				rd_data_ret.push(mux2s[i]);
+			}
+		}
+
+		let mut rd_ret = Vec::with_capacity(read_ports.capacity());
+		for i in 0..read_ports.len() {
+			rd_ret.push(MemoryPortReadFilled {
+				addr_wire: rd_addr_ret[i],
+				data: rd_data_ret[i],
+				clk_wire: rd_clk_ret[i],
+				en_wire: rd_en_ret[i],
+				rst_wire: rd_rst_ret[i],
+			});
+		}
+		let wr_ret = MemoryPortWriteFilled {
+			addr_wire: wr_addr_wire,
+			data_wire: demux.data_in_wire,
+			clk_wire: todo!(),
+			en_wire: todo!(),
+		};
+
+		(rd_ret, wr_ret, demux.byte_select_wire)
 	}
 
 	pub(crate) fn add_ram(
@@ -1850,6 +2497,44 @@ impl LogicalDesign {
 				expression_conj_disj.push(conj_disj);
 				input_left_networks.push(left_network);
 				input_right_networks.push(right_network);
+			},
+			_ => assert!(
+				false,
+				"Tried to add DeciderCombinator output to non DeciderCombinator node"
+			),
+		}
+	}
+
+	pub fn set_decider_inputs<S: AsRef<str>>(&mut self, id: NodeId, expr: S) {
+		let expr = expr.as_ref();
+		match &mut self.nodes[id.0].function {
+			NodeFunction::Decider {
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				..
+			} => {
+				let expr = decider_parser::parser().parse(expr).unwrap();
+				expressions.clear();
+				expression_conj_disj.clear();
+				input_left_networks.clear();
+				input_right_networks.clear();
+				for (i, disj) in expr.disj.iter().enumerate() {
+					if i == 0 {
+						expression_conj_disj.push(DeciderRowConjDisj::FirstRow);
+					} else {
+						expression_conj_disj.push(DeciderRowConjDisj::Or);
+					}
+					for (j, conj) in disj.conj.iter().enumerate() {
+						if j != 0 {
+							expression_conj_disj.push(DeciderRowConjDisj::And);
+						}
+						input_left_networks.push(conj.net_left);
+						input_right_networks.push(conj.net_right);
+						expressions.push((conj.left, conj.op, conj.right));
+					}
+				}
 			},
 			_ => assert!(
 				false,
