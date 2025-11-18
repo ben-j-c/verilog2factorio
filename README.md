@@ -17,13 +17,24 @@ The easiest way to get started is to make a Codespace for your designs. This tak
 
 It takes ~5 minutes to boot up and get your environment ready. Once it boots fully you can follow your preferred mode of usage.
 
-## Mode of usage
+## Lua
 
 Once you have your environment running, you can create a new lua file
 and run it by clicking `"Run and Debug" > "Current lua file"`. This will 
 cause the project to compile, so the first run may take ~30 seconds to start.
 
 Subsequent runs should start instantly.
+
+## CLI
+
+You only need to set `V2F_ROOT` to the repo root and update `PATH` to include `$(V2F_ROOT)/target/release`.
+
+You can do this automatically by executing `source env.bash`. This will add the
+needed environment variable and alias `v2f` to the release binary in this repo.
+
+Make sure you execute `cargo build --release` before you try to use `v2f`.
+
+For more info use `v2f --help`
 
 # Bare Metal
 An alternative to docker is to just setup the software manually.
