@@ -25,16 +25,44 @@ cause the project to compile, so the first run may take ~30 seconds to start.
 
 Subsequent runs should start instantly.
 
+With the "Run and Debug" set to "Current lua file" you can press F5 to run the currently open lua file.
+
 ## CLI
 
 You only need to set `V2F_ROOT` to the repo root and update `PATH` to include `$(V2F_ROOT)/target/release`.
 
 You can do this automatically by executing `source env.bash`. This will add the
-needed environment variable and alias `v2f` to the release binary in this repo.
+needed environment variables and alias `v2f` to the release binary in this repo.
 
 Make sure you execute `cargo build --release` before you try to use `v2f`.
 
-For more info use `v2f --help`
+For more info use `v2f --help`.
+
+### CLI -- Invoke a Lua Script
+
+Typical usage would be to execute a lua script and get a blueprint:
+```bash
+$ v2f -i xyz.lua -o blueprint.json
+```
+Note: Without `-o` the json will be printed to screen.
+
+### CLI -- Running On Mapped Designs
+
+If your design is being inefficiently generated, you may want to modify the front-end mapping. Yosys is the rtl and word-level generation.
+
+If you want to mess with the yosys scripts you can invoke `v2f` on the `*rtl_map.json` produced from the yosys front-end:
+
+```bash
+# A normal flow, just used to produce the rtl.ys and mapping.ys scripts
+$ v2f -i my_full_flow_script.lua
+<output>
+$ yosys -s mapping.ys
+<output>
+$ v2f -i my_full_flow_design_rtl_map.json -o blueprint.json
+<output>
+```
+
+There is a desired feature to allow you to tweak the yosys pass, but that isn't available now. To do that, you need to follow the process like above.
 
 # Bare Metal
 An alternative to docker is to just setup the software manually.
