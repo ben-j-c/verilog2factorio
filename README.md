@@ -56,6 +56,8 @@ If you want to mess with the yosys scripts you can invoke `v2f` on the `*rtl_map
 # A normal flow, just used to produce the rtl.ys and mapping.ys scripts
 $ v2f -i my_full_flow_script.lua
 <output>
+$ yosys -s rtl.ys
+<output>
 $ yosys -s mapping.ys
 <output>
 $ v2f -i my_full_flow_design_rtl_map.json -o blueprint.json
