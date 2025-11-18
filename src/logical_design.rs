@@ -413,7 +413,7 @@ impl Node {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResetSpec {
 	Sync(Signal),
 	Async(Signal),
@@ -427,15 +427,12 @@ pub enum Polarity {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct MemoryCellConnections {
-	row_out: NodeId,
-	row_in_wire: NodeId,
-	row_in_comb: NodeId,
-	clk_pos_wire: NodeId,
-	clk_neg_wire: NodeId,
-	arst_wire_1: NodeId,
-	arst_wire_2: NodeId,
-	en_wire: NodeId,
+pub(crate) struct MemoryCellConnections {
+	pub(crate) row_out: NodeId,
+	pub(crate) row_in_comb: NodeId,
+	pub(crate) latch_pos: MemoryCellArstLatch,
+	pub(crate) latch_neg: MemoryCellArstLatch,
+	pub(crate) en_wire: NodeId,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -447,6 +444,13 @@ pub(crate) struct MemoryDemuxFeedback {
 	pub(crate) row_in: NodeId,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MemoryCellArstLatch {
+	pub(crate) in_comb: NodeId,
+	pub(crate) out_comb: NodeId,
+}
+
+#[derive(Debug, Clone)]
 pub struct MemoryReadPort {
 	pub addr: Signal,
 	pub data: Signal,
@@ -457,6 +461,7 @@ pub struct MemoryReadPort {
 	pub transparent: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct MemoryWritePort {
 	pub addr: Signal,
 	pub data: Signal,
@@ -482,6 +487,7 @@ pub struct MemoryPortWriteFilled {
 	pub en_wire: Option<NodeId>,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct LogicalPort {
 	id: NodeId,
 	direction: Direction,
@@ -766,6 +772,35 @@ impl LogicalDesign {
 		(data_in_wire, clk_wire, clk_wire, mem_cell)
 	}
 
+	pub(crate) fn add_latch_arst_mem_cell(
+		&mut self,
+		clk: Signal,
+		arst: Signal,
+	) -> MemoryCellArstLatch {
+		let in_control = {
+			let ic = self.add_decider();
+			self.set_decider_inputs(ic, format!("{clk:?}[G] != 0 && {arst:?}[G] == 0"));
+			self.add_decider_out_input_count(ic, Signal::Everything, NET_RED);
+			ic
+		};
+
+		let mem_cell = {
+			let mc = self.add_decider();
+			self.set_decider_inputs(mc, format!("{clk:?}[G] == 0 && {arst:?}[G] == 0"));
+			self.add_decider_out_input_count(mc, Signal::Everything, NET_RED);
+			mc
+		};
+
+		self.add_wire_green(vec![], vec![in_control, mem_cell]);
+		self.add_wire_red(vec![in_control, mem_cell], vec![mem_cell]);
+		self.add_wire_red(vec![], vec![in_control]);
+
+		MemoryCellArstLatch {
+			in_comb: in_control,
+			out_comb: mem_cell,
+		}
+	}
+
 	/** Create a standard D-Flip-Flop in this design. Returned NodeIds match the order of the function signature.
 	Inputs are returned as wires, outputs are retured as combinators. */
 	pub(crate) fn add_dff(
@@ -916,7 +951,7 @@ impl LogicalDesign {
 		(latch_in_wire_1, clk_wire, arst_wire, final_out, latch_out_2)
 	}
 
-	fn add_adffe_program_mem_cell(
+	pub(crate) fn add_adffe_program_mem_cell(
 		&mut self,
 		clk: Signal,
 		en: Signal,
@@ -924,48 +959,38 @@ impl LogicalDesign {
 		reset_value: &[i32],
 		density: usize,
 	) -> MemoryCellConnections {
-		let (data_wire_1, clk_wire_1, arst_wire_1, latch_out_1) =
-			self.add_latch_arst(Signal::Everything, clk, arst, false, false);
-		let (data_wire_2, clk_wire_2, arst_wire_2, latch_out_2) =
-			self.add_latch_arst(Signal::Everything, clk, arst, false, false);
+		let latch_1 = self.add_latch_arst_mem_cell(clk, arst);
+		let latch_2 = self.add_latch_arst_mem_cell(clk, arst);
 
-		let reset_emitter = self.add_decider();
-		self.add_decider_input(
-			reset_emitter,
-			(arst, DeciderOperator::Equal, Signal::Constant(1)),
-			DeciderRowConjDisj::FirstRow,
-			NET_GREEN,
-			NET_GREEN,
-		);
+		let reset_emitter_2 = self.add_decider();
+		self.set_decider_inputs(reset_emitter_2, format!("{arst:?}[G] == 1"));
 		for i in 0..density {
 			let reset_value = reset_value[i];
 			self.add_decider_out_constant(
-				reset_emitter,
+				reset_emitter_2,
 				Signal::Id(i as i32),
 				reset_value,
 				NET_RED,
 			);
 		}
-		self.add_wire_red(vec![reset_emitter, latch_out_2], vec![]);
-		let reset_emitter = self.add_decider();
-		self.add_decider_input(
-			reset_emitter,
-			(arst, DeciderOperator::Equal, Signal::Constant(1)),
-			DeciderRowConjDisj::FirstRow,
-			NET_GREEN,
-			NET_GREEN,
-		);
+		self.add_wire_red(vec![reset_emitter_2, latch_2.out_comb], vec![]);
+		self.add_wire_green(vec![], vec![reset_emitter_2, latch_2.in_comb]);
+
+		let reset_emitter_1 = self.add_decider();
+		self.set_decider_inputs(reset_emitter_1, format!("{arst:?}[G] == 1"));
 		for i in 0..density {
 			let reset_value = reset_value[i];
 			self.add_decider_out_constant(
-				reset_emitter,
+				reset_emitter_1,
 				Signal::Id(i as i32),
 				reset_value,
-				NET_RED_GREEN,
+				NET_RED,
 			);
 		}
-		self.add_wire_red(vec![reset_emitter, latch_out_1], vec![]);
-		self.connect_red(latch_out_1, data_wire_2);
+		self.add_wire_red(vec![reset_emitter_1, latch_1.out_comb], vec![]);
+		self.add_wire_green(vec![], vec![reset_emitter_1, latch_1.in_comb]);
+
+		self.add_wire_red_simple(latch_1.out_comb, latch_2.in_comb);
 
 		let mux_0 = self.add_decider();
 		self.add_decider_input(
@@ -985,28 +1010,33 @@ impl LogicalDesign {
 			NET_GREEN,
 		);
 		self.add_decider_out_input_count(mux_1, Signal::Everything, NET_RED);
-		self.connect_red(mux_0, data_wire_1);
+		self.add_wire_red_simple(mux_0, latch_1.in_comb);
 		self.add_wire_red(vec![mux_0, mux_1], vec![]);
 		self.add_wire_green(vec![], vec![mux_0, mux_1]);
-		self.add_wire_red_simple(latch_out_1, mux_0);
+		self.add_wire_red_simple(latch_2.out_comb, mux_0);
 
-		let row_out = latch_out_2;
-		let row_in_wire = self.add_wire_red(vec![], vec![mux_1]);
+		let row_out = latch_2.out_comb;
 		let row_in_comb = mux_1;
-		let clk_pos_wire = clk_wire_2;
-		let clk_neg_wire = clk_wire_1;
-		let arst_wire_1 = arst_wire_1;
-		let arst_wire_2 = arst_wire_2;
 		let en_wire = self.add_wire_green(vec![], vec![mux_0]);
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(mux_0, "mux_0".to_owned());
+			self.set_description_node(mux_1, "mux_1".to_owned());
+			self.set_description_node(row_out, "row_out".to_owned());
+			self.set_description_node(row_in_comb, "row_in_comb".to_owned());
+			self.set_description_node(latch_2.in_comb, "latch_pos_in".to_owned());
+			self.set_description_node(latch_2.out_comb, "latch_pos_out".to_owned());
+			self.set_description_node(latch_1.in_comb, "latch_neg_in".to_owned());
+			self.set_description_node(latch_1.out_comb, "latch_neg_out".to_owned());
+			self.set_description_node(reset_emitter_1, "reset_emitter_neg".to_owned());
+			self.set_description_node(reset_emitter_2, "reset_emitter_pos".to_owned());
+		}
 
 		MemoryCellConnections {
 			row_out,
-			row_in_wire,
 			row_in_comb,
-			clk_pos_wire,
-			clk_neg_wire,
-			arst_wire_1,
-			arst_wire_2,
+			latch_pos: latch_2,
+			latch_neg: latch_1,
 			en_wire,
 		}
 	}
@@ -1613,39 +1643,40 @@ impl LogicalDesign {
 	pub(crate) fn add_ram_resetable_dense(
 		&mut self,
 		arst: Signal,
+		clk: Signal,
 		byte_select: Signal,
 		read_ports: Vec<MemoryReadPort>,
 		write_port: MemoryWritePort,
+		density: usize,
 		mut reset_values: Vec<i32>,
 	) -> (Vec<MemoryPortReadFilled>, MemoryPortWriteFilled, NodeId) {
-		const DENSITY: usize = 256;
 		const LOW_BITS: i32 = 0xFF;
-		reset_values.resize((reset_values.len() / DENSITY * DENSITY).max(1), 0);
+		reset_values.resize((reset_values.len() / density * density).max(1), 0);
 		let size = reset_values.len();
-		let n_rows = size / DENSITY;
+		let n_rows = size / density;
 
 		assert!(!read_ports.is_empty());
 
-		let clk = signal_lookup_table::lookup_sig("signal-C");
-		let en = signal_lookup_table::lookup_sig("signal-E");
+		let clk_internal = signal_lookup_table::lookup_sig("signal-C");
+		let en_internal = signal_lookup_table::lookup_sig("signal-E");
 
 		// Make physical memory cells.
 		let mut memory_cells = Vec::with_capacity(n_rows);
 		for row in 0..n_rows {
 			memory_cells.push(self.add_adffe_program_mem_cell(
-				clk,
-				en,
+				clk_internal,
+				en_internal,
 				arst,
-				&reset_values[row * DENSITY..row * DENSITY + DENSITY],
-				DENSITY,
+				&reset_values[row * density..row * density + density],
+				density,
 			));
 		}
 
 		// Address decoding write enable.
 		let mut wr_enable_decode = Vec::with_capacity(n_rows);
 		for row in 0..n_rows {
-			let phy_addr_start = row * DENSITY;
-			let phy_addr_end = phy_addr_start + DENSITY;
+			let phy_addr_start = row * density;
+			let phy_addr_end = phy_addr_start + density;
 			let one_hot = self.add_decider();
 			{
 				self.add_decider_input(
@@ -1695,12 +1726,37 @@ impl LogicalDesign {
 			let mcell1 = memory_cells[row];
 			self.add_wire_red(vec![], vec![mcell1.row_in_comb, mcell0.row_in_comb]);
 		}
+		// Daisy-chain clk in and arst.
+		let clk_pos_comb = self.add_nop(clk, clk_internal);
+		let clk_neg_comb = self.add_neg(clk, clk_internal);
+		let arst_pos_comb = self.add_nop(arst, arst);
+		let arst_neg_comb = self.add_nop(arst, arst);
+		{
+			self.add_wire_red(vec![], vec![clk_pos_comb, clk_neg_comb]);
+			self.add_wire_red(vec![], vec![arst_pos_comb, arst_neg_comb]);
+			self.add_wire_green(vec![clk_pos_comb, arst_pos_comb], vec![]);
+			self.add_wire_green(vec![clk_neg_comb, arst_neg_comb], vec![]);
+			self.add_wire_green_simple(clk_pos_comb, memory_cells[0].latch_pos.in_comb);
+			self.add_wire_green_simple(clk_neg_comb, memory_cells[0].latch_neg.in_comb);
+			for row in 1..n_rows {
+				let mcell0 = memory_cells[row - 1];
+				let mcell1 = memory_cells[row];
+				self.add_wire_green(
+					vec![],
+					vec![mcell0.latch_pos.in_comb, mcell1.latch_pos.in_comb],
+				);
+				self.add_wire_green(
+					vec![],
+					vec![mcell0.latch_neg.in_comb, mcell1.latch_neg.in_comb],
+				);
+			}
+		}
 
 		// row_out -> mux1
 		let mut mux1s_write = vec![];
 		for row in 0..n_rows {
-			let phy_addr_start = row * DENSITY;
-			let phy_addr_end = phy_addr_start + DENSITY;
+			let phy_addr_start = row * density;
+			let phy_addr_end = phy_addr_start + density;
 			let mux = self.add_decider();
 			mux1s_write.push(mux);
 			let addr = write_port.addr;
@@ -1737,7 +1793,7 @@ impl LogicalDesign {
 			self.add_wire_red(vec![], vec![nop, low_bits]);
 			(self.add_wire_red(vec![], vec![nop]), low_bits)
 		};
-		let demux = self.add_demux_memory_with_byte_select(write_port.addr, byte_select, DENSITY);
+		let demux = self.add_demux_memory_with_byte_select(write_port.addr, byte_select, density);
 		{
 			self.connect_green(addr_low, demux.addr_low_wire_g);
 			self.connect_red(mux1s_write[0], demux.mux1_out_wire);
@@ -1753,8 +1809,8 @@ impl LogicalDesign {
 
 		let mut mux1s = vec![Vec::with_capacity(size as usize); read_ports.len()];
 		for row in 0..n_rows {
-			let phy_addr_start = row * DENSITY;
-			let phy_addr_end = phy_addr_start + DENSITY;
+			let phy_addr_start = row * density;
+			let phy_addr_end = phy_addr_start + density;
 			for (i, rdport) in read_ports.iter().enumerate() {
 				let mux = self.add_decider();
 				mux1s[i].push(mux);
@@ -1770,7 +1826,7 @@ impl LogicalDesign {
 		// Wiring up read side.
 		let mut mux2s = vec![];
 		for i in 0..read_ports.len() {
-			mux2s.push(self.add_mux_memory(en, DENSITY as i32));
+			mux2s.push(self.add_mux_memory(en_internal, density as i32));
 			// Make buffering and bit selection
 			let nop = self.add_nop(read_ports[i].addr, read_ports[i].addr);
 			let low_bits = self.add_arithmetic(

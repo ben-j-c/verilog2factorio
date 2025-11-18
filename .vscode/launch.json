@@ -79,7 +79,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::simple_counter",
+				"tests::logical_design_tests::byte_select",
 			],
 			"cwd": "${workspaceFolder}"
 		},

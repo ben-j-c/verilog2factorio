@@ -1417,3 +1417,206 @@ fn demux() {
 		}
 	}
 }
+
+//#[test]
+fn ram_resetable_dense() {
+	const DENSITY: i32 = 4;
+	let mut logd = LogicalDesign::new();
+	let arst_sig = signal_lookup_table::lookup_sig("signal-R");
+	let clk_sig = signal_lookup_table::lookup_sig("signal-C");
+	let bs_sig = signal_lookup_table::lookup_sig("signal-S");
+	let rd_port = vec![MemoryReadPort {
+		addr: todo!(),
+		data: todo!(),
+		clk: todo!(),
+		clk_polarity: todo!(),
+		en: todo!(),
+		rst: todo!(),
+		transparent: todo!(),
+	}];
+	let wr_port = MemoryWritePort {
+		addr: todo!(),
+		data: todo!(),
+		clk: todo!(),
+		en: todo!(),
+		clk_polarity: todo!(),
+	};
+	let mem = logd.add_ram_resetable_dense(
+		arst_sig,
+		clk_sig,
+		bs_sig,
+		rd_port.clone(),
+		wr_port,
+		DENSITY as usize,
+		(0..(DENSITY * 4)).collect_vec(),
+	);
+}
+
+#[test]
+fn adffe_program_mem_cell() {
+	const DENSITY: i32 = 4;
+	let mut logd = LogicalDesign::new();
+	let clk_sig = signal_lookup_table::lookup_sig("signal-C");
+	let en_sig = signal_lookup_table::lookup_sig("signal-E");
+	let arst_sig = signal_lookup_table::lookup_sig("signal-R");
+
+	use DeciderOperator as Dop;
+	use Signal as Sig;
+	let lamp = logd.add_lamp((Signal::Anything, Dop::NotEqual, Signal::Constant(0)));
+	let data = logd.add_constant(
+		vec![Sig::Id(0), Sig::Id(1), Sig::Id(2), Sig::Id(3)],
+		vec![1, 2, 3, 4],
+	);
+
+	let clk = logd.add_constant(vec![clk_sig], vec![0]);
+	let en = logd.add_constant(vec![en_sig], vec![0]);
+	let arst = logd.add_constant(vec![arst_sig], vec![0]);
+
+	let mcell = logd.add_adffe_program_mem_cell(
+		clk_sig,
+		en_sig,
+		arst_sig,
+		&(10..10 + DENSITY).collect_vec(),
+		DENSITY as usize,
+	);
+
+	logd.add_wire_red_simple(mcell.row_out, lamp);
+	logd.add_wire_red_simple(data, mcell.row_in_comb);
+
+	{
+		let clk_pos = logd.add_nop(clk_sig, clk_sig);
+		let clk_neg = logd.add_neg(clk_sig, clk_sig);
+		let arst_pos = logd.add_nop(arst_sig, arst_sig);
+		let arst_neg = logd.add_nop(arst_sig, arst_sig);
+		logd.add_wire_red(vec![clk], vec![clk_pos, clk_neg]);
+		logd.add_wire_red(vec![arst], vec![arst_pos, arst_neg]);
+		logd.add_wire_green(vec![arst_pos, clk_pos], vec![]);
+		logd.add_wire_green(vec![arst_neg, clk_neg], vec![]);
+		logd.add_wire_green_simple(clk_pos, mcell.latch_pos.in_comb);
+		logd.add_wire_green_simple(clk_neg, mcell.latch_neg.in_comb);
+		logd.connect_green(en, mcell.en_wire);
+	}
+
+	{
+		let mut phy = PhysicalDesign::new();
+		phy.build_from(&logd);
+		let mut serd = SerializableDesign::new();
+		serd.build_from(&phy, &logd);
+		let blueprint_json = serde_json::to_string(&serd).unwrap();
+		println!("\n{}", blueprint_json);
+	}
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(10);
+
+	let init_val = sim.probe_input(lamp, NET_RED_GREEN);
+	assert_eq!(init_val.len(), 0);
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(arst, 0, 1);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(arst, 0, 0);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clk, 0, 1);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clk, 0, 0);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(en, 0, 1);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clk, 0, 1);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 1)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(clk, 0, 0);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 1)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(en, 0, 0);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 1)).collect_vec());
+	}
+
+	{
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(arst, 0, 1);
+		}
+		sim.step(3);
+		let mut val = sim.probe_input(lamp, NET_RED_GREEN);
+		val.sort();
+		assert_eq!(val.len(), 4);
+		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
+	}
+}
