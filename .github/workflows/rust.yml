@@ -19,7 +19,7 @@ jobs:
       with:
         submodules: recursive
     - name: apt update
-      run: sudo apt update && sudo apt upgrade
+      run: sudo apt update && sudo apt upgrade -y
     - name: Build
       run: cargo build --release --verbose 
     - name: Run lib tests
