@@ -1426,24 +1426,23 @@ fn ram_resetable_dense() {
 	let clk_sig = signal_lookup_table::lookup_sig("signal-C");
 	let bs_sig = signal_lookup_table::lookup_sig("signal-S");
 	let rd_port = vec![MemoryReadPort {
-		addr: todo!(),
-		data: todo!(),
-		clk: todo!(),
-		clk_polarity: todo!(),
-		en: todo!(),
-		rst: todo!(),
-		transparent: todo!(),
+		addr: signal_lookup_table::lookup_sig("signal-A"),
+		data: signal_lookup_table::lookup_sig("signal-Q"),
+		clk: None,
+		clk_polarity: Polarity::Positive,
+		en: None,
+		rst: ResetSpec::Disabled,
+		transparent: false,
 	}];
 	let wr_port = MemoryWritePort {
-		addr: todo!(),
-		data: todo!(),
-		clk: todo!(),
-		en: todo!(),
-		clk_polarity: todo!(),
+		addr: signal_lookup_table::lookup_sig("signal-A"),
+		data: signal_lookup_table::lookup_sig("signal-D"),
+		clk: Signal::None,
+		en: Some(signal_lookup_table::lookup_sig("signal-E")),
+		clk_polarity: Polarity::Positive,
 	};
 	let mem = logd.add_ram_resetable_dense(
 		arst_sig,
-		clk_sig,
 		bs_sig,
 		rd_port.clone(),
 		wr_port,

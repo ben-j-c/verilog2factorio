@@ -1643,7 +1643,6 @@ impl LogicalDesign {
 	pub(crate) fn add_ram_resetable_dense(
 		&mut self,
 		arst: Signal,
-		clk: Signal,
 		byte_select: Signal,
 		read_ports: Vec<MemoryReadPort>,
 		write_port: MemoryWritePort,
@@ -1652,8 +1651,12 @@ impl LogicalDesign {
 	) -> (Vec<MemoryPortReadFilled>, MemoryPortWriteFilled, NodeId) {
 		const LOW_BITS: i32 = 0xFF;
 		reset_values.resize((reset_values.len() / density * density).max(1), 0);
-		let size = reset_values.len();
-		let n_rows = size / density;
+		let n_rows = reset_values.len() / density;
+
+		assert!(matches!(write_port.clk_polarity, Polarity::Positive));
+		assert!(matches!(write_port.en, Some(Signal::Id(_))));
+		assert!(matches!(write_port.clk, Signal::Id(_)));
+		let clk = write_port.clk;
 
 		assert!(!read_ports.is_empty());
 
@@ -1678,39 +1681,12 @@ impl LogicalDesign {
 			let phy_addr_start = row * density;
 			let phy_addr_end = phy_addr_start + density;
 			let one_hot = self.add_decider();
-			{
-				self.add_decider_input(
-					one_hot,
-					(
-						write_port.addr,
-						DeciderOperator::GreaterThanEqual,
-						Signal::Constant(phy_addr_start as i32),
-					),
-					DeciderRowConjDisj::FirstRow,
-					NET_RED_GREEN,
-					NET_RED_GREEN,
-				);
-				self.add_decider_input(
-					one_hot,
-					(
-						write_port.addr,
-						DeciderOperator::LessThan,
-						Signal::Constant(phy_addr_end as i32),
-					),
-					DeciderRowConjDisj::And,
-					NET_RED_GREEN,
-					NET_RED_GREEN,
-				);
-				if let Some(en_signal) = write_port.en {
-					self.add_decider_input(
-						one_hot,
-						(en_signal, DeciderOperator::Equal, Signal::Constant(1)),
-						DeciderRowConjDisj::And,
-						NET_RED_GREEN,
-						NET_RED_GREEN,
-					);
-				}
-			}
+			let addr = write_port.addr;
+			let en = write_port.en.unwrap();
+			self.set_decider_inputs(
+				one_hot,
+				format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end} && {en:?} == 1"),
+			);
 			self.add_decider_out_constant(one_hot, Signal::Id(1), 1, NET_RED);
 			wr_enable_decode.push(one_hot);
 		}
@@ -1726,7 +1702,7 @@ impl LogicalDesign {
 			let mcell1 = memory_cells[row];
 			self.add_wire_red(vec![], vec![mcell1.row_in_comb, mcell0.row_in_comb]);
 		}
-		// Daisy-chain clk in and arst.
+		// Daisy-chain clk, arst, and en.
 		let clk_pos_comb = self.add_nop(clk, clk_internal);
 		let clk_neg_comb = self.add_neg(clk, clk_internal);
 		let arst_pos_comb = self.add_nop(arst, arst);
@@ -1748,6 +1724,10 @@ impl LogicalDesign {
 				self.add_wire_green(
 					vec![],
 					vec![mcell0.latch_neg.in_comb, mcell1.latch_neg.in_comb],
+				);
+				self.add_wire_red(
+					vec![],
+					vec![wr_enable_decode[row - 1], wr_enable_decode[row]],
 				);
 			}
 		}
@@ -1779,8 +1759,9 @@ impl LogicalDesign {
 			self.add_wire_red(vec![mux1s_write[row - 1], mux1s_write[row]], vec![]);
 		}
 
-		let (wr_addr_wire, addr_low) = {
+		let (wr_addr_wire, addr_low, wr_en_wire) = {
 			let nop = self.add_nop(write_port.addr, write_port.addr);
+			let nop_en = self.add_nop(write_port.en.unwrap(), write_port.en.unwrap());
 			let low_bits = self.add_arithmetic(
 				(
 					write_port.addr,
@@ -1790,8 +1771,14 @@ impl LogicalDesign {
 				write_port.addr,
 			);
 			self.add_wire_green_simple(nop, mux1s_write[0]);
+			self.add_wire_red_simple(nop, wr_enable_decode[0]);
+			self.add_wire_red(vec![nop, nop_en], vec![]);
 			self.add_wire_red(vec![], vec![nop, low_bits]);
-			(self.add_wire_red(vec![], vec![nop]), low_bits)
+			(
+				self.add_wire_red(vec![], vec![nop]),
+				low_bits,
+				self.add_wire_red(vec![], vec![nop_en]),
+			)
 		};
 		let demux = self.add_demux_memory_with_byte_select(write_port.addr, byte_select, density);
 		{
@@ -1807,7 +1794,7 @@ impl LogicalDesign {
 		let mut rd_clk_ret = Vec::with_capacity(read_ports.len());
 		let mut rd_rst_ret = Vec::with_capacity(read_ports.len());
 
-		let mut mux1s = vec![Vec::with_capacity(size as usize); read_ports.len()];
+		let mut mux1s = vec![Vec::with_capacity(n_rows as usize); read_ports.len()];
 		for row in 0..n_rows {
 			let phy_addr_start = row * density;
 			let phy_addr_end = phy_addr_start + density;
@@ -1924,8 +1911,8 @@ impl LogicalDesign {
 		let wr_ret = MemoryPortWriteFilled {
 			addr_wire: wr_addr_wire,
 			data_wire: demux.data_in_wire,
-			clk_wire: todo!(),
-			en_wire: todo!(),
+			clk_wire: Some(self.add_wire_red(vec![], vec![clk_pos_comb])),
+			en_wire: Some(wr_en_wire),
 		};
 
 		(rd_ret, wr_ret, demux.byte_select_wire)
