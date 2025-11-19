@@ -22,6 +22,7 @@
 //!
 //! See [LogicalDesign] for more details on how to build designs.
 
+pub mod arithmetic_parser;
 pub mod decider_parser;
 
 use std::{
@@ -51,7 +52,7 @@ pub const NET_GREEN: (bool, bool) = (false, true);
 pub const NET_NONE: (bool, bool) = (false, false);
 
 // Supported Arithmetic Combinator operations as in the game.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ArithmeticOperator {
 	Mult,
 	Div,
