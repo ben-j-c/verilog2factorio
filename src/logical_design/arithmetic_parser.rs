@@ -20,6 +20,15 @@ enum ArithExpr {
 	},
 }
 
+impl Default for ArithExpr {
+	fn default() -> Self {
+		Self::Leaf {
+			signal: Signal::None,
+			net: (false, false),
+		}
+	}
+}
+
 fn precedence(op: &ArithmeticOperator) -> usize {
 	match op {
 		// Exponentiation (right-associative)
@@ -167,11 +176,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, ArithExpr, extra::Err<Rich
 						operands.push(right);
 						ops.push(op);
 					}
-					if ops.is_empty() {
-						return operands.pop().unwrap();
-					}
-
-					todo!()
+					reduce_prescedence(&mut operands, &ops)
 				},
 			)
 			.or(leaf)
@@ -180,11 +185,36 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, ArithExpr, extra::Err<Rich
 	expr.then(end()).map(|x| x.0)
 }
 
-fn reduce_prescedence(operands: &[ArithExpr], ops: &[ArithmeticOperator]) -> ArithExpr {
+fn reduce_prescedence(operands: &mut [ArithExpr], ops: &[ArithmeticOperator]) -> ArithExpr {
 	if operands.len() == 1 {
-		return operands[0].clone();
+		let mut ret = ArithExpr::default();
+		std::mem::swap(&mut operands[0], &mut ret);
+		return ret;
 	}
-	let max_precedence = ops.iter().map(precedence).max().unwrap();
-
-	todo!()
+	let min_precedence = ops.iter().map(precedence).min().unwrap();
+	let split_idx = if min_precedence == 6 {
+		// exp is right to left evaluated
+		ops.iter().enumerate().rev().find_map(|(idx, op)| {
+			if precedence(op) == min_precedence {
+				Some(idx)
+			} else {
+				None
+			}
+		})
+	} else {
+		ops.iter().enumerate().find_map(|(idx, op)| {
+			if precedence(op) == min_precedence {
+				Some(idx)
+			} else {
+				None
+			}
+		})
+	}
+	.unwrap();
+	let (left, right) = operands.split_at_mut(split_idx + 1);
+	ArithExpr::Expr {
+		left: Box::new(reduce_prescedence(left, &ops[0..split_idx])),
+		op: ops[split_idx],
+		right: Box::new(reduce_prescedence(right, &ops[split_idx + 1..])),
+	}
 }
