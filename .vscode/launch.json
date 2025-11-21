@@ -79,7 +79,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::byte_select",
+				"tests::logical_design_tests::ram_resetable_dense",
 			],
 			"cwd": "${workspaceFolder}"
 		},

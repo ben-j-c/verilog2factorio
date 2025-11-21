@@ -1649,8 +1649,14 @@ impl LogicalDesign {
 		write_port: MemoryWritePort,
 		density: usize,
 		mut reset_values: Vec<i32>,
-	) -> (Vec<MemoryPortReadFilled>, MemoryPortWriteFilled, NodeId) {
-		const LOW_BITS: i32 = 0xFF;
+	) -> (
+		Vec<MemoryPortReadFilled>,
+		MemoryPortWriteFilled,
+		NodeId,
+		NodeId,
+	) {
+		assert!(density.is_power_of_two());
+		let low_bits_mask: i32 = (density - 1) as i32;
 		reset_values.resize((reset_values.len() / density * density).max(1), 0);
 		let n_rows = reset_values.len() / density;
 
@@ -1688,7 +1694,7 @@ impl LogicalDesign {
 				one_hot,
 				format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end} && {en:?} == 1"),
 			);
-			self.add_decider_out_constant(one_hot, Signal::Id(1), 1, NET_RED);
+			self.add_decider_out_constant(one_hot, en_internal, 1, NET_RED);
 			wr_enable_decode.push(one_hot);
 		}
 
@@ -1761,24 +1767,24 @@ impl LogicalDesign {
 		}
 
 		let (wr_addr_wire, addr_low, wr_en_wire) = {
-			let nop = self.add_nop(write_port.addr, write_port.addr);
-			let nop_en = self.add_nop(write_port.en.unwrap(), write_port.en.unwrap());
+			let addr_buffer = self.add_nop(write_port.addr, write_port.addr);
+			let en_buffer = self.add_nop(write_port.en.unwrap(), write_port.en.unwrap());
 			let low_bits = self.add_arithmetic(
 				(
 					write_port.addr,
 					ArithmeticOperator::And,
-					Signal::Constant(LOW_BITS),
+					Signal::Constant(low_bits_mask),
 				),
 				write_port.addr,
 			);
-			self.add_wire_green_simple(nop, mux1s_write[0]);
-			self.add_wire_red_simple(nop, wr_enable_decode[0]);
-			self.add_wire_red(vec![nop, nop_en], vec![]);
-			self.add_wire_red(vec![], vec![nop, low_bits]);
+			self.add_wire_green_simple(addr_buffer, mux1s_write[0]);
+			self.add_wire_red_simple(addr_buffer, wr_enable_decode[0]);
+			self.add_wire_red_tie_outputs(addr_buffer, en_buffer);
+			self.add_wire_red_tie_inputs(addr_buffer, low_bits);
 			(
-				self.add_wire_red(vec![], vec![nop]),
+				self.add_wire_red(vec![], vec![addr_buffer]),
 				low_bits,
-				self.add_wire_red(vec![], vec![nop_en]),
+				self.add_wire_red(vec![], vec![en_buffer]),
 			)
 		};
 		let demux = self.add_demux_memory_with_byte_select(write_port.addr, byte_select, density);
@@ -1808,40 +1814,53 @@ impl LogicalDesign {
 					format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end}",),
 				);
 				self.add_decider_out_input_count(mux, Signal::Everything, NET_RED);
+				#[cfg(debug_assertions)]
+				{
+					self.set_description_node(mux, format!("rd_mux {row}"));
+				}
 			}
 		}
 
 		// Wiring up read side.
 		let mut mux2s = vec![];
 		for i in 0..read_ports.len() {
-			mux2s.push(self.add_mux_memory(en_internal, density as i32));
+			mux2s.push(self.add_mux_memory(read_ports[i].addr, density as i32));
 			// Make buffering and bit selection
 			let nop = self.add_nop(read_ports[i].addr, read_ports[i].addr);
 			let low_bits = self.add_arithmetic(
 				(
 					read_ports[i].addr,
 					ArithmeticOperator::And,
-					Signal::Constant(LOW_BITS),
+					Signal::Constant(low_bits_mask),
 				),
 				read_ports[i].addr,
 			);
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(nop, "addr buffering");
+				self.set_description_node(low_bits, "low_bits");
+			}
+
 			self.add_wire_green_simple(nop, mux1s[i][0]);
 			self.add_wire_green_simple(low_bits, mux2s[i]);
-			self.add_wire_red(vec![], vec![nop, low_bits]); // Tie inputs
+			self.add_wire_red_tie_inputs(nop, low_bits);
 			let address_wire = self.add_wire_red(vec![], vec![nop]);
 			rd_addr_ret.push(address_wire);
 			// Daisy chain up port address muxes
 			for row in 1..n_rows as usize {
-				self.add_wire_green(vec![], vec![mux1s[i][row - 1], mux1s[i][row]]);
-				self.add_wire_green(vec![mux1s[i][row - 1], mux1s[i][row]], vec![]);
+				self.add_wire_green_tie_inputs(mux1s[i][row - 1], mux1s[i][row]);
+				self.add_wire_red_tie_outputs(mux1s[i][row - 1], mux1s[i][row]);
 			}
 			self.add_wire_red_simple(mux1s[i][0], mux2s[i]);
 			// First goes to the row directly, subsequent ports goes to the previous port
-			if i == 0 {
-				self.add_wire_red_simple(memory_cells[i].row_out, mux1s[i][0]);
-			} else {
-				self.add_wire_red(vec![], vec![mux1s[i - 1][0], mux1s[i][0]]);
+			for row in 0..n_rows {
+				if i == 0 {
+					self.add_wire_red_simple(memory_cells[row].row_out, mux1s[0][row]);
+				} else {
+					self.add_wire_red_tie_inputs(mux1s[i - 1][row], mux1s[i][row]);
+				}
 			}
+
 			// Connecting mux2s to buffering happens in the read buffering loop.
 		}
 
@@ -1892,10 +1911,12 @@ impl LogicalDesign {
 					rd_rst_ret.push(None);
 				}
 			} else {
+				let signal_changer = self.add_nop(Signal::Each, p.data);
+				self.add_wire_red_simple(mux2s[i], signal_changer);
 				rd_clk_ret.push(None);
 				rd_rst_ret.push(None);
 				rd_en_ret.push(None);
-				rd_data_ret.push(mux2s[i]);
+				rd_data_ret.push(signal_changer);
 			}
 		}
 
@@ -1916,7 +1937,9 @@ impl LogicalDesign {
 			en_wire: Some(wr_en_wire),
 		};
 
-		(rd_ret, wr_ret, demux.byte_select_wire)
+		let arst_wire = self.add_wire_red(vec![], vec![arst_pos_comb]);
+
+		(rd_ret, wr_ret, arst_wire, demux.byte_select_wire)
 	}
 
 	pub(crate) fn add_ram(
@@ -2657,6 +2680,18 @@ impl LogicalDesign {
 		)
 	}
 
+	/// Add a new constant combinator to this design, with the specified output signals and their matching constant values.
+	/// For example, (vec![Signal::Id(0)], vec![100]) defines a combinator that always output 100 for the virtual signal, signal-0.
+	pub fn add_constant_simple(&mut self, output: Signal, count: i32) -> NodeId {
+		self.add_node(
+			NodeFunction::Constant {
+				enabled: true,
+				constants: vec![count],
+			},
+			vec![output],
+		)
+	}
+
 	pub fn set_ith_output_count(&mut self, id: NodeId, i: usize, count: i32) {
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Constant { constants, .. } => {
@@ -2703,6 +2738,20 @@ impl LogicalDesign {
 		id
 	}
 
+	/// It has the same behaviour as a wire in game. Attach the outputs of two combinators together.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_red_tie_outputs(&mut self, first: NodeId, second: NodeId) -> NodeId {
+		self.add_wire_red(vec![first, second], vec![])
+	}
+
+	/// It has the same behaviour as a wire in game. Attach the inputs of two combinators together.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_red_tie_inputs(&mut self, first: NodeId, second: NodeId) -> NodeId {
+		self.add_wire_red(vec![], vec![first, second])
+	}
+
 	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.
 	///
 	/// Returns the id for the wire you created.
@@ -2728,6 +2777,20 @@ impl LogicalDesign {
 			self.set_description_node(id, "wire_green");
 		}
 		id
+	}
+
+	/// It has the same behaviour as a wire in game. Attach the outputs of two combinators together.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_green_tie_outputs(&mut self, first: NodeId, second: NodeId) -> NodeId {
+		self.add_wire_green(vec![first, second], vec![])
+	}
+
+	/// It has the same behaviour as a wire in game. Attach the inputs of two combinators together.
+	///
+	/// Returns the id for the wire you created.
+	pub fn add_wire_green_tie_inputs(&mut self, first: NodeId, second: NodeId) -> NodeId {
+		self.add_wire_green(vec![], vec![first, second])
 	}
 
 	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.
