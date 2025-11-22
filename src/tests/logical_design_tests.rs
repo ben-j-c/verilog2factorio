@@ -1681,3 +1681,129 @@ fn adffe_program_mem_cell() {
 		assert_eq!(val, (0..DENSITY).map(|i| (i, i + 10)).collect_vec());
 	}
 }
+
+#[test]
+fn ram_resetable_dense_full() {
+	const DENSITY: i32 = 8;
+	let mut logd = LogicalDesign::new();
+	let arst_sig = signal_lookup_table::lookup_sig("signal-R");
+	let clk_sig = signal_lookup_table::lookup_sig("signal-C");
+	let bs_sig = signal_lookup_table::lookup_sig("signal-S");
+	let rd_port = MemoryReadPort {
+		addr: signal_lookup_table::lookup_sig("signal-A"),
+		data: signal_lookup_table::lookup_sig("signal-Q"),
+		clk: None,
+		clk_polarity: Polarity::Positive,
+		en: None,
+		rst: ResetSpec::Disabled,
+		transparent: false,
+	};
+	let wr_port = MemoryWritePort {
+		addr: signal_lookup_table::lookup_sig("signal-I"),
+		data: signal_lookup_table::lookup_sig("signal-D"),
+		clk: clk_sig,
+		en: Some(signal_lookup_table::lookup_sig("signal-E")),
+		clk_polarity: Polarity::Positive,
+	};
+
+	let rd_data = logd.add_lamp((
+		Signal::Anything,
+		DeciderOperator::NotEqual,
+		Signal::Constant(0),
+	));
+	let clk = logd.add_constant_simple(clk_sig, 0);
+	let arst = logd.add_constant_simple(arst_sig, 0);
+	let bs = logd.add_constant_simple(bs_sig, 0);
+	let wr_en = logd.add_constant_simple(wr_port.en.unwrap(), 0);
+	let wr_data = logd.add_constant_simple(wr_port.data, 0);
+	let wr_addr = logd.add_constant_simple(wr_port.addr, 0);
+
+	let rd_addr = logd.add_constant_simple(rd_port.addr, 0);
+
+	let n_addr = DENSITY * 8;
+	let (rd_port_ret, wr_port_ret, arst_wire, bs_wire) = logd.add_ram_resetable_dense(
+		arst_sig,
+		bs_sig,
+		vec![rd_port.clone()],
+		wr_port,
+		DENSITY as usize,
+		vec![0; n_addr as usize],
+	);
+
+	let rd_port_ret = &rd_port_ret[0];
+
+	logd.connect_red(rd_addr, rd_port_ret.addr_wire);
+	logd.add_wire_red_simple(rd_port_ret.data, rd_data);
+
+	logd.connect_red(clk, wr_port_ret.clk_wire.unwrap());
+	logd.connect_red(wr_en, wr_port_ret.en_wire.unwrap());
+	logd.connect_red(arst, arst_wire);
+	logd.connect_red(bs, bs_wire);
+	logd.connect_red(wr_data, wr_port_ret.data_wire);
+	logd.connect_red(wr_addr, wr_port_ret.addr_wire);
+
+	{
+		let mut phy = PhysicalDesign::new();
+		phy.build_from(&logd);
+		let mut serd = SerializableDesign::new();
+		serd.build_from(&phy, &logd);
+		let blueprint_json = serde_json::to_string(&serd).unwrap();
+		println!("\n{}", blueprint_json);
+	}
+
+	let logd = Arc::new(RwLock::new(logd));
+	let mut sim = SimState::new(logd.clone());
+	sim.step(10);
+	{
+		let val = sim.probe_input(rd_data, NET_RED_GREEN);
+		assert_eq!(val.len(), 0);
+	}
+	sim.step(10);
+	for byte_select in 0..16u32 {
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(arst, 0, 1);
+		}
+		sim.step(5);
+		{
+			let mut logd = logd.write().unwrap();
+			logd.set_ith_output_count(arst, 0, 0);
+		}
+		sim.step(5);
+		for i in 0..n_addr {
+			let data_on_wire = 0x04030201 * (i + 10);
+			let data_written = (data_on_wire as u32
+				& ((byte_select & 0x1) * 0xFF
+					| ((byte_select & 0x2) >> 1) * 0xFF00
+					| ((byte_select & 0x4) >> 2) * 0xFF0000
+					| ((byte_select & 0x8) >> 3) * 0xFF000000)) as i32;
+			{
+				let mut logd = logd.write().unwrap();
+				logd.set_ith_output_count(wr_addr, 0, i);
+				logd.set_ith_output_count(wr_data, 0, data_on_wire);
+				logd.set_ith_output_count(bs, 0, byte_select as i32);
+				logd.set_ith_output_count(wr_en, 0, 1);
+			}
+			sim.step(10);
+			{
+				let mut logd = logd.write().unwrap();
+				logd.set_ith_output_count(clk, 0, 1);
+			}
+			sim.step(2);
+			{
+				let mut logd = logd.write().unwrap();
+				logd.set_ith_output_count(clk, 0, 0);
+				logd.set_ith_output_count(rd_addr, 0, i);
+			}
+			sim.step(10);
+			let val = sim.probe_input(rd_data, NET_RED_GREEN);
+			if data_written != 0 {
+				assert_eq!(val.len(), 1);
+				assert_eq!(val[0].0, rd_port.data.id());
+				assert_eq!(val[0].1, data_written);
+			} else {
+				assert!(val.is_empty());
+			}
+		}
+	}
+}
