@@ -994,6 +994,137 @@ fn convert_reduce_x_ports(pre_mapped: MappedCell) -> Cell {
 	}
 }
 
+fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
+	let no_init = !cell.parameters["INIT"].is_empty();
+	let valid_reg_init = cell.parameters["RD_INIT_VALUE"]
+		.chars()
+		.all(|c| c == '0' || c == 'x');
+	let valid_reg_init = valid_reg_init
+		&& cell.parameters["RD_SRST_VALUE"]
+			.chars()
+			.all(|c| c == '0' || c == 'x');
+	let abits = cell.parameters["ABITS"].unwrap_bin_str();
+	let width = cell.parameters["WIDTH"].unwrap_bin_str();
+	let wr_port_count = cell.parameters["WR_PORTS"].unwrap_bin_str();
+	assert!(
+		!cell.parameters["RD_TRANSPARENCY_MASK"].contains("1"),
+		"Currently memory doesn't support transparent reads."
+	);
+	assert!(
+		wr_port_count == 0 || no_init,
+		"The game doesn't support initial values for writeable memories. {:?}",
+		cell.attributes["src"]
+	);
+	assert!(
+		valid_reg_init,
+		"The game doesn't support initial values for registers. {:?}",
+		cell.attributes["src"]
+	);
+	assert!(
+		width <= 32,
+		"The game doesn't support port widths larger than 32. {:?}",
+		cell.attributes["src"]
+	);
+	assert!(
+		abits <= 32,
+		"The game doesn't support port widths larger than 32. {:?}",
+		cell.attributes["src"]
+	);
+
+	let tmp1 = cell.connections["RD_ADDR"].iter().copied().chunks(abits);
+	let tmp2 = cell.connections["RD_DATA"].iter().copied().chunks(width);
+	let rd_ports = izip!(
+		tmp1.into_iter().map(|c| c.collect_vec()),
+		tmp2.into_iter().map(|c| c.collect_vec()),
+		cell.connections["RD_ARST"].iter(),
+		cell.connections["RD_CLK"].iter(),
+		cell.connections["RD_EN"].iter(),
+		cell.connections["RD_SRST"].iter(),
+	)
+	.collect_vec();
+	assert_eq!(rd_ports.len(), cell.parameters["RD_PORTS"].unwrap_bin_str());
+
+	let tmp1 = cell.connections["WR_ADDR"].iter().copied().chunks(abits);
+	let tmp2 = cell.connections["WR_DATA"].iter().copied().chunks(width);
+	let wr_ports = izip!(
+		tmp1.into_iter().map(|c| c.collect_vec()),
+		tmp2.into_iter().map(|c| c.collect_vec()),
+		cell.connections["WR_CLK"].iter(),
+		cell.connections["WR_EN"]
+			.iter()
+			.chunks(width)
+			.into_iter()
+			.map(|c| {
+				let tmp3 = c.collect_vec();
+				assert!(
+					tmp3.iter().all(|v| *v == tmp3[0]),
+					"We currently don't support bit masks."
+				);
+				tmp3[0]
+			}),
+	)
+	.collect_vec();
+	assert_eq!(wr_ports.len(), cell.parameters["WR_PORTS"].unwrap_bin_str());
+
+	let mut directions = hash_map();
+	let mut connections: HashM<String, Vec<Bit>> = hash_map();
+	for i in 0..rd_ports.len() {
+		let (addr, data, arst, clk, en, srst) = &rd_ports[i];
+		directions.insert(format!("RD_ADDR_{}", i), Direction::Input);
+		connections.insert(format!("RD_ADDR_{}", i), addr.clone());
+		directions.insert(format!("RD_DATA_{}", i), Direction::Output);
+		connections.insert(format!("RD_DATA_{}", i), data.clone());
+		if clk.is_connection() {
+			directions.insert(format!("RD_CLK_{}", i), Direction::Input);
+			connections.insert(format!("RD_CLK_{}", i), vec![**clk]);
+		}
+		if en.is_connection() {
+			directions.insert(format!("RD_EN_{}", i), Direction::Input);
+			connections.insert(format!("RD_EN_{}", i), vec![**en]);
+		}
+		if arst.is_connection() {
+			directions.insert(format!("RD_ARST_{}", i), Direction::Input);
+			connections.insert(format!("RD_ARST_{}", i), vec![**arst]);
+		}
+		if srst.is_connection() {
+			directions.insert(format!("RD_SRST_{}", i), Direction::Input);
+			connections.insert(format!("RD_SRST_{}", i), vec![**arst]);
+		}
+	}
+
+	for i in 1..wr_ports.len() {
+		let (_addr, _data, clk0, _en) = &wr_ports[i - 1];
+		let (_addr, _data, clk1, _en) = &wr_ports[i];
+		assert!(clk0 == clk1, "Can only have a single writer clock.");
+	}
+
+	for i in 0..wr_ports.len() {
+		let (addr, data, clk, en) = &wr_ports[i];
+		directions.insert(format!("WR_ADDR_{}", i), Direction::Input);
+		connections.insert(format!("WR_ADDR_{}", i), addr.clone());
+		directions.insert(format!("WR_DATA_{}", i), Direction::Input);
+		connections.insert(format!("WR_DATA_{}", i), data.clone());
+		if i == 0 {
+			directions.insert(format!("WR_CLK_{}", i), Direction::Input);
+			connections.insert(format!("WR_CLK_{}", i), vec![**clk]);
+		}
+		if en.is_connection() {
+			directions.insert(format!("WR_EN_{}", i), Direction::Input);
+			connections.insert(format!("WR_EN_{}", i), vec![**en]);
+		}
+	}
+
+	Cell {
+		hide_name: cell.hide_name,
+		cell_type: ImplementableOp::Memory,
+		model: cell.model,
+		parameters: cell.parameters,
+		attributes: cell.attributes,
+		port_directions: directions,
+		connections,
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use std::{fs::File, io::BufReader};
