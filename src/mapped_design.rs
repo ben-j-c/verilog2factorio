@@ -293,6 +293,34 @@ impl Cell {
 					}
 					ports
 				},
+				ImplementableOp::V2FProgRam => {
+					let n_rd_ports = self.parameters["RD_PORTS"].unwrap_bin_str();
+					let mut ports = vec![];
+					for i in 0..n_rd_ports {
+						let expected = [
+							format!("RD_ADDR_{i}"),
+							format!("RD_DATA_{i}"),
+							format!("RD_CLK_{i}"),
+							format!("RD_EN_{i}"),
+							format!("RD_ARST_{i}"),
+							format!("RD_SRST_{i}"),
+						];
+						for port in expected {
+							if self.port_directions.contains_key(&port) {
+								ports.push(port);
+							}
+						}
+					}
+					ports.extend([
+						format!("WR_ADDR"),
+						format!("WR_DATA"),
+						format!("WR_CLK"),
+						format!("WR_EN"),
+						format!("ARST"),
+						format!("BYTE_SELECT"),
+					]);
+					ports
+				},
 				ImplementableOp::ReduceAnd => {
 					let width = self.parameters["A_WIDTH"].unwrap_bin_str();
 					chain!((0..width).map(|i| format!("A{i}")), ["Y".to_owned()]).collect_vec()
@@ -625,6 +653,7 @@ impl Display for ImplementableOp {
 			ImplementableOp::ReduceOr => "v2f_reduce_or",
 			ImplementableOp::ReduceAnd => "v2f_reduce_and",
 			ImplementableOp::V2FRollingAccumulate => "v2f_rolling_accumulate",
+			ImplementableOp::V2FProgRam => "v2f_programmable_ram",
 			ImplementableOp::Neg => "v2f_neg",
 			ImplementableOp::Not => "v2f_not",
 			ImplementableOp::PMux(_, _) => "v2f_pmux",
@@ -674,6 +703,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_reduce_or" => ImplementableOp::ReduceOr,
 			"v2f_reduce_and" => ImplementableOp::ReduceAnd,
 			"v2f_rolling_accumulate" => ImplementableOp::V2FRollingAccumulate,
+			"v2f_programmable_ram" => ImplementableOp::V2FProgRam,
 			"v2f_neg" => ImplementableOp::Neg,
 			"v2f_not" => ImplementableOp::Not,
 			"v2f_pmux" => ImplementableOp::PMux(false, 0),
@@ -701,6 +731,8 @@ impl<'de> Deserialize<'de> for Cell {
 			Ok(convert_pmux_ports(helper))
 		} else if helper.cell_type.starts_with("v2f_reduce") {
 			Ok(convert_reduce_x_ports(helper))
+		} else if helper.cell_type.starts_with("v2f_programmable_ram") {
+			Ok(convert_v2f_programmable_ram(helper))
 		} else {
 			Ok(Cell {
 				hide_name: helper.hide_name,
@@ -995,39 +1027,11 @@ fn convert_reduce_x_ports(pre_mapped: MappedCell) -> Cell {
 }
 
 fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
-	let no_init = !cell.parameters["INIT"].is_empty();
-	let valid_reg_init = cell.parameters["RD_INIT_VALUE"]
-		.chars()
-		.all(|c| c == '0' || c == 'x');
-	let valid_reg_init = valid_reg_init
-		&& cell.parameters["RD_SRST_VALUE"]
-			.chars()
-			.all(|c| c == '0' || c == 'x');
 	let abits = cell.parameters["ABITS"].unwrap_bin_str();
-	let width = cell.parameters["WIDTH"].unwrap_bin_str();
-	let wr_port_count = cell.parameters["WR_PORTS"].unwrap_bin_str();
-	assert!(
-		!cell.parameters["RD_TRANSPARENCY_MASK"].contains("1"),
-		"Currently memory doesn't support transparent reads."
-	);
-	assert!(
-		wr_port_count == 0 || no_init,
-		"The game doesn't support initial values for writeable memories. {:?}",
-		cell.attributes["src"]
-	);
-	assert!(
-		valid_reg_init,
-		"The game doesn't support initial values for registers. {:?}",
-		cell.attributes["src"]
-	);
-	assert!(
-		width <= 32,
-		"The game doesn't support port widths larger than 32. {:?}",
-		cell.attributes["src"]
-	);
+	let width = 32;
 	assert!(
 		abits <= 32,
-		"The game doesn't support port widths larger than 32. {:?}",
+		"This cell doesnt support more than 2^31 addresses. {:?}",
 		cell.attributes["src"]
 	);
 
@@ -1043,28 +1047,6 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 	)
 	.collect_vec();
 	assert_eq!(rd_ports.len(), cell.parameters["RD_PORTS"].unwrap_bin_str());
-
-	let tmp1 = cell.connections["WR_ADDR"].iter().copied().chunks(abits);
-	let tmp2 = cell.connections["WR_DATA"].iter().copied().chunks(width);
-	let wr_ports = izip!(
-		tmp1.into_iter().map(|c| c.collect_vec()),
-		tmp2.into_iter().map(|c| c.collect_vec()),
-		cell.connections["WR_CLK"].iter(),
-		cell.connections["WR_EN"]
-			.iter()
-			.chunks(width)
-			.into_iter()
-			.map(|c| {
-				let tmp3 = c.collect_vec();
-				assert!(
-					tmp3.iter().all(|v| *v == tmp3[0]),
-					"We currently don't support bit masks."
-				);
-				tmp3[0]
-			}),
-	)
-	.collect_vec();
-	assert_eq!(wr_ports.len(), cell.parameters["WR_PORTS"].unwrap_bin_str());
 
 	let mut directions = hash_map();
 	let mut connections: HashM<String, Vec<Bit>> = hash_map();
@@ -1092,31 +1074,27 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 		}
 	}
 
-	for i in 1..wr_ports.len() {
-		let (_addr, _data, clk0, _en) = &wr_ports[i - 1];
-		let (_addr, _data, clk1, _en) = &wr_ports[i];
-		assert!(clk0 == clk1, "Can only have a single writer clock.");
-	}
-
-	for i in 0..wr_ports.len() {
-		let (addr, data, clk, en) = &wr_ports[i];
-		directions.insert(format!("WR_ADDR_{}", i), Direction::Input);
-		connections.insert(format!("WR_ADDR_{}", i), addr.clone());
-		directions.insert(format!("WR_DATA_{}", i), Direction::Input);
-		connections.insert(format!("WR_DATA_{}", i), data.clone());
-		if i == 0 {
-			directions.insert(format!("WR_CLK_{}", i), Direction::Input);
-			connections.insert(format!("WR_CLK_{}", i), vec![**clk]);
-		}
-		if en.is_connection() {
-			directions.insert(format!("WR_EN_{}", i), Direction::Input);
-			connections.insert(format!("WR_EN_{}", i), vec![**en]);
-		}
+	{
+		directions.insert(format!("WR_ADDR"), Direction::Input);
+		connections.insert(format!("WR_ADDR"), cell.connections["WR_ADDR"].clone());
+		directions.insert(format!("WR_DATA"), Direction::Input);
+		connections.insert(format!("WR_DATA"), cell.connections["WR_DATA"].clone());
+		directions.insert(format!("WR_CLK"), Direction::Input);
+		connections.insert(format!("WR_CLK"), cell.connections["WR_CLK"].clone());
+		directions.insert(format!("WR_EN"), Direction::Input);
+		connections.insert(format!("WR_EN"), cell.connections["WR_EN"].clone());
+		directions.insert(format!("ARST"), Direction::Input);
+		connections.insert(format!("ARST"), cell.connections["ARST"].clone());
+		directions.insert(format!("BYTE_SELECT"), Direction::Input);
+		connections.insert(
+			format!("BYTE_SELECT"),
+			cell.connections["BYTE_SELECT"].clone(),
+		);
 	}
 
 	Cell {
 		hide_name: cell.hide_name,
-		cell_type: ImplementableOp::Memory,
+		cell_type: ImplementableOp::V2FProgRam,
 		model: cell.model,
 		parameters: cell.parameters,
 		attributes: cell.attributes,

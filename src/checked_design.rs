@@ -15,7 +15,7 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::{hash_map, hash_set, index_of, HashS},
+	util::{self, hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
 
@@ -44,6 +44,7 @@ pub enum ImplementableOp {
 	Neg,
 	Not,
 	V2FRollingAccumulate,
+	V2FProgRam,
 	DFF,
 	SDFF,
 	SDFFE,
@@ -97,6 +98,7 @@ impl ImplementableOp {
 			ImplementableOp::ADFF => BodyType::MultiPart,
 			ImplementableOp::DFFE => BodyType::MultiPart,
 			ImplementableOp::Sop(_) => BodyType::MultiPart,
+			ImplementableOp::V2FProgRam => BodyType::MultiPart,
 		}
 	}
 
@@ -1734,7 +1736,7 @@ impl CheckedDesign {
 					(ret_in, ret_out)
 				} else {
 					let mut wr_ports = vec![];
-					for i in 0..n_rd_ports {
+					for i in 0..n_wr_ports {
 						let addr_idx = index_of(&mapped_in_port, &format!("WR_ADDR_{i}")).unwrap();
 						let data_idx = index_of(&mapped_in_port, &format!("WR_DATA_{i}")).unwrap();
 						let clk_idx = index_of(&mapped_in_port, &format!("WR_CLK_{i}")).unwrap();
@@ -1925,6 +1927,123 @@ impl CheckedDesign {
 					&self.nodes[nodeid].folded_expressions,
 				);
 				(wires, vec![sop_comb])
+			},
+			ImplementableOp::V2FProgRam => {
+				let cell = mapped_cell.unwrap();
+				let n_rd_ports = cell.parameters["RD_PORTS"].unwrap_bin_str();
+				let rd_clk_polarity = cell.parameters["RD_CLK_POLARITY"]
+					.chars()
+					.map(|c| match c {
+						'0' => Polarity::Negative,
+						_ => Polarity::Positive,
+					})
+					.collect_vec();
+
+				let mut rd_ports = vec![];
+				for i in 0..n_rd_ports {
+					let addr_idx = index_of(&mapped_in_port, &format!("RD_ADDR_{i}")).unwrap();
+					let data_idx = index_of(&mapped_out_port, &format!("RD_DATA_{i}")).unwrap();
+					let clk_idx = index_of(&mapped_in_port, &format!("RD_CLK_{i}"));
+					let en_idx = index_of(&mapped_in_port, &format!("RD_EN_{i}"));
+					let arst_idx = index_of(&mapped_in_port, &format!("RD_ARST_{i}"));
+					let srst_idx = index_of(&mapped_in_port, &format!("RD_SRST_{i}"));
+					let rst_spec = if let Some(idx) = arst_idx {
+						ResetSpec::Async(sig_in[idx])
+					} else if let Some(idx) = srst_idx {
+						ResetSpec::Sync(sig_in[idx])
+					} else {
+						ResetSpec::Disabled
+					};
+					let mut idx_offset = 1;
+					if clk_idx.is_some() {
+						assert!(addr_idx + idx_offset == clk_idx.unwrap());
+						idx_offset += 1;
+					}
+					if en_idx.is_some() {
+						assert!(addr_idx + idx_offset == en_idx.unwrap());
+						idx_offset += 1;
+					}
+					if arst_idx.is_some() {
+						assert!(addr_idx + idx_offset == arst_idx.unwrap());
+					} else if srst_idx.is_some() {
+						assert!(addr_idx + idx_offset == srst_idx.unwrap());
+					}
+					rd_ports.push(MemoryReadPort {
+						addr: sig_in[addr_idx],
+						data: sig_out[data_idx],
+						clk: clk_idx.map(|idx| sig_in[idx]),
+						en: en_idx.map(|idx| sig_in[idx]),
+						rst: rst_spec,
+						transparent: false,
+						clk_polarity: rd_clk_polarity[i],
+					});
+				}
+
+				{
+					let wr_port = {
+						let addr_idx = index_of(&mapped_in_port, "WR_ADDR").unwrap();
+						let data_idx = index_of(&mapped_in_port, "WR_DATA").unwrap();
+						let clk_idx = index_of(&mapped_in_port, "WR_CLK").unwrap();
+						let en_idx = index_of(&mapped_in_port, "WR_EN");
+						let mut idx_offset = 1;
+						assert!(addr_idx + idx_offset == data_idx);
+						idx_offset += 1;
+						assert!(addr_idx + idx_offset == clk_idx);
+						idx_offset += 1;
+						if en_idx.is_some() {
+							assert!(addr_idx + idx_offset == en_idx.unwrap());
+						}
+						MemoryWritePort {
+							addr: sig_in[addr_idx],
+							data: sig_in[data_idx],
+							clk: sig_in[clk_idx],
+							en: en_idx.map(|idx| sig_in[idx]),
+							clk_polarity: Polarity::Positive,
+						}
+					};
+					let arst_idx = index_of(&mapped_in_port, "ARST").unwrap();
+					let byte_select_idx = index_of(&mapped_in_port, "BYTE_SELECT").unwrap();
+					let program_file = cell.parameters["PROGRAM_FILE"].to_string();
+					let mut program = util::load_hex_file(program_file);
+					let size = cell.parameters["SIZE"].unwrap_bin_str();
+					program.resize(size, 0);
+					assert!(size > 0);
+					let density = (1 << (64 - size.leading_zeros() - 1)).min(256);
+					let (rd_ports, wr_port, arst_wire, byte_select_wire) = logical_design
+						.add_ram_resetable_dense(
+							sig_in[arst_idx],
+							sig_in[byte_select_idx],
+							rd_ports,
+							wr_port,
+							density as usize,
+							program,
+						);
+					let mut ret_in = vec![];
+					let mut ret_out = vec![];
+					for p in rd_ports {
+						ret_in.push(p.addr_wire);
+						ret_out.push(p.data);
+						if let Some(clk_wire) = p.clk_wire {
+							ret_in.push(clk_wire);
+						}
+						if let Some(en_wire) = p.en_wire {
+							ret_in.push(en_wire);
+						}
+						if let Some(rst_wire) = p.rst_wire {
+							ret_in.push(rst_wire);
+						}
+					}
+					{
+						let p = wr_port;
+						ret_in.push(p.addr_wire);
+						ret_in.push(p.data_wire);
+						ret_in.push(p.clk_wire.unwrap());
+						ret_in.push(p.en_wire.unwrap());
+						ret_in.push(arst_wire);
+						ret_in.push(byte_select_wire);
+					}
+					(ret_in, ret_out)
+				}
 			},
 			ImplementableOp::AndBitwise
 			| ImplementableOp::OrBitwise

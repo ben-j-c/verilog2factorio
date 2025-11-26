@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, io};
 
-use graphviz_rust::attributes::id;
 use itertools::Itertools;
 use vcd::{Value, Vector};
 
@@ -21,7 +20,11 @@ impl VCD {
 		let mut values = hash_map();
 		let mut time = 0;
 		for command_result in parser {
-			let command = command_result.unwrap();
+			let command = if let Ok(command) = command_result {
+				command
+			} else {
+				continue;
+			};
 			use vcd::Command::*;
 			match command {
 				ChangeScalar(id_code, value) => {

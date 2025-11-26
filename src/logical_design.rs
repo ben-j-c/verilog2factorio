@@ -1657,7 +1657,12 @@ impl LogicalDesign {
 	) {
 		assert!(density.is_power_of_two());
 		let low_bits_mask: i32 = (density - 1) as i32;
-		reset_values.resize((reset_values.len() / density * density).max(1), 0);
+		{
+			let n = reset_values.len();
+			let needed_size = (n - 1) / density * density + density;
+			reset_values.resize(needed_size, 0);
+		}
+
 		let n_rows = reset_values.len() / density;
 
 		assert!(matches!(write_port.clk_polarity, Polarity::Positive));
@@ -1749,7 +1754,7 @@ impl LogicalDesign {
 			let addr = write_port.addr;
 			self.set_decider_inputs(
 				mux,
-				format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end}",),
+				format!("{addr:?}[G] >= {phy_addr_start} && {addr:?}[G] < {phy_addr_end}",),
 			);
 			self.add_decider_out_input_count(mux, Signal::Everything, NET_RED);
 		}
@@ -1758,7 +1763,6 @@ impl LogicalDesign {
 			let mcell = memory_cells[row];
 			self.add_wire_red_simple(mcell.row_out, mux1s_write[row]);
 		}
-		//let mux2_write = self.add_mux_memory(write_port.addr, DENSITY as i32);
 		for row in 1..n_rows {
 			// Addr wire
 			self.add_wire_green(vec![], vec![mux1s_write[row - 1], mux1s_write[row]]);
@@ -1811,7 +1815,7 @@ impl LogicalDesign {
 				let addr = rdport.addr;
 				self.set_decider_inputs(
 					mux,
-					format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end}",),
+					format!("{addr:?}[G] >= {phy_addr_start} && {addr:?}[G] < {phy_addr_end}",),
 				);
 				self.add_decider_out_input_count(mux, Signal::Everything, NET_RED);
 				#[cfg(debug_assertions)]

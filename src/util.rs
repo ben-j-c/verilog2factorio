@@ -1,6 +1,8 @@
 use std::{
 	collections::{HashMap, HashSet},
+	fs,
 	hash::BuildHasherDefault,
+	path::Path,
 };
 
 use hashers::fnv::FNV1aHasher64;
@@ -86,4 +88,12 @@ pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, 
 		idx_adj.push(idx);
 	}
 	(adj, idx_adj)
+}
+
+pub(crate) fn load_hex_file<P: AsRef<Path>>(path: P) -> Vec<i32> {
+	let path = path.as_ref();
+	let data = fs::read_to_string(path).expect("Failed to read file");
+	data.lines()
+		.map(|x| i32::from_str_radix(x, 16).unwrap())
+		.collect_vec()
 }

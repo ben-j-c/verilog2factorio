@@ -1,0 +1,149 @@
+{
+  "creator": "Yosys 0.52 (git sha1 fee39a328, g++ 13.3.0-6ubuntu2~24.04 -fPIC -O3)",
+  "modules": {
+    "ram": {
+      "attributes": {
+        "top": "00000000000000000000000000000001",
+        "src": "ram.v:3.1-35.10"
+      },
+      "ports": {
+        "RD_ADDR": {
+          "direction": "input",
+          "bits": [ 2, 3, 4 ]
+        },
+        "RD_DATA": {
+          "direction": "output",
+          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ]
+        },
+        "WR_CLK": {
+          "direction": "input",
+          "bits": [ 37 ]
+        },
+        "ARST": {
+          "direction": "input",
+          "bits": [ 38 ]
+        },
+        "WR_ADDR": {
+          "direction": "input",
+          "bits": [ 39, 40, 41 ]
+        },
+        "WR_DATA": {
+          "direction": "input",
+          "bits": [ 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73 ]
+        },
+        "WR_EN": {
+          "direction": "input",
+          "bits": [ 74 ]
+        },
+        "BYTE_SELECT": {
+          "direction": "input",
+          "bits": [ 75, 76, 77, 78 ]
+        }
+      },
+      "cells": {
+        "dut": {
+          "hide_name": 0,
+          "type": "v2f_programmable_ram",
+          "parameters": {
+            "ABITS": "00000000000000000000000000000011",
+            "PROGRAM_FILE": "program.mem",
+            "RD_CLK_ENABLE": "00000000000000000000000000000000",
+            "RD_CLK_POLARITY": "00000000000000000000000000000001",
+            "RD_PORTS": "00000000000000000000000000000001",
+            "SIZE": "00000000000000000000000000001000"
+          },
+          "attributes": {
+            "module_not_derived": "00000000000000000000000000000001",
+            "src": "ram.v:21.5-34.3"
+          },
+          "port_directions": {
+            "ARST": "input",
+            "BYTE_SELECT": "input",
+            "RD_ADDR": "input",
+            "RD_ARST": "input",
+            "RD_CLK": "input",
+            "RD_DATA": "output",
+            "RD_EN": "input",
+            "RD_SRST": "input",
+            "WR_ADDR": "input",
+            "WR_CLK": "input",
+            "WR_DATA": "input",
+            "WR_EN": "input"
+          },
+          "connections": {
+            "ARST": [ 38 ],
+            "BYTE_SELECT": [ 75, 76, 77, 78 ],
+            "RD_ADDR": [ 2, 3, 4 ],
+            "RD_ARST": [ "0" ],
+            "RD_CLK": [ "x" ],
+            "RD_DATA": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
+            "RD_EN": [ "x" ],
+            "RD_SRST": [ "0" ],
+            "WR_ADDR": [ 39, 40, 41 ],
+            "WR_CLK": [ 37 ],
+            "WR_DATA": [ 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73 ],
+            "WR_EN": [ 74 ]
+          }
+        }
+      },
+      "netnames": {
+        "ARST": {
+          "hide_name": 0,
+          "bits": [ 38 ],
+          "attributes": {
+            "src": "ram.v:7.8-7.12"
+          }
+        },
+        "BYTE_SELECT": {
+          "hide_name": 0,
+          "bits": [ 75, 76, 77, 78 ],
+          "attributes": {
+            "src": "ram.v:11.14-11.25"
+          }
+        },
+        "RD_ADDR": {
+          "hide_name": 0,
+          "bits": [ 2, 3, 4 ],
+          "attributes": {
+            "src": "ram.v:4.14-4.21"
+          }
+        },
+        "RD_DATA": {
+          "hide_name": 0,
+          "bits": [ 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36 ],
+          "attributes": {
+            "src": "ram.v:5.16-5.23"
+          }
+        },
+        "WR_ADDR": {
+          "hide_name": 0,
+          "bits": [ 39, 40, 41 ],
+          "attributes": {
+            "src": "ram.v:8.14-8.21"
+          }
+        },
+        "WR_CLK": {
+          "hide_name": 0,
+          "bits": [ 37 ],
+          "attributes": {
+            "src": "ram.v:6.8-6.14"
+          }
+        },
+        "WR_DATA": {
+          "hide_name": 0,
+          "bits": [ 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73 ],
+          "attributes": {
+            "src": "ram.v:9.15-9.22"
+          }
+        },
+        "WR_EN": {
+          "hide_name": 0,
+          "bits": [ 74 ],
+          "attributes": {
+            "src": "ram.v:10.8-10.13"
+          }
+        }
+      }
+    }
+  }
+}

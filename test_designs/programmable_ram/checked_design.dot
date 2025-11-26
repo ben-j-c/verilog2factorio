@@ -1,0 +1,91 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n0[shape=box,label="WR_DATA
+0"]
+  n1[shape=box,label="WR_EN
+1"]
+  n2[shape=box,label="BYTE_SELECT
+2"]
+  n3[shape=box,label="ARST
+3"]
+  n4[shape=box,label="RD_ADDR
+4"]
+  n5[shape=box,label="RD_DATA
+5"]
+  n6[shape=box,label="WR_CLK
+6"]
+  n7[shape=box,label="WR_ADDR
+7"]
+  n8[shape=box,label="dut
+v2f_programmable_ram"]
+  n9[shape=rarrow,label="WR_DATA
+0"]
+  n10[shape=rarrow,label="WR_EN
+1"]
+  n11[shape=rarrow,label="BYTE_SELECT
+2"]
+  n12[shape=rarrow,label="ARST
+3"]
+  n13[shape=rarrow,label="RD_ADDR
+4"]
+  n14[shape=larrow,label="RD_DATA
+255"]
+  n15[shape=rarrow,label="WR_CLK
+6"]
+  n16[shape=rarrow,label="WR_ADDR
+7"]
+  n17[shape=larrow,label="dut
+v2f_programmable_ram
+248
+RD_ADDR_0"]
+  n18[shape=rarrow,label="dut
+v2f_programmable_ram
+251
+RD_DATA_0"]
+  n19[shape=larrow,label="dut
+v2f_programmable_ram
+52
+WR_ADDR"]
+  n20[shape=larrow,label="dut
+v2f_programmable_ram
+142
+WR_DATA"]
+  n21[shape=larrow,label="dut
+v2f_programmable_ram
+253
+WR_CLK"]
+  n22[shape=larrow,label="dut
+v2f_programmable_ram
+53
+WR_EN"]
+  n23[shape=larrow,label="dut
+v2f_programmable_ram
+254
+ARST"]
+  n24[shape=larrow,label="dut
+v2f_programmable_ram
+211
+BYTE_SELECT"]
+  n0 -> n9
+  n1 -> n10
+  n2 -> n11
+  n3 -> n12
+  n4 -> n13
+  n6 -> n15
+  n7 -> n16
+  n8 -> n18
+  n9 -> n20 [label="wooden-chest(0)",syle=bold,color=blue]
+  n10 -> n22 [label="iron-chest(1)",syle=bold,color=blue]
+  n11 -> n24 [label="steel-chest(2)",syle=bold,color=blue]
+  n13 -> n17 [label="transport-belt(4)",syle=bold,color=blue]
+  n14 -> n5
+  n16 -> n19 [label="underground-belt(7)",syle=bold,color=blue]
+  n17 -> n8
+  n18 -> n14 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n19 -> n8
+  n20 -> n8
+  n21 -> n8
+  n22 -> n8
+  n23 -> n8
+  n24 -> n8
+}
