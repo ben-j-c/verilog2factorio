@@ -17,6 +17,7 @@ fn main() {
 		input_file: Some(PathBuf::from("alu.lua")),
 		dump_phy_cfg: false,
 		output_file: None,
+		convert_to_memh: false,
 	};
 	match lua_flow(args) {
 		Ok(json) => {

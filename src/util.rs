@@ -90,10 +90,36 @@ pub(crate) fn convert_connectivity_to_csr(conn: &Vec<Vec<usize>>) -> (Vec<i32>, 
 	(adj, idx_adj)
 }
 
-pub(crate) fn load_hex_file<P: AsRef<Path>>(path: P) -> Vec<i32> {
+pub fn load_hex_file<P: AsRef<Path>>(path: P) -> Vec<i32> {
 	let path = path.as_ref();
 	let data = fs::read_to_string(path).expect("Failed to read file");
 	data.lines()
 		.map(|x| i32::from_str_radix(x, 16).unwrap())
 		.collect_vec()
+}
+
+pub fn load_bin_file<P: AsRef<Path>>(path: P) -> Result<Vec<i32>, std::io::Error> {
+	let path = path.as_ref();
+	let data = fs::read(path)?;
+	Ok(data
+		.chunks(4)
+		.map(|c| {
+			let mut ret = 0u32;
+			for (i, b) in c.iter().enumerate() {
+				ret |= (*b as u32) << (i * 8);
+			}
+			ret as i32
+		})
+		.collect_vec())
+}
+
+pub fn save_memh_file<P: AsRef<Path>>(path: P, data: Vec<i32>) -> Result<(), std::io::Error> {
+	use std::io::Write;
+	let path = path.as_ref();
+	let file = fs::File::create(path)?;
+	let mut writer = std::io::BufWriter::new(file);
+	for word in data {
+		writeln!(&mut writer, "{word:08x}")?;
+	}
+	Ok(())
 }

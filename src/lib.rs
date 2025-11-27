@@ -28,7 +28,7 @@ pub mod sim;
 mod ndarr;
 mod svg;
 
-mod util;
+pub mod util;
 
 #[cfg(test)]
 mod tests;
@@ -38,6 +38,7 @@ pub enum Error {
 	SerializationError(serde_json::Error),
 	LuaError(mlua::Error),
 	IOError(std::io::Error),
+	NoSuchFile,
 	ReadlineError(rustyline::error::ReadlineError),
 	LuaErrorNoReturnedDesign,
 	ResultantFileNameIsBad(PathBuf),
@@ -69,16 +70,24 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-	/// Input technology-mapped file, .json, or lua script, .lua.
+	/// Input file if in normal flow.
+	///   .json -> technology-mapped
+	///   .lua -> script
+	/// Sub-tools use this flag for input files.
 	#[arg(short, long, required_unless_present = "dump_phy_cfg")]
 	pub input_file: Option<PathBuf>,
 
+	/// Output
 	#[arg(short, long)]
 	pub output_file: Option<PathBuf>,
 
 	/// Dump a template cfg/phy_template.toml. Rename to cfg/phy.toml to use for real.
 	#[arg(short, long)]
 	pub dump_phy_cfg: bool,
+
+	/// Sub-tool to convert any file into a 32 bit $readmemh compatible format.
+	#[arg(short, long)]
+	pub convert_to_memh: bool,
 }
 
 pub fn mapped_flow(args: Args) -> Result<String> {
