@@ -11,6 +11,7 @@ fn yosys_example() {
 		input_file: Some(PathBuf::from("yosys.lua")),
 		dump_phy_cfg: true,
 		output_file: None,
+		convert_to_memh: false,
 	};
 	match lua_flow(args) {
 		Ok(bp) => {
