@@ -1,3 +1,3 @@
-FROM peaboff/yosys:0.52
+FROM peaboff/riscv-yosys:latest
 ENV CARGO_TERM_COLOR=always
 ENV YOSYS_HOME=/core/yosys
