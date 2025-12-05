@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-enum ArithExpr {
+pub enum ArithExpr {
 	Expr {
 		left: Box<Self>,
 		op: ArithmeticOperator,
@@ -166,23 +166,30 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, ArithExpr, extra::Err<Rich
 	});
 
 	let expr = recursive(|expr| {
-		expr.clone()
-			.then(op.then(expr.clone()).repeated().collect::<Vec<_>>())
-			.map(
-				|(left, chained): (ArithExpr, Vec<(ArithmeticOperator, ArithExpr)>)| {
-					let mut operands = vec![left];
-					let mut ops = vec![];
-					for (op, right) in chained {
-						operands.push(right);
-						ops.push(op);
-					}
-					reduce_prescedence(&mut operands, &ops)
-				},
-			)
-			.or(leaf)
-			.or(expr.delimited_by(just("("), just(")")))
+		leaf.then(end())
+			.map(|x| x.0)
+			.or(expr
+				.clone()
+				.delimited_by(just("("), just(")"))
+				.padded()
+				.then(end())
+				.map(|x| x.0))
+			.or(expr
+				.clone()
+				.then(op.then(expr).repeated().collect::<Vec<_>>())
+				.map(
+					|(left, chained): (ArithExpr, Vec<(ArithmeticOperator, ArithExpr)>)| {
+						let mut operands = vec![left];
+						let mut ops = vec![];
+						for (op, right) in chained {
+							operands.push(right);
+							ops.push(op);
+						}
+						reduce_prescedence(&mut operands, &ops)
+					},
+				))
 	});
-	expr.then(end()).map(|x| x.0)
+	expr.map(|x| x)
 }
 
 fn reduce_prescedence(operands: &mut [ArithExpr], ops: &[ArithmeticOperator]) -> ArithExpr {

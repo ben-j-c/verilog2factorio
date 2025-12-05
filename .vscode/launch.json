@@ -60,6 +60,32 @@
 		{
 			"type": "lldb",
 			"request": "launch",
+			"name": "Specific file dbg",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=v2f",
+					"--package=v2f",
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"env": {
+				"V2F_ROOT": "${workspaceFolder}"
+			},
+			"args": [
+				"-i",
+				"examples/riscv_v2f_optimized/top_v2f/sys.lua",
+				"-o",
+				"blueprint.json",
+			],
+			"cwd": "${fileDirname}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
 			"name": "Cargo test",
 			"cargo": {
 				"args": [
@@ -105,7 +131,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::ram_resetable_dense_full",
+				"tests::logical_design_tests::arith_expr",
 			],
 			"cwd": "${workspaceFolder}"
 		},

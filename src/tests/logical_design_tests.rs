@@ -8,9 +8,14 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-	checked_design::CheckedDesign, connected_design::CoarseExpr, logical_design::*,
-	mapped_design::MappedDesign, phy::PhysicalDesign, serializable_design::SerializableDesign,
-	signal_lookup_table, sim::SimState,
+	checked_design::CheckedDesign,
+	connected_design::CoarseExpr,
+	logical_design::{self, *},
+	mapped_design::MappedDesign,
+	phy::PhysicalDesign,
+	serializable_design::SerializableDesign,
+	signal_lookup_table,
+	sim::SimState,
 };
 
 #[cfg(test)]
@@ -1806,4 +1811,12 @@ fn ram_resetable_dense_full() {
 			}
 		}
 	}
+}
+
+#[test]
+fn arith_expr() {
+	use chumsky::Parser;
+	//let parser = logical_design::arithmetic_parser::parser();
+	//let v = parser.parse("signal_A + signal_B").unwrap();
+	//println!("{v:?}")
 }
