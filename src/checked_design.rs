@@ -132,6 +132,10 @@ impl ImplementableOp {
 		)
 	}
 
+	pub fn is_memory(&self) -> bool {
+		matches!(self, ImplementableOp::V2FProgRam | ImplementableOp::Memory)
+	}
+
 	pub fn get_decider_op(&self) -> Option<DeciderOperator> {
 		match self {
 			ImplementableOp::LessThan => Some(DeciderOperator::LessThan),
@@ -224,11 +228,11 @@ pub(crate) enum BodyType {
 	Nop,
 }
 
-#[derive(Debug, Clone)]
-enum TimingBoundary {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum TimingBoundary {
+	None,
 	Pre,
 	Post,
-	None,
 }
 
 #[derive(Debug, Clone)]
@@ -429,11 +433,13 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => {
 					let cell = mapped_design.get_cell(&mapped_id);
 
-					for (connected_id, direction, terminal_name) in cell
+					for (_idx, connected_id, direction, terminal_name) in cell
 						.get_terminal_names()
 						.iter()
-						.map(|terminal_name| {
+						.enumerate()
+						.map(|(idx, terminal_name)| {
 							(
+								idx,
 								self.connected_design.get_node_id(&mapped_id, terminal_name),
 								self.connected_design.terminal_direction(terminal_name),
 								terminal_name,
@@ -451,6 +457,11 @@ impl CheckedDesign {
 									},
 								);
 								self.connect(id, nodeid);
+								if cell.cell_type.is_memory() {
+									let terminal_boundary =
+										cell.memory_terminal_to_timing_boundary(&terminal_name);
+									self.nodes[id].timing_boundary = terminal_boundary;
+								}
 							},
 							Direction::Output => {
 								let id = self.new_node(
@@ -464,6 +475,14 @@ impl CheckedDesign {
 								if cell.cell_type.is_dff() {
 									self.nodes[id].timing_boundary = TimingBoundary::Pre;
 									self.nodes[nodeid].timing_boundary = TimingBoundary::Post;
+								}
+								if cell.cell_type.is_memory() {
+									let terminal_boundary =
+										cell.memory_terminal_to_timing_boundary(&terminal_name);
+									self.nodes[id].timing_boundary = terminal_boundary;
+									if !matches!(terminal_boundary, TimingBoundary::None) {
+										self.nodes[nodeid].timing_boundary = TimingBoundary::Post;
+									}
 								}
 							},
 							Direction::Inout => panic!("Not supported"),
@@ -2212,12 +2231,17 @@ impl CheckedDesign {
 	}
 
 	/** see [`count_connected_terminals`] */
-	fn get_sigular_output_input_pair(&self, id: NodeId) -> (usize, usize) {
-		assert_eq!(self.count_connected_terminals(id), 1);
-		assert!(matches!(self.node_type(id), NodeType::CellBody { .. }));
-		let cell_input = self.nodes[id].fanin[0];
-		let cell_output = self.nodes[cell_input].fanin[0];
-		(cell_output, cell_input)
+	fn get_sigular_output_input_pair(&self, body_id: NodeId) -> (usize, usize) {
+		assert_eq!(self.count_connected_terminals(body_id), 1);
+		assert!(matches!(self.node_type(body_id), NodeType::CellBody { .. }));
+		let body_node = &self.nodes[body_id];
+		for cell_input_id in &body_node.fanin {
+			let cell_input = &self.nodes[*cell_input_id];
+			for cell_output_id in &cell_input.fanin {
+				return (*cell_output_id, *cell_input_id);
+			}
+		}
+		unreachable!("You fucked it, didnt call count_connected_terminals");
 	}
 
 	/** I wish there was a better way to implement optimizations, instead of having an ad-hoc approach for each

@@ -1,4 +1,4 @@
-(*whitebox*)
+(* blackbox *)
 module v2f_programmable_ram(
 		RD_CLK,
 		RD_EN,
@@ -45,6 +45,8 @@ module v2f_programmable_ram(
 	input [WR_PORTS*WIDTH-1:0] WR_DATA;
 	input ARST;
 	input [3:0] BYTE_SELECT;
+
+`ifndef YOSYS
 
 	reg [WIDTH-1:0] memory [SIZE-1:0];
 
@@ -125,4 +127,5 @@ module v2f_programmable_ram(
 		LAST_RD_CLK <= RD_CLK;
 		LAST_WR_CLK <= WR_CLK;
 	end
+`endif
 endmodule

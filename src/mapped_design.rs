@@ -7,7 +7,7 @@ use serde::{
 };
 
 use crate::{
-	checked_design::{BodyType, ImplementableOp},
+	checked_design::{BodyType, ImplementableOp, TimingBoundary},
 	util::{hash_map, HashM},
 };
 
@@ -199,6 +199,7 @@ pub struct Cell {
 	pub attributes: HashM<AttributeName, Attribute>,
 	pub port_directions: HashM<PortName, Direction>,
 	pub connections: HashM<PortName, Vec<Bit>>,
+	timing_boundaries: HashM<PortName, TimingBoundary>,
 }
 
 #[allow(dead_code)]
@@ -366,6 +367,15 @@ impl Cell {
 					.collect_vec(),
 				ImplementableOp::Not => ay(),
 			},
+		}
+	}
+
+	pub(crate) fn memory_terminal_to_timing_boundary(&self, terminal: &str) -> TimingBoundary {
+		let rhs = self.timing_boundaries.get(terminal);
+		if let Some(boundary) = rhs {
+			*boundary
+		} else {
+			TimingBoundary::None
 		}
 	}
 
@@ -742,6 +752,7 @@ impl<'de> Deserialize<'de> for Cell {
 				attributes: helper.attributes,
 				port_directions: helper.port_directions,
 				connections: helper.connections,
+				timing_boundaries: hash_map(),
 			})
 		}
 	}
@@ -821,13 +832,15 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 
 	let mut directions = hash_map();
 	let mut connections: HashM<String, Vec<Bit>> = hash_map();
+	let mut timing_boundaries = hash_map();
 	for i in 0..rd_ports.len() {
 		let (addr, data, arst, clk, en, srst) = &rd_ports[i];
 		directions.insert(format!("RD_ADDR_{}", i), Direction::Input);
 		connections.insert(format!("RD_ADDR_{}", i), addr.clone());
 		directions.insert(format!("RD_DATA_{}", i), Direction::Output);
 		connections.insert(format!("RD_DATA_{}", i), data.clone());
-		if clk.is_connection() {
+		let is_clocked = clk.is_connection();
+		if is_clocked {
 			directions.insert(format!("RD_CLK_{}", i), Direction::Input);
 			connections.insert(format!("RD_CLK_{}", i), vec![**clk]);
 		}
@@ -842,6 +855,14 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		if srst.is_connection() {
 			directions.insert(format!("RD_SRST_{}", i), Direction::Input);
 			connections.insert(format!("RD_SRST_{}", i), vec![**arst]);
+		}
+		if is_clocked {
+			timing_boundaries.insert(format!("RD_ADDR_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_DATA_{i}"), TimingBoundary::Pre);
+			timing_boundaries.insert(format!("RD_CLK_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_EN_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_SRST_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_ARST_{i}"), TimingBoundary::Post);
 		}
 	}
 
@@ -865,6 +886,10 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 			directions.insert(format!("WR_EN_{}", i), Direction::Input);
 			connections.insert(format!("WR_EN_{}", i), vec![**en]);
 		}
+		timing_boundaries.insert(format!("WR_DATA_{i}"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_ADDR_{i}"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_CLK_{i}"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_EN_{i}"), TimingBoundary::Post);
 	}
 
 	Cell {
@@ -875,6 +900,7 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		attributes: cell.attributes,
 		port_directions: directions,
 		connections,
+		timing_boundaries,
 	}
 }
 
@@ -901,6 +927,7 @@ fn convert_lut_ports(pre_mapped: MappedCell) -> Cell {
 		attributes: pre_mapped.attributes,
 		port_directions: new_directions,
 		connections: new_connections,
+		timing_boundaries: hash_map(),
 	}
 }
 
@@ -927,6 +954,7 @@ fn convert_sop_ports(pre_mapped: MappedCell) -> Cell {
 		attributes: pre_mapped.attributes,
 		port_directions: new_directions,
 		connections: new_connections,
+		timing_boundaries: hash_map(),
 	}
 }
 
@@ -992,6 +1020,7 @@ fn convert_pmux_ports(pre_mapped: MappedCell) -> Cell {
 		attributes: pre_mapped.attributes,
 		port_directions: new_directions,
 		connections: new_connections,
+		timing_boundaries: hash_map(),
 	}
 }
 
@@ -1023,6 +1052,7 @@ fn convert_reduce_x_ports(pre_mapped: MappedCell) -> Cell {
 		attributes: pre_mapped.attributes,
 		port_directions: new_directions,
 		connections: new_connections,
+		timing_boundaries: hash_map(),
 	}
 }
 
@@ -1050,13 +1080,15 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 
 	let mut directions = hash_map();
 	let mut connections: HashM<String, Vec<Bit>> = hash_map();
+	let mut timing_boundaries = hash_map();
 	for i in 0..rd_ports.len() {
 		let (addr, data, arst, clk, en, srst) = &rd_ports[i];
 		directions.insert(format!("RD_ADDR_{}", i), Direction::Input);
 		connections.insert(format!("RD_ADDR_{}", i), addr.clone());
 		directions.insert(format!("RD_DATA_{}", i), Direction::Output);
 		connections.insert(format!("RD_DATA_{}", i), data.clone());
-		if clk.is_connection() {
+		let is_clocked = clk.is_connection();
+		if is_clocked {
 			directions.insert(format!("RD_CLK_{}", i), Direction::Input);
 			connections.insert(format!("RD_CLK_{}", i), vec![**clk]);
 		}
@@ -1071,6 +1103,14 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 		if srst.is_connection() {
 			directions.insert(format!("RD_SRST_{}", i), Direction::Input);
 			connections.insert(format!("RD_SRST_{}", i), vec![**arst]);
+		}
+		if is_clocked {
+			timing_boundaries.insert(format!("RD_ADDR_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_DATA_{i}"), TimingBoundary::Pre);
+			timing_boundaries.insert(format!("RD_CLK_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_EN_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_SRST_{i}"), TimingBoundary::Post);
+			timing_boundaries.insert(format!("RD_ARST_{i}"), TimingBoundary::Post);
 		}
 	}
 
@@ -1090,6 +1130,11 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 			format!("BYTE_SELECT"),
 			cell.connections["BYTE_SELECT"].clone(),
 		);
+		timing_boundaries.insert(format!("WR_ADDR"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_DATA"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_EN"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("WR_CLK"), TimingBoundary::Post);
+		timing_boundaries.insert(format!("BYTE_SELECT"), TimingBoundary::Post);
 	}
 
 	Cell {
@@ -1100,6 +1145,7 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 		attributes: cell.attributes,
 		port_directions: directions,
 		connections,
+		timing_boundaries,
 	}
 }
 

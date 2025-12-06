@@ -77,11 +77,11 @@
 			},
 			"args": [
 				"-i",
-				"examples/riscv_v2f_optimized/top_v2f/sys.lua",
+				"sys.lua",
 				"-o",
 				"blueprint.json",
 			],
-			"cwd": "${fileDirname}"
+			"cwd": "examples/riscv_v2f_optimized/top_v2f/"
 		},
 		{
 			"type": "lldb",

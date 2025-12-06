@@ -1218,7 +1218,16 @@ pub fn get_lua() -> Result<Lua, Error> {
 		lua.create_function(
 			|_, (files, top_mod, include_dirs): (Value, String, Option<String>)| match files {
 				Value::String(filename) => {
-					method_load_rtl(&[filename.to_string_lossy()], top_mod, include_dirs)
+					let filename = filename.to_string_lossy();
+					if filename.ends_with(".json") {
+						Ok(RTL {
+							filename: filename.into(),
+							top_mod,
+							promote_all_nets_to_ports: false,
+						})
+					} else {
+						method_load_rtl(&[filename], top_mod, include_dirs)
+					}
 				},
 				Value::Table(table) => {
 					let mut filenames = vec![];
