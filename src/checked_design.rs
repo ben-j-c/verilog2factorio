@@ -1346,6 +1346,9 @@ impl CheckedDesign {
 				if self.nodes[*foid]
 					.fanin
 					.iter()
+					.filter(|fiid| {
+						!matches!(self.nodes[**fiid].timing_boundary, TimingBoundary::Post)
+					})
 					.all(|fiid| topo_seen.contains(fiid))
 				{
 					queue.push_back(*foid);

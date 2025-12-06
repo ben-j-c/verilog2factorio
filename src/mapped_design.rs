@@ -859,7 +859,6 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		if is_clocked {
 			timing_boundaries.insert(format!("RD_ADDR_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_DATA_{i}"), TimingBoundary::Pre);
-			timing_boundaries.insert(format!("RD_CLK_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_EN_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_SRST_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_ARST_{i}"), TimingBoundary::Post);
@@ -888,7 +887,6 @@ fn convert_mem_v2(cell: MappedCell) -> Cell {
 		}
 		timing_boundaries.insert(format!("WR_DATA_{i}"), TimingBoundary::Post);
 		timing_boundaries.insert(format!("WR_ADDR_{i}"), TimingBoundary::Post);
-		timing_boundaries.insert(format!("WR_CLK_{i}"), TimingBoundary::Post);
 		timing_boundaries.insert(format!("WR_EN_{i}"), TimingBoundary::Post);
 	}
 
@@ -1107,7 +1105,6 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 		if is_clocked {
 			timing_boundaries.insert(format!("RD_ADDR_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_DATA_{i}"), TimingBoundary::Pre);
-			timing_boundaries.insert(format!("RD_CLK_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_EN_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_SRST_{i}"), TimingBoundary::Post);
 			timing_boundaries.insert(format!("RD_ARST_{i}"), TimingBoundary::Post);
@@ -1133,7 +1130,6 @@ fn convert_v2f_programmable_ram(cell: MappedCell) -> Cell {
 		timing_boundaries.insert(format!("WR_ADDR"), TimingBoundary::Post);
 		timing_boundaries.insert(format!("WR_DATA"), TimingBoundary::Post);
 		timing_boundaries.insert(format!("WR_EN"), TimingBoundary::Post);
-		timing_boundaries.insert(format!("WR_CLK"), TimingBoundary::Post);
 		timing_boundaries.insert(format!("BYTE_SELECT"), TimingBoundary::Post);
 	}
 
