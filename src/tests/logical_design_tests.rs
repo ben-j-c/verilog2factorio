@@ -1462,7 +1462,7 @@ fn ram_resetable_dense() {
 	let rd_addr = logd.add_constant_simple(rd_port.addr, 0);
 
 	let n_addr = DENSITY * 16;
-	let (rd_port_ret, wr_port_ret, arst_wire, bs_wire) = logd.add_ram_resetable_dense(
+	let (rd_port_ret, wr_port_ret, arst_wire, bs_wire) = logd.add_programmable_ram(
 		arst_sig,
 		bs_sig,
 		vec![rd_port.clone()],
@@ -1726,7 +1726,7 @@ fn ram_resetable_dense_full() {
 	let rd_addr = logd.add_constant_simple(rd_port.addr, 0);
 
 	let n_addr = DENSITY * 8;
-	let (rd_port_ret, wr_port_ret, arst_wire, bs_wire) = logd.add_ram_resetable_dense(
+	let (rd_port_ret, wr_port_ret, arst_wire, bs_wire) = logd.add_programmable_ram(
 		arst_sig,
 		bs_sig,
 		vec![rd_port.clone()],

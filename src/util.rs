@@ -94,7 +94,7 @@ pub fn load_hex_file<P: AsRef<Path>>(path: P) -> Vec<i32> {
 	let path = path.as_ref();
 	let data = fs::read_to_string(path).expect("Failed to read file");
 	data.lines()
-		.map(|x| i32::from_str_radix(x, 16).unwrap())
+		.map(|x| u32::from_str_radix(x, 16).unwrap() as i32)
 		.collect_vec()
 }
 

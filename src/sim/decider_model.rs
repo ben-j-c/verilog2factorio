@@ -350,7 +350,7 @@ impl SimState {
 			use_input_count,
 			constants,
 		) = node.function.unwrap_decider();
-		let mut state_out = OutputState::default();
+		new_state_red.clear();
 		let has_each_output = node.output.contains(&Signal::Each);
 
 		for (sig, network, use_input_count, constant) in izip!(
@@ -363,7 +363,7 @@ impl SimState {
 			match sig {
 				Signal::Id(id) => self.execute_decider_output_signal_model(
 					node,
-					&mut state_out,
+					new_state_red,
 					*network,
 					constant,
 					*id,
@@ -372,7 +372,7 @@ impl SimState {
 				),
 				Signal::Everything => self.execute_decider_output_everything_model(
 					node,
-					&mut state_out,
+					new_state_red,
 					*network,
 					constant,
 				),
@@ -380,7 +380,7 @@ impl SimState {
 					let has_each = expressions.iter().any(|e| e.0 == Signal::Each);
 					self.execute_decider_output_anything_model(
 						node,
-						&mut state_out,
+						new_state_red,
 						*network,
 						constant,
 						has_each,
@@ -388,7 +388,7 @@ impl SimState {
 					)
 				},
 				Signal::Each => {
-					self.execute_decider_output_each_model(node, &mut state_out, *network, constant)
+					self.execute_decider_output_each_model(node, new_state_red, *network, constant)
 				},
 				Signal::Constant(_) => {
 					panic!("Decider combinator has a constant as an output, which isn't valid.")
@@ -396,7 +396,6 @@ impl SimState {
 				Signal::None => continue,
 			}
 		}
-		*new_state_red = state_out.clone();
-		*new_state_green = state_out;
+		new_state_green.copy(&new_state_red);
 	}
 }

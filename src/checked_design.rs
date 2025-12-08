@@ -480,9 +480,6 @@ impl CheckedDesign {
 									let terminal_boundary =
 										cell.memory_terminal_to_timing_boundary(&terminal_name);
 									self.nodes[id].timing_boundary = terminal_boundary;
-									if !matches!(terminal_boundary, TimingBoundary::None) {
-										self.nodes[nodeid].timing_boundary = TimingBoundary::Post;
-									}
 								}
 							},
 							Direction::Inout => panic!("Not supported"),
@@ -1343,6 +1340,9 @@ impl CheckedDesign {
 				continue;
 			}
 			for foid in &self.nodes[id].fanout {
+				if matches!(self.nodes[*foid].timing_boundary, TimingBoundary::Pre) {
+					continue;
+				}
 				if self.nodes[*foid]
 					.fanin
 					.iter()
@@ -1352,6 +1352,14 @@ impl CheckedDesign {
 					.all(|fiid| topo_seen.contains(fiid))
 				{
 					queue.push_back(*foid);
+				}
+			}
+		}
+		#[cfg(debug_assertions)]
+		if topological_order.len() != self.nodes.len() {
+			for node in &self.nodes {
+				if !topo_seen.contains(&node.id) {
+					println!("{:?}", node);
 				}
 			}
 		}
@@ -2032,7 +2040,7 @@ impl CheckedDesign {
 					assert!(size > 0);
 					let density = (1 << (64 - size.leading_zeros() - 1)).min(256);
 					let (rd_ports, wr_port, arst_wire, byte_select_wire) = logical_design
-						.add_ram_resetable_dense(
+						.add_programmable_ram(
 							sig_in[arst_idx],
 							sig_in[byte_select_idx],
 							rd_ports,
@@ -2400,34 +2408,6 @@ impl CheckedDesign {
 							}
 						}
 					}
-				},
-				_ => {},
-			}
-		}
-	}
-
-	fn mark_keepnets(&self, mapped_design: &MappedDesign) {
-		let mut bit_to_net = hash_map();
-		for (netname, net) in mapped_design.iter_netnames() {
-			if !net.attributes.contains_key("keep") {
-				continue;
-			}
-			for bit in &net.bits {
-				match bit {
-					crate::mapped_design::Bit::Id(bit_id) => {
-						bit_to_net.insert(bit_id.0, (netname, net.bits.clone()));
-					},
-					_ => {
-						println!("WARNING: {} has constant drivers.", netname)
-					},
-				}
-			}
-		}
-		for id in 0..self.nodes.len() {
-			let node = &self.nodes[id];
-			match node.node_type {
-				NodeType::CellOutput { connected_id, .. } => {
-					//
 				},
 				_ => {},
 			}

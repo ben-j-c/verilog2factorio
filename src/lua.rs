@@ -370,7 +370,6 @@ where
 			return Err(Error::RuntimeError(format!("{:?} is not a file.", file)));
 		}
 	}
-
 	let filenames = filenames
 		.iter()
 		.map(|file| (file.as_ref(), file.as_ref().to_str()));
@@ -442,7 +441,14 @@ fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
 	let exe_dir = get_v2f_root()?;
 	{
 		let mut buf = Vec::new();
-		let mut mapping_script = File::open(exe_dir.join("v2flib/mapping.ys"))?;
+		let mut mapping_script = File::open(exe_dir.join("v2flib/mapping.ys")).map_err(|e| {
+			let msg = format!(
+				"{}, {}",
+				e.to_string(),
+				exe_dir.join("v2flib/mapping.ys").to_string_lossy(),
+			);
+			mlua::Error::runtime(msg)
+		})?;
 		mapping_script.read_to_end(&mut buf)?;
 		let mapping_script_text = String::from_utf8(buf).map_err(|e| e.utf8_error())?;
 		let mapping_script_text = mapping_script_text
@@ -868,7 +874,7 @@ impl UserData for SimStateAPI {
 		});
 		methods.add_method("probe", |_, this, data: AnyUserData| {
 			let signals: Vec<(i32, i32)> = if let Ok(term) = data.borrow::<Terminal>() {
-				let (nodeid, logd, colour) = term.get();
+				let (nodeid, _logd, colour) = term.get();
 				//if logd.as_ptr() != this.logd.as_ptr() {
 				//	return Err(Error::runtime(
 				//		"Supplied a combinator that doesn't belong to this design.",
@@ -883,7 +889,7 @@ impl UserData for SimStateAPI {
 					TerminalSide::Output(_, _) => this.sim.write().unwrap().probe_red_out(nodeid),
 				}
 			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
-				let (nodeid, logd) = term_side.clone().get();
+				let (nodeid, _logd) = term_side.clone().get();
 				//if logd.as_ptr() != this.logd.as_ptr() {
 				//	return Err(Error::runtime(
 				//		"Supplied a combinator that doesn't belong to this design.",
@@ -1062,7 +1068,7 @@ impl UserData for RTL {
 		});
 		methods.add_method(
 			"yosys_sim",
-			|_, this: &RTL, (fin, fout): (String, String)| method_sim_yosys(&fin, &fout),
+			|_, _this: &RTL, (fin, fout): (String, String)| method_sim_yosys(&fin, &fout),
 		);
 	}
 }

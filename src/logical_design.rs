@@ -1641,7 +1641,7 @@ impl LogicalDesign {
 		(bytes_pos[0], bytes_neg[0], select[0], mux_pos[0])
 	}
 
-	pub(crate) fn add_ram_resetable_dense(
+	pub(crate) fn add_programmable_ram(
 		&mut self,
 		arst: Signal,
 		byte_select: Signal,
@@ -1873,14 +1873,14 @@ impl LogicalDesign {
 			if let Some(clk) = p.clk {
 				let (d_wire, clk_wire, en_wire, rst_wire, q) = match p.rst {
 					ResetSpec::Sync(rst) => self.add_sdffe(
-						p.data,
+						Signal::Everything,
 						clk,
 						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
 						p.data,
 					),
 					ResetSpec::Async(rst) => self.add_adffe(
-						p.data,
+						Signal::Everything,
 						clk,
 						p.en.unwrap_or(Signal::Constant(1)),
 						rst,
@@ -1893,10 +1893,11 @@ impl LogicalDesign {
 					ResetSpec::Disabled => {
 						if let Some(en) = p.en {
 							let (d_wire, clk_wire, en_wire, q) =
-								self.add_dffe(p.data, clk, en, p.data);
+								self.add_dffe(Signal::Everything, clk, en, p.data);
 							(d_wire, clk_wire, en_wire, NodeId(usize::MAX), q)
 						} else {
-							let (d_wire, clk_wire, q) = self.add_dff(p.data, clk, p.data);
+							let (d_wire, clk_wire, q) =
+								self.add_dff(Signal::Everything, clk, p.data);
 							(d_wire, clk_wire, NodeId(usize::MAX), NodeId(usize::MAX), q)
 						}
 					},
@@ -3449,13 +3450,6 @@ impl LogicalDesign {
 
 	pub fn get_port_signal(&self, id: NodeId) -> Option<Signal> {
 		self.ports.iter().find(|v| v.id == id).map(|v| v.signal)
-	}
-
-	pub fn get_keepnet<S>(&self, name: S) -> Option<(NodeId, Signal, NodeId)>
-	where
-		S: AsRef<str>,
-	{
-		todo!()
 	}
 }
 
