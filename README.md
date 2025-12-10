@@ -11,11 +11,11 @@ create designs.
 
 # How to get started
 
-The easiest way to get started is to make a Codespace for your designs. This takes a single click to do.
+The easiest way is to install VSCode and Docker. Also install the [dev-containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension for VSCode.
 
-[![Open in Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?template_repository=ben-j-c/verilog2factorio)
-
-It takes ~5 minutes to boot up and get your environment ready. Once it boots fully you can follow your preferred mode of usage.
+1. Clone the repo into you preferred working directory.
+2. Open the repo with VSCode, you should be prompted to re-open in a dev-container. Select yes.
+   - If not, press ctrl-p and type `>reopen` and select "Dev containers: Reopen in container"
 
 ## Lua
 
