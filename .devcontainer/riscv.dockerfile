@@ -1,4 +1,4 @@
-FROM peaboff/yosys:0.52 as toolchain-builder
+FROM debian:bookworm-slim as toolchain-builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 
