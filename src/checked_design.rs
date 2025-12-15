@@ -15,7 +15,7 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::{self, hash_map, hash_set, index_of, HashS},
+	util::{self, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
 

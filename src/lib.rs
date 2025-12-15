@@ -128,6 +128,7 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let blueprint_json = if let Ok(logd) = eval.borrow::<LogicalDesignAPI>() {
 		let mut serd = SerializableDesign::new();
 		let mut phyd = PhysicalDesign::new();
+		phyd.set_group_io(logd.group_io);
 		phyd.build_from(&logd.logd.read().unwrap());
 		if logd.make_svg {
 			let svg_name = get_derivative_file_name(input_file.clone(), ".svg")?;

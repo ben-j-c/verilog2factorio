@@ -131,7 +131,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::arith_expr",
+				"phy::design::test::synthetic_n_mcmc_dense",
 			],
 			"cwd": "${workspaceFolder}"
 		},

@@ -41,6 +41,7 @@ impl From<crate::Error> for mlua::Error {
 pub(crate) struct LogicalDesignAPI {
 	pub(crate) logd: LogDRef,
 	pub(crate) make_svg: bool,
+	pub(crate) group_io: bool,
 }
 
 pub(crate) struct PhysicalDesignAPI {
@@ -487,6 +488,7 @@ fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
 	Ok(LogicalDesignAPI {
 		logd: Arc::new(RwLock::new(logd)),
 		make_svg: false,
+		group_io: false,
 	})
 }
 
@@ -763,6 +765,10 @@ impl UserData for LogicalDesignAPI {
 		});
 		methods.add_method_mut("make_svg", |_, this, _: ()| {
 			this.make_svg = true;
+			Ok(())
+		});
+		methods.add_method_mut("group_io", |_, this, _: ()| {
+			this.group_io = true;
 			Ok(())
 		});
 		methods.add_method("new_simulation", |_, this, _: ()| {
@@ -1182,6 +1188,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 			Ok(LogicalDesignAPI {
 				logd: LogDRef::new(RwLock::new(LogicalDesign::new())),
 				make_svg: false,
+				group_io: false,
 			})
 		})?,
 	)?;

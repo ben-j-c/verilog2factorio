@@ -44,8 +44,8 @@ pub struct WireId(usize);
 pub struct TerminalId(pub u32);
 
 impl TerminalId {
-	fn input(color: ld::WireColour) -> TerminalId {
-		match color {
+	fn input(colour: ld::WireColour) -> TerminalId {
+		match colour {
 			WireColour::Red => TerminalId(1),
 			WireColour::Green => TerminalId(2),
 		}
@@ -103,8 +103,15 @@ pub enum WireHopType {
 	Lamp,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Settings {
+	pub group_io: bool,
+}
+
 #[derive(Debug)]
 pub struct PhysicalDesign {
+	settings: Settings,
+
 	nodes: Vec<PhyNode>,
 	wires: Vec<Wire>,
 
@@ -127,17 +134,76 @@ pub struct PhysicalDesign {
 	user_partition_size: Option<usize>,
 
 	route_cache: HashM<(usize, bool), (Vec<SpaceIndex>, Vec<PhyId>)>,
+	failed_routes: Vec<(usize, usize)>,
+}
 
+#[derive(Debug)]
+struct Netlist {
 	networks: Vec<WireNetwork>,
 	network_map: Vec<Option<NetId>>,
+}
 
-	failed_routes: Vec<(usize, usize)>,
+#[derive(Debug, Default, Clone)]
+struct RouteCache {
+	existing_poles: HashM<usize, Vec<PhyId>>,
+}
+
+impl Netlist {
+	fn compute_networks(logd: &LogicalDesign) -> Netlist {
+		let mut nets = Netlist {
+			networks: vec![],
+			network_map: vec![None; logd.nodes.len()],
+		};
+		for node in logd.nodes.iter() {
+			let colour = if let NodeFunction::WireSum(colour) = node.function {
+				colour
+			} else {
+				continue;
+			};
+			if let Some(_existing_network) = nets.network_map[node.id.0] {
+				continue;
+			}
+			let network_wires = logd.get_wire_network(node.id);
+			assert!(
+				!network_wires.is_empty(),
+				"A \"wire\" network was found with no wires."
+			);
+			assert!(
+				network_wires.contains(&node.id),
+				"Wire not in it's own network!"
+			);
+			let network_id = NetId(nets.networks.len());
+			let mut fanin = hash_set();
+			let mut fanout = hash_set();
+			for wire in &network_wires {
+				let wire_node = &logd.nodes[wire.0];
+				for fiid in wire_node.iter_fanin(colour) {
+					fanin.insert(*fiid);
+				}
+				for foid in wire_node.iter_fanout(colour) {
+					fanout.insert(*foid);
+				}
+			}
+			for wire in &network_wires {
+				nets.network_map[wire.0] = Some(network_id);
+			}
+			nets.networks.push(WireNetwork {
+				fanin: fanin.into_iter().sorted().collect_vec(),
+				fanout: fanout.into_iter().sorted().collect_vec(),
+				wires: network_wires,
+				colour,
+			});
+		}
+		nets
+	}
 }
 
 #[allow(dead_code)]
 impl PhysicalDesign {
 	pub fn new() -> Self {
 		PhysicalDesign {
+			settings: Settings::default(),
+
 			nodes: vec![],
 			wires: vec![],
 			idx_combs: hash_map(),
@@ -158,11 +224,12 @@ impl PhysicalDesign {
 			user_partition_size: None,
 			route_cache: hash_map(),
 
-			network_map: vec![],
-			networks: vec![],
-
 			failed_routes: vec![],
 		}
+	}
+
+	pub fn set_group_io(&mut self, group_io: bool) {
+		self.settings.group_io = group_io;
 	}
 
 	pub fn with_parameters(
@@ -181,7 +248,7 @@ impl PhysicalDesign {
 		self.side_length_single_partition =
 			(partition_size as f64 * scale_factor * 2.0).sqrt().ceil() as usize;
 		self.extract_combs(logical);
-		self.partition(logical, partition_size as i32);
+		let n_grouped_io_blocks = self.partition(logical, partition_size as i32) as i32;
 		self.side_length_partitions = (self.n_partitions as f64).sqrt().ceil() as usize;
 
 		let connectivity = self.get_connectivity_as_vec_usize(logical);
@@ -193,21 +260,33 @@ impl PhysicalDesign {
 		) = self.split_connections_to_local_and_global(&connectivity);
 
 		self.place_global(&partition_global_connectivity);
+		if n_grouped_io_blocks > 0 {
+			let mut count = 0;
+			for i in (self.n_partitions - n_grouped_io_blocks)..self.n_partitions {
+				self.partition_assignments[i as usize] = (
+					self.side_length_partitions + count / self.side_length_partitions,
+					count % self.side_length_partitions,
+				);
+				count += 1;
+			}
+			self.side_length_partitions +=
+				(count + self.side_length_partitions - 1) / self.side_length_partitions;
+		}
 		self.place_local(
 			logical,
 			&partition_local_connectivity,
 			&partition_global_connectivity,
 			&local_to_global,
 		);
-		let res = self.global_freeze_and_route(
+		let res = self.global_freeze_and_route2(
 			logical,
-			&partition_global_connectivity,
+			//&partition_global_connectivity,
 			&local_to_global,
 			&global_to_local,
 		);
 		self.connected_wires = vec![vec![]; self.nodes.len()];
 		println!("Connecting combs.");
-		self.connect_combs(logical);
+		//self.connect_combs(logical);
 		self.validate_against(logical);
 		res
 	}
@@ -913,7 +992,7 @@ impl PhysicalDesign {
 
 		let connections = adjacency_to_edges_weighted(connections_per_node, false);
 
-		let mut rng = StdRng::seed_from_u64(0xCAFEBABE);
+		let mut rng = StdRng::seed_from_u64(0xB1FFB0FF);
 		let mut curr =
 			GlobalPlacement::from_initialization(vec![(0, 0); num_cells], side_length, cell_size);
 
@@ -1518,6 +1597,59 @@ impl PhysicalDesign {
 		});
 	}
 
+	fn connect_wire2(
+		&mut self,
+		direction_a: Direction,
+		id_comb_a: NodeId,
+		direction_b: Direction,
+		id_comb_b: NodeId,
+		colour: WireColour,
+		logical: &LogicalDesign,
+	) {
+		let id_comb_a = self.idx_combs[&id_comb_a];
+		let id_comb_b = self.idx_combs[&id_comb_b];
+		let id_wire = self.wires.len();
+		let comb_a = &self.nodes[id_comb_a.0];
+		let comb_b = &self.nodes[id_comb_b.0];
+		let ld_comb_a = logical.get_node(comb_a.logic);
+		let ld_comb_b = logical.get_node(comb_b.logic);
+		let term_a = match &ld_comb_a.function {
+			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
+				if matches!(direction_a, Direction::Input) {
+					TerminalId::input(colour)
+				} else {
+					TerminalId::output_combinator(colour)
+				}
+			},
+			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
+				TerminalId::output_constant(colour)
+			},
+			ld::NodeFunction::WireSum(_c) => unreachable!(),
+		};
+		let term_b = match &ld_comb_b.function {
+			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
+				if matches!(direction_b, Direction::Input) {
+					TerminalId::input(colour)
+				} else {
+					TerminalId::output_combinator(colour)
+				}
+			},
+			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
+				TerminalId::input(colour)
+			},
+			ld::NodeFunction::WireSum(_c) => unreachable!(),
+		};
+		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
+		self.connected_wires[id_comb_b.0].push(WireId(id_wire));
+		self.wires.push(Wire {
+			id: WireId(id_wire),
+			node1_id: id_comb_a,
+			node2_id: id_comb_b,
+			terminal1_id: term_a,
+			terminal2_id: term_b,
+		});
+	}
+
 	pub(crate) fn save_svg_full<P>(
 		&self,
 		sim: Option<&SimState>,
@@ -1943,20 +2075,39 @@ impl PhysicalDesign {
 		ret
 	}
 
-	fn partition(&mut self, ld: &LogicalDesign, target_size: i32) {
+	fn partition(&mut self, ld: &LogicalDesign, target_size: i32) -> usize {
 		let connectivity = self.get_connectivity_as_vec_usize(ld);
 		if target_size * 3 / 2 > connectivity.len() as i32 {
 			self.space = vec![Arr2::new([0, 0]); self.n_partitions as usize];
 			println!("Design small enough to skip partitioning.");
-			return;
+			return 0;
 		}
-		let n_parts = (connectivity.len() as f64 / target_size as f64).ceil() as i32;
-		let (partition, n_cuts) = partition::metis(&connectivity, n_parts);
+		let mut n_parts = (connectivity.len() as f64 / target_size as f64).ceil() as i32;
+		let (mut partition, n_cuts) = partition::metis(&connectivity, n_parts);
 		partition::report_partition_quality(&partition, n_cuts, &connectivity, n_parts);
+		let mut ret = 0;
+		if self.settings.group_io {
+			ret += 1;
+			n_parts += 1;
+			let mut count = 0;
+			for (id, p) in partition.iter_mut().enumerate() {
+				if ld.is_port(self.nodes[id].logic).is_none() {
+					continue;
+				}
+				if count > target_size {
+					n_parts += 1;
+					count = 0;
+					ret += 1;
+				}
+				self.nodes[id].partition = n_parts - 1;
+				*p = n_parts - 1;
+				count += 1;
+			}
+		}
 		self.n_edges_cut = n_cuts;
 		self.n_partitions = n_parts;
 		for (id, p) in partition.iter().enumerate() {
-			assert!(*p >= 0, "");
+			assert!(*p >= 0);
 			self.nodes[id].partition = *p;
 		}
 		self.local_assignments = vec![vec![]; n_parts as usize];
@@ -1975,6 +2126,7 @@ impl PhysicalDesign {
 			.cloned()
 			.collect_vec();
 		self.space = vec![Arr2::new([0, 0]); self.n_partitions as usize];
+		ret
 	}
 
 	fn place_global(
@@ -2113,51 +2265,6 @@ impl PhysicalDesign {
 		}
 	}
 
-	fn compute_networks(&mut self, logd: &LogicalDesign) {
-		self.network_map = vec![None; logd.nodes.len()];
-		self.networks = vec![];
-		for node in logd.nodes.iter() {
-			let colour = if let NodeFunction::WireSum(colour) = node.function {
-				colour
-			} else {
-				continue;
-			};
-			if let Some(_existing_network) = self.network_map[node.id.0] {
-				continue;
-			}
-			let network_wires = logd.get_wire_network(node.id);
-			assert!(
-				!network_wires.is_empty(),
-				"A \"wire\" network was found with no wires."
-			);
-			assert!(
-				network_wires.contains(&node.id),
-				"Wire not in it's own network!"
-			);
-			let network_id = NetId(self.networks.len());
-			let mut fanin = hash_set();
-			let mut fanout = hash_set();
-			for wire in &network_wires {
-				let wire_node = &logd.nodes[wire.0];
-				for fiid in wire_node.iter_fanin(colour) {
-					fanin.insert(*fiid);
-				}
-				for foid in wire_node.iter_fanout(colour) {
-					fanout.insert(*foid);
-				}
-			}
-			for wire in &network_wires {
-				self.network_map[wire.0] = Some(network_id);
-			}
-			self.networks.push(WireNetwork {
-				fanin: fanin.into_iter().sorted().collect_vec(),
-				fanout: fanout.into_iter().sorted().collect_vec(),
-				wires: network_wires,
-				colour,
-			});
-		}
-	}
-
 	fn global_freeze_and_route(
 		&mut self,
 		logical: &LogicalDesign,
@@ -2175,7 +2282,6 @@ impl PhysicalDesign {
 		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(1..=10);
 		let mut success = false;
 
-		self.compute_networks(logical);
 		for margin in margin_range {
 			println!("Starting routing with margin {margin}");
 			success = true;
@@ -2233,6 +2339,350 @@ impl PhysicalDesign {
 			if success {
 				break;
 			} else {
+				self.save_svg(
+					logical,
+					format!("svg/global_freeze_routing_failure_{margin}.svg"),
+				)
+				.ok();
+			}
+		}
+		#[cfg(debug_assertions)]
+		{
+			//self.print_ascii_global_space();
+		}
+		success
+	}
+
+	fn route_nets(&mut self, logical: &LogicalDesign) -> bool {
+		let mut success = true;
+		let nets = Netlist::compute_networks(logical);
+		for net in nets.networks {
+			let terminals = net
+				.fanin
+				.iter()
+				.map(|id| (Direction::Output, *id))
+				.chain(net.fanout.iter().map(|id| (Direction::Input, *id)))
+				.collect_vec();
+			let mut connected_group_count = 0;
+			let mut connected_map: Vec<Option<usize>> = vec![None; terminals.len()];
+			let mut cache = RouteCache::default();
+			for (idx_1, (dir_1, node_1)) in terminals.iter().enumerate() {
+				if connected_map[idx_1].is_some() {
+					continue;
+				}
+				for (idx_2, (dir_2, node_2)) in terminals.iter().enumerate() {
+					if idx_1 == idx_2 {
+						continue;
+					}
+					if connected_map[idx_1] == connected_map[idx_2] {
+						continue;
+					}
+					if !self.close_enough_to_connect(logical, *node_1, *node_2) {
+						continue;
+					}
+					self.connect_wire2(*dir_1, *node_1, *dir_2, *node_2, net.colour, logical);
+					if connected_map[idx_2].is_some() {
+						connected_map[idx_1] = connected_map[idx_2];
+						break;
+					}
+					connected_group_count += 1;
+					connected_map[idx_1] = Some(connected_group_count);
+					connected_map[idx_2] = Some(connected_group_count);
+				}
+			}
+			for v in connected_map.iter_mut() {
+				if v.is_none() {
+					connected_group_count += 1;
+					*v = Some(connected_group_count);
+				}
+			}
+			for idx_1 in 0..connected_map.len() {
+				let group_1 = connected_map[idx_1];
+				if connected_map[idx_1] != group_1 {
+					continue;
+				}
+				for idx_2 in 0..connected_map.len() {
+					let group_2 = connected_map[idx_2];
+					if group_2 == group_1 {
+						continue;
+					}
+					let node_1 = terminals[idx_1].1;
+					let node_2 = terminals[idx_2].1;
+					if !self.close_enough_to_connect(logical, node_1, node_2) {
+						continue;
+					}
+					self.connect_wire2(
+						terminals[idx_1].0,
+						node_1,
+						terminals[idx_2].0,
+						node_2,
+						net.colour,
+						logical,
+					);
+					for x in &mut connected_map.iter_mut() {
+						if *x == group_2 {
+							*x = group_1;
+						}
+					}
+				}
+			}
+			while connected_map.iter().any(|x| *x != connected_map[0]) {
+				for (idx_1, (_dir_1, node_1)) in terminals.iter().enumerate() {
+					if connected_map.iter().all(|x| *x == connected_map[0]) {
+						break;
+					}
+					let idx_closest = (0..terminals.len())
+						.filter(|idx_2| *idx_2 != idx_1)
+						.filter(|idx_2| connected_map[*idx_2] != connected_map[idx_1])
+						.min_by(|left, right| {
+							let pos_1 = self.nodes[self.idx_combs[node_1].0].position;
+							let left = self.idx_combs[&terminals[*left].1];
+							let right = self.idx_combs[&terminals[*right].1];
+							let left = self.nodes[left.0].position;
+							let right = self.nodes[right.0].position;
+							distance_diff(&pos_1, &left)
+								.partial_cmp(&distance_diff(&pos_1, &right))
+								.unwrap()
+						})
+						.unwrap();
+					match self.route_partial_net(
+						&terminals,
+						&connected_map,
+						idx_1,
+						idx_closest,
+						&mut cache,
+					) {
+						Ok(path) => {
+							self.commit_route2(
+								path,
+								&terminals,
+								&mut connected_map,
+								idx_1,
+								idx_closest,
+								net.colour,
+								&mut cache,
+								logical,
+							);
+						},
+						Err(s) => {
+							self.failed_routes.push((
+								self.idx_combs[&terminals[idx_1].1].0,
+								self.idx_combs[&terminals[idx_closest].1].0,
+							));
+							println!("{}", s);
+							success = false;
+						},
+					};
+					let connected_group_1 = connected_map[idx_1];
+					let connected_group_2 = connected_map[idx_closest];
+					for x in &mut connected_map.iter_mut() {
+						if *x == connected_group_1 {
+							*x = connected_group_2;
+						}
+					}
+				}
+			}
+		}
+
+		success
+	}
+
+	fn add_pole(&mut self, loc: SpaceIndex, logic: NodeId) -> PhyId {
+		let id = PhyId(self.nodes.len());
+		assert!(self.global_space[(loc.0, loc.1)] == PhyId::default());
+		self.nodes.push(PhyNode {
+			id,
+			logic,
+			position: (loc.0 as f64, loc.1 as f64),
+			placed: true,
+			orientation: 4,
+			partition: -1,
+			hop_type: WireHopType::Medium,
+			routes: vec![],
+			foreign_routes: vec![],
+		});
+		self.global_space[(loc.0, loc.1)] = id;
+		id
+	}
+
+	fn commit_route2(
+		&mut self,
+		mut path: Vec<SpaceIndex>,
+		terminals: &Vec<(Direction, NodeId)>,
+		connected_map: &mut Vec<Option<usize>>,
+		idx_1: usize,
+		idx_2: usize,
+		colour: WireColour,
+		cache: &mut RouteCache,
+		logical: &LogicalDesign,
+	) {
+		path.reverse();
+		let group_1 = connected_map[idx_1];
+		let group_2 = connected_map[idx_2];
+		// find closest PhyId to path[end]
+		let start_pos = path[0];
+		let end_pole = path[path.len() - 1];
+		let poles = path
+			.into_iter()
+			.skip(1)
+			.map(|pole_pos| self.add_pole(pole_pos, NodeId(usize::MAX)))
+			.collect_vec();
+
+		let attachment_2 = (0..connected_map.len())
+			.into_iter()
+			.filter(|idx| connected_map[*idx] == group_2)
+			.map(|idx| (&self.idx_combs[&terminals[idx].1], terminals[idx].0))
+			.chain(
+				cache
+					.existing_poles
+					.entry(group_2.unwrap())
+					.or_default()
+					.iter()
+					.map(|x| (x, Direction::Input)),
+			)
+			.min_by(|(left, _), (right, _)| {
+				let comb_left = self.nodes[left.0].position;
+				let comb_right = self.nodes[right.0].position;
+				let dist_left = distance_diff(&(end_pole.0 as f64, end_pole.1 as f64), &comb_left);
+				let dist_right =
+					distance_diff(&(end_pole.0 as f64, end_pole.1 as f64), &comb_right);
+				dist_left.partial_cmp(&dist_right).unwrap()
+			})
+			.unwrap();
+
+		let start_phy = self.global_space[start_pos.to_pair()];
+		let attachment_1 = if self.nodes[start_phy.0].is_pole() {
+			(start_phy, Direction::Input)
+		} else {
+			(
+				start_phy,
+				terminals
+					.iter()
+					.find(|v| v.1 == self.nodes[start_phy.0].logic)
+					.unwrap()
+					.0,
+			)
+		};
+
+		for i in 1..poles.len() {
+			let wire_id = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(wire_id),
+				node1_id: poles[i - 1],
+				node2_id: poles[i],
+				terminal1_id: TerminalId::input(colour),
+				terminal2_id: TerminalId::input(colour),
+			});
+		}
+		{
+			let wire_id = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(wire_id),
+				node1_id: attachment_1.0,
+				node2_id: poles[0],
+				terminal1_id: self.get_terminal_for_phy(
+					attachment_1.0,
+					attachment_1.1,
+					colour,
+					logical,
+				),
+				terminal2_id: TerminalId::input(colour),
+			});
+		}
+		{
+			let wire_id = self.wires.len();
+			self.wires.push(Wire {
+				id: WireId(wire_id),
+				node1_id: *attachment_2.0,
+				node2_id: poles[poles.len() - 1],
+				terminal1_id: self.get_terminal_for_phy(
+					*attachment_2.0,
+					attachment_2.1,
+					colour,
+					logical,
+				),
+				terminal2_id: TerminalId::input(colour),
+			});
+		}
+		for pole in poles {
+			cache
+				.existing_poles
+				.entry(group_1.unwrap())
+				.or_default()
+				.push(pole);
+		}
+		let mut g2_poles = vec![];
+		std::mem::swap(
+			cache.existing_poles.entry(group_2.unwrap()).or_default(),
+			&mut g2_poles,
+		);
+		cache
+			.existing_poles
+			.get_mut(&group_1.unwrap())
+			.unwrap()
+			.extend(g2_poles);
+		for x in connected_map.iter_mut() {
+			if *x == group_2 {
+				*x = group_1;
+			}
+		}
+	}
+
+	fn get_terminal_for_phy(
+		&self,
+		id: PhyId,
+		dir: Direction,
+		colour: WireColour,
+		logical: &LogicalDesign,
+	) -> TerminalId {
+		let comb = &self.nodes[id.0];
+		if comb.is_pole() {
+			return TerminalId::input(colour);
+		}
+		let ld_comb = logical.get_node(self.nodes[id.0].logic);
+		match &ld_comb.function {
+			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
+				if dir == Direction::Input {
+					TerminalId::input(colour)
+				} else {
+					TerminalId::output_combinator(colour)
+				}
+			},
+			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
+				TerminalId::output_constant(colour)
+			},
+			ld::NodeFunction::WireSum(_c) => unreachable!(),
+		}
+	}
+
+	fn global_freeze_and_route2(
+		&mut self,
+		logical: &LogicalDesign,
+		local_to_global: &Vec<Vec<usize>>,
+		_global_to_local: &Vec<HashM<usize, usize>>,
+	) -> bool {
+		let partition_dims = calculate_minimum_partition_dim(&self.local_assignments);
+		println!(
+			"Starting global freeze and route with partition dims ({}, {}).",
+			partition_dims.0, partition_dims.1
+		);
+		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(1..=10);
+		let mut success = false;
+
+		for margin in margin_range {
+			println!("Starting routing with margin {margin}");
+			success = true;
+			self.intra_partition_margin = margin;
+			self.reset_place_route();
+			self.global_freeze(logical, margin, partition_dims, local_to_global);
+			self.save_svg(logical, format!("svg/global_freeze_{margin}.svg"))
+				.ok();
+
+			let success = self.route_nets(logical);
+			if success {
+				break;
+			} else {
+				println!("Failed to route nets. Writing svg for debugging at svg/global_freeze_routing_failure_{margin}.svg");
 				self.save_svg(
 					logical,
 					format!("svg/global_freeze_routing_failure_{margin}.svg"),
@@ -2387,32 +2837,74 @@ impl PhysicalDesign {
 		Result::Ok(ret)
 	}
 
-	fn route_to_seen(
+	fn route_partial_net(
 		&mut self,
-		src: NodeId,
-		dst: &HashS<NodeId>,
-		logd: &LogicalDesign,
-		colour: WireColour,
-	) {
-	}
+		terminals: &Vec<(Direction, NodeId)>,
+		connected_map: &Vec<Option<usize>>,
+		idx_1: usize,
+		idx_2: usize,
+		cache: &mut RouteCache,
+	) -> Result<Vec<SpaceIndex>, String> {
+		let group_1 = connected_map[idx_1];
+		let group_2 = connected_map[idx_2];
+		let node_id_1 = terminals[idx_1].1;
+		let node_id_2 = terminals[idx_2].1;
 
-	fn route_net(&mut self, net_idx: usize, logd: &LogicalDesign) {
-		let net = self.networks[net_idx].clone();
-		let mut seen = HashS::default();
-
-		for fanin_id in &net.fanin {
-			for fanout_id in &net.fanout {
-				seen.insert(*fanout_id);
-				self.route_to_seen(*fanin_id, &seen, logd, net.colour);
-				seen.insert(*fanin_id);
+		let mut b = vec![];
+		{
+			// Add all ending points in group 2.
+			for idx_3 in 0..terminals.len() {
+				if connected_map[idx_3] != group_2 {
+					continue;
+				}
+				let node_id_3 = terminals[idx_3].1;
+				let comb3 = &self.nodes[self.idx_combs[&node_id_3].0];
+				let neig3 = self.get_neighbors(
+					&SpaceIndex(comb3.position.0 as usize, comb3.position.1 as usize),
+					&SpaceIndex::default(),
+				);
+				for pos in neig3 {
+					b.push(pos);
+				}
+				for pole_id in cache.existing_poles.entry(group_1.unwrap()).or_default() {
+					let pole = &self.nodes[pole_id.0];
+					let neig_pole = self.get_neighbors(
+						&SpaceIndex(pole.position.0 as usize, pole.position.1 as usize),
+						&SpaceIndex::default(),
+					);
+					for pos in neig_pole {
+						b.push(pos);
+					}
+				}
 			}
 		}
-	}
+		let b = b.into_iter().unique().collect_vec();
 
-	fn route_nets(&mut self, logd: &LogicalDesign) {
-		for net_idx in 0..self.networks.len() {
-			self.route_net(net_idx, logd);
+		let mut a = vec![];
+		{
+			// Add all starting points in group 1.
+			for idx_3 in 0..terminals.len() {
+				if connected_map[idx_3] != group_1 {
+					continue;
+				}
+				let node_id_3 = terminals[idx_3].1;
+				let comb3 = &self.nodes[self.idx_combs[&node_id_3].0];
+				a.push(SpaceIndex(
+					comb3.position.0 as usize,
+					comb3.position.1 as usize,
+				));
+			}
+			for pole_id in cache.existing_poles.entry(group_1.unwrap()).or_default() {
+				let pole_pos = self.nodes[pole_id.0].position;
+				a.push(SpaceIndex(pole_pos.0 as usize, pole_pos.1 as usize));
+			}
 		}
+
+		let ret = route::a_star_initial_set(self, &a, &b, None);
+		if ret.is_empty() {
+			return Result::Err(format!("Could not route {} -> {}", node_id_1, node_id_2));
+		}
+		Result::Ok(ret)
 	}
 
 	fn get_neighbors(&self, index: &SpaceIndex, _goal: &SpaceIndex) -> SpaceIter {
@@ -2525,10 +3017,16 @@ pub(crate) fn adjacency_to_edges_global_edges(
 	ret
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 struct SpaceIndex(usize, usize);
 
 impl route::TopologyIndex for SpaceIndex {}
+
+impl SpaceIndex {
+	fn to_pair(self) -> (usize, usize) {
+		(self.0, self.1)
+	}
+}
 
 struct SpaceIter {
 	points: Vec<SpaceIndex>,
@@ -2557,15 +3055,16 @@ impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
 	fn distance(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
 		let mut dx = b.0.abs_diff(a.0) as f32;
 		let mut dy = b.1.abs_diff(a.1) as f32;
-		if (dx <= 5.0 && dy <= 5.0) {
-			return 0.0;
-		}
-		dx -= 5.0;
-		dy -= 5.0;
-		dx = dx.max(0.0);
-		dy = dy.max(0.0);
-		let dist = (dx * dx + dy * dy).sqrt();
-		(dist / 9.0).round() + 1.0
+		//if dx <= 5.0 && dy <= 5.0 {
+		//	return 0.0;
+		//}
+		//dx -= 5.0;
+		//dy -= 5.0;
+		//dx = dx.max(0.0);
+		//dy = dy.max(0.0);
+		//let dist = (dx * dx + dy * dy).sqrt();
+		//(dist / 9.0).round() + 1.0
+		(dx * dx + dy * dy).sqrt()
 	}
 
 	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {

@@ -12,6 +12,7 @@
 ---@field find_in_port fun(self: LogicalDesignAPI, name: string): Constant|nil
 ---@field in_ports fun(self: LogicalDesignAPI): table<string, Constant>
 ---@field out_ports fun(self: LogicalDesignAPI): table<string, Lamp>
+---@field group_io fun(self: LogicalDesignAPI)
 
 ---@class SimStateAPI
 ---@field step fun(self: SimStateAPI, n: integer)
