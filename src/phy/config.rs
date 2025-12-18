@@ -232,7 +232,7 @@ impl Default for Config {
 			},
 			parition: ConfigPartition {
 				target_size: 25,
-				side_length_single_partition_scale_factor: 1.4,
+				side_length_single_partition_scale_factor: 1.5,
 			},
 			routing: ConfigRouting { max_margin: 10 },
 		}

@@ -1,3 +1,6 @@
+pub mod physical_ensemble;
+pub use physical_ensemble::*;
+
 use itertools::Itertools;
 use mlua::{
 	AnyUserData, Error, FromLua, Lua, MetaMethod, MultiValue, Table, UserData, UserDataFields,
@@ -11,7 +14,7 @@ use std::{
 	io::{BufReader, Read, Write},
 	panic::{catch_unwind, AssertUnwindSafe},
 	path::{Path, PathBuf},
-	sync::{Arc, RwLock},
+	sync::{atomic::AtomicUsize, Arc, RwLock},
 };
 
 type LogDRef = Arc<RwLock<LogicalDesign>>;
@@ -26,7 +29,7 @@ use crate::{
 		WireColour, NET_GREEN, NET_RED, NET_RED_GREEN,
 	},
 	mapped_design::MappedDesign,
-	phy::PhysicalDesign,
+	phy::{PhyId, PhysicalDesign},
 	signal_lookup_table,
 	sim::{self, vcd::VCD, SimState},
 	util::{hash_map, HashM},
@@ -38,18 +41,25 @@ impl From<crate::Error> for mlua::Error {
 	}
 }
 
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone)]
 pub(crate) struct LogicalDesignAPI {
+	pub(crate) id: usize,
 	pub(crate) logd: LogDRef,
 	pub(crate) make_svg: bool,
 	pub(crate) group_io: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct PhysicalDesignAPI {
+	pub(crate) log_id: usize,
 	pub(crate) logd: LogDRef,
 	pub(crate) phyd: PhyDRef,
 }
 
 pub(crate) struct SimStateAPI {
+	pub(crate) log_id: usize,
 	pub(crate) logd: LogDRef,
 	pub(crate) sim: SimRef,
 }
@@ -106,8 +116,8 @@ pub(crate) struct RTL {
 
 #[derive(Clone, Debug)]
 enum TerminalSide {
-	Input(NodeId, LogDRef),
-	Output(NodeId, LogDRef),
+	Input(usize, NodeId, LogDRef),
+	Output(usize, NodeId, LogDRef),
 }
 
 impl PartialEq for TerminalSide {
@@ -136,10 +146,12 @@ struct ArithmeticExpression(Signal, ArithmeticOperator, Signal);
 impl UserData for ArithmeticExpression {}
 
 impl TerminalSide {
-	fn get(&self) -> (NodeId, LogDRef) {
+	fn get(&self) -> (usize, NodeId, LogDRef) {
 		match self {
-			TerminalSide::Input(node_id, ref_cell) => (*node_id, ref_cell.clone()),
-			TerminalSide::Output(node_id, ref_cell) => (*node_id, ref_cell.clone()),
+			TerminalSide::Input(log_id, node_id, ref_cell) => (*log_id, *node_id, ref_cell.clone()),
+			TerminalSide::Output(log_id, node_id, ref_cell) => {
+				(*log_id, *node_id, ref_cell.clone())
+			},
 		}
 	}
 }
@@ -250,21 +262,21 @@ impl FromLua for Signal {
 struct Terminal(TerminalSide, WireColour);
 
 impl Terminal {
-	fn get(&self) -> (NodeId, LogDRef, WireColour) {
+	fn get(&self) -> (usize, NodeId, LogDRef, WireColour) {
 		let inner = self.0.get();
-		(inner.0, inner.1, self.1)
+		(inner.0, inner.1, inner.2, self.1)
 	}
 }
 
 fn method_connect(this: &Terminal, other: AnyUserData) -> Result<(), mlua::Error> {
 	let other = other.borrow::<TerminalSide>()?;
-	let (this_id, this_logd, this_colour) = this.get();
-	let (other_id, other_logd) = other.get();
-	//if this_logd.as_ptr() != other_logd.as_ptr() {
-	//	return Err(Error::RuntimeError(
-	//		"Can't connect two logical designs together".to_owned(),
-	//	));
-	//}
+	let (log_id, this_id, this_logd, this_colour) = this.get();
+	let (log_id_other, other_id, _other_logd) = other.get();
+	if log_id != log_id_other {
+		return Err(Error::RuntimeError(
+			"Can't connect two logical designs together".to_owned(),
+		));
+	}
 	if this_id == other_id && this.0 == *other {
 		return Err(Error::RuntimeError(
 			"Can't connect a terminal to itself.".to_owned(),
@@ -486,6 +498,7 @@ fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
 	logd.build_from(&checked_design, &mapped_design);
 	checked_design.save_dot(&mapped_design);
 	Ok(LogicalDesignAPI {
+		id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
 		logd: Arc::new(RwLock::new(logd)),
 		make_svg: false,
 		group_io: false,
@@ -502,24 +515,28 @@ impl UserData for Terminal {
 
 #[derive(Debug, Clone)]
 struct Decider {
+	log_id: usize,
 	id: NodeId,
 	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Arithmetic {
+	log_id: usize,
 	id: NodeId,
 	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Lamp {
+	log_id: usize,
 	id: NodeId,
 	logd: LogDRef,
 }
 
 #[derive(Debug, Clone)]
 struct Constant {
+	log_id: usize,
 	id: NodeId,
 	logd: LogDRef,
 }
@@ -527,10 +544,14 @@ struct Constant {
 impl UserData for Decider {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("input", |_, this| {
-			Ok(TerminalSide::Input(this.id, this.logd.clone()))
+			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
 		});
 		fields.add_field_method_get("output", |_, this| {
-			Ok(TerminalSide::Output(this.id, this.logd.clone()))
+			Ok(TerminalSide::Output(
+				this.log_id,
+				this.id,
+				this.logd.clone(),
+			))
 		});
 	}
 
@@ -606,10 +627,14 @@ impl UserData for Decider {
 impl UserData for Arithmetic {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("input", |_, this| {
-			Ok(TerminalSide::Input(this.id, this.logd.clone()))
+			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
 		});
 		fields.add_field_method_get("output", |_, this| {
-			Ok(TerminalSide::Output(this.id, this.logd.clone()))
+			Ok(TerminalSide::Output(
+				this.log_id,
+				this.id,
+				this.logd.clone(),
+			))
 		});
 	}
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
@@ -628,7 +653,11 @@ impl UserData for Arithmetic {
 impl UserData for Constant {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("output", |_, this| {
-			Ok(TerminalSide::Output(this.id, this.logd.clone()))
+			Ok(TerminalSide::Output(
+				this.log_id,
+				this.id,
+				this.logd.clone(),
+			))
 		});
 	}
 
@@ -680,7 +709,7 @@ impl UserData for Constant {
 impl UserData for Lamp {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("input", |_, this| {
-			Ok(TerminalSide::Input(this.id, this.logd.clone()))
+			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
 		});
 	}
 
@@ -711,6 +740,7 @@ impl UserData for LogicalDesignAPI {
 		methods.add_method("add_decider", |_, this, _: ()| {
 			let id = this.logd.write().unwrap().add_decider();
 			Ok(Decider {
+				log_id: this.id,
 				id,
 				logd: this.logd.clone(),
 			})
@@ -729,6 +759,7 @@ impl UserData for LogicalDesignAPI {
 					net_right,
 				);
 				Ok(Arithmetic {
+					log_id: this.id,
 					id,
 					logd: this.logd.clone(),
 				})
@@ -742,6 +773,7 @@ impl UserData for LogicalDesignAPI {
 				.unwrap()
 				.add_lamp((expr.0, expr.1, expr.2));
 			Ok(Lamp {
+				log_id: this.id,
 				id,
 				logd: this.logd.clone(),
 			})
@@ -754,6 +786,7 @@ impl UserData for LogicalDesignAPI {
 				}
 				let id = this.logd.write().unwrap().add_constant(sigs, counts);
 				Ok(Constant {
+					log_id: this.id,
 					id,
 					logd: this.logd.clone(),
 				})
@@ -773,6 +806,7 @@ impl UserData for LogicalDesignAPI {
 		});
 		methods.add_method("new_simulation", |_, this, _: ()| {
 			Ok(SimStateAPI {
+				log_id: this.id,
 				logd: this.logd.clone(),
 				sim: SimRef::new(RwLock::new(SimState::new(this.logd.clone()))),
 			})
@@ -784,6 +818,7 @@ impl UserData for LogicalDesignAPI {
 				.unwrap()
 				.get_out_port_node(name)
 				.map(|id| Lamp {
+					log_id: this.id,
 					id,
 					logd: this.logd.clone(),
 				}))
@@ -795,6 +830,7 @@ impl UserData for LogicalDesignAPI {
 				.unwrap()
 				.get_in_port_node(name)
 				.map(|id| Constant {
+					log_id: this.id,
 					id,
 					logd: this.logd.clone(),
 				}))
@@ -810,6 +846,7 @@ impl UserData for LogicalDesignAPI {
 					(
 						name,
 						Constant {
+							log_id: this.id,
 							id,
 							logd: this.logd.clone(),
 						},
@@ -828,6 +865,7 @@ impl UserData for LogicalDesignAPI {
 					(
 						name,
 						Lamp {
+							log_id: this.id,
 							id,
 							logd: this.logd.clone(),
 						},
@@ -838,10 +876,26 @@ impl UserData for LogicalDesignAPI {
 		methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
 			Ok(format!("{}", this.logd.read().unwrap()))
 		});
+		methods.add_method("make_phy", |_, this, input_file: Option<String>| {
+			let logd = this;
+			let mut phyd = PhysicalDesign::new();
+			phyd.set_group_io(logd.group_io);
+			phyd.build_from(&logd.logd.read().unwrap());
+			if let Some(input_file) = input_file {
+				let svg_name = get_derivative_file_name(input_file.clone(), ".svg")
+					.map_err(|_| mlua::Error::runtime("failed to make svg name."))?;
+				phyd.save_svg(&logd.logd.read().unwrap(), svg_name)
+					.map_err(|_| mlua::Error::runtime("failed to make svg."))?;
+			}
+			let ret = PhysicalDesignAPI {
+				log_id: logd.id,
+				logd: LogDRef::new(RwLock::new(logd.logd.read().unwrap().clone())),
+				phyd: PhyDRef::new(RwLock::new(phyd)),
+			};
+			Ok(ret)
+		});
 	}
 }
-
-impl UserData for PhysicalDesignAPI {}
 
 fn verify_is_combinator(_this: &SimStateAPI, data: &Value) -> Result<NodeId, mlua::Error> {
 	let nodeid = match data {
@@ -880,32 +934,38 @@ impl UserData for SimStateAPI {
 		});
 		methods.add_method("probe", |_, this, data: AnyUserData| {
 			let signals: Vec<(i32, i32)> = if let Ok(term) = data.borrow::<Terminal>() {
-				let (nodeid, _logd, colour) = term.get();
-				//if logd.as_ptr() != this.logd.as_ptr() {
-				//	return Err(Error::runtime(
-				//		"Supplied a combinator that doesn't belong to this design.",
-				//	));
-				//}
+				let (log_id, nodeid, _logd, colour) = term.get();
+				if this.log_id != log_id {
+					return Err(Error::runtime(
+						"Supplied a combinator that doesn't belong to this design.",
+					));
+				}
 				let net = match colour {
 					WireColour::Red => NET_RED,
 					WireColour::Green => NET_GREEN,
 				};
 				match term.0 {
-					TerminalSide::Input(_, _) => this.sim.write().unwrap().probe_input(nodeid, net),
-					TerminalSide::Output(_, _) => this.sim.write().unwrap().probe_red_out(nodeid),
+					TerminalSide::Input(_, _, _) => {
+						this.sim.write().unwrap().probe_input(nodeid, net)
+					},
+					TerminalSide::Output(_, _, _) => {
+						this.sim.write().unwrap().probe_red_out(nodeid)
+					},
 				}
 			} else if let Ok(term_side) = data.borrow::<TerminalSide>() {
-				let (nodeid, _logd) = term_side.clone().get();
-				//if logd.as_ptr() != this.logd.as_ptr() {
-				//	return Err(Error::runtime(
-				//		"Supplied a combinator that doesn't belong to this design.",
-				//	));
-				//}
+				let (log_id, nodeid, _logd) = term_side.clone().get();
+				if this.log_id != log_id {
+					return Err(Error::runtime(
+						"Supplied a combinator that doesn't belong to this design.",
+					));
+				}
 				match *term_side {
-					TerminalSide::Input(_, _) => {
+					TerminalSide::Input(_, _, _) => {
 						this.sim.write().unwrap().probe_input(nodeid, NET_RED_GREEN)
 					},
-					TerminalSide::Output(_, _) => this.sim.write().unwrap().probe_red_out(nodeid),
+					TerminalSide::Output(_, _, _) => {
+						this.sim.write().unwrap().probe_red_out(nodeid)
+					},
 				}
 			} else {
 				return Err(Error::runtime("Passed an invalid type into probe."));
@@ -1153,6 +1213,23 @@ impl UserData for VCD {
 	}
 }
 
+impl UserData for PhysicalDesignAPI {
+	fn add_methods<M: UserDataMethods<Self>>(_methods: &mut M) {}
+}
+
+impl FromLua for PhysicalDesignAPI {
+	fn from_lua(value: Value, _: &Lua) -> mlua::Result<Self> {
+		match value {
+			Value::UserData(data) => Ok(data.borrow::<Self>()?.clone()),
+			_ => Err(Error::FromLuaConversionError {
+				from: value.type_name(),
+				to: "PhysicalDesignAPI".to_owned(),
+				message: None,
+			}),
+		}
+	}
+}
+
 pub fn get_lua() -> Result<Lua, Error> {
 	let lua = Lua::new();
 	lua.globals().set(
@@ -1186,6 +1263,7 @@ pub fn get_lua() -> Result<Lua, Error> {
 		"get_empty_design",
 		lua.create_function(|_, _: ()| {
 			Ok(LogicalDesignAPI {
+				id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
 				logd: LogDRef::new(RwLock::new(LogicalDesign::new())),
 				make_svg: false,
 				group_io: false,
@@ -1321,6 +1399,23 @@ pub fn get_lua() -> Result<Lua, Error> {
 				todo!()
 			}
 			Ok(())
+		})?,
+	)?;
+
+	lua.globals().set(
+		"make_ensemble",
+		lua.create_function(|_lua, _: ()| {
+			//
+			let ret = PhysicalEnsembleAPI {
+				root: PhysicalDesignAPI {
+					log_id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+					logd: LogDRef::new(RwLock::new(LogicalDesign::new())),
+					phyd: PhyDRef::new(RwLock::new(PhysicalDesign::new())),
+				},
+				offsets_log: hash_map(),
+				offsets_phy: hash_map(),
+			};
+			Ok(ret)
 		})?,
 	)?;
 

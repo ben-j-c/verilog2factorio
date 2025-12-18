@@ -497,6 +497,7 @@ pub(crate) struct LogicalPort {
 }
 
 /// A design you want to build up and save.
+#[derive(Clone)]
 pub struct LogicalDesign {
 	pub(crate) nodes: Vec<Node>,
 	pub(crate) ports: Vec<LogicalPort>,
@@ -2743,6 +2744,38 @@ impl LogicalDesign {
 		id
 	}
 
+	pub fn add_wire_red_safe(
+		&mut self,
+		fanin: Vec<NodeId>,
+		fanout: Vec<NodeId>,
+	) -> Result<NodeId, ()> {
+		for x in &fanin {
+			if !self.is_wire(*x) {
+				return Err(());
+			}
+		}
+		for x in &fanout {
+			if !self.is_wire(*x) {
+				return Err(());
+			}
+		}
+		let id = self.add_node(
+			NodeFunction::WireSum(WireColour::Red),
+			vec![Signal::Everything],
+		);
+		for node_in in fanin {
+			self.connect_red(node_in, id);
+		}
+		for node_out in fanout {
+			self.connect_red(id, node_out);
+		}
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(id, "wire_red");
+		}
+		Ok(id)
+	}
+
 	/// It has the same behaviour as a wire in game. Attach the outputs of two combinators together.
 	///
 	/// Returns the id for the wire you created.
@@ -2782,6 +2815,38 @@ impl LogicalDesign {
 			self.set_description_node(id, "wire_green");
 		}
 		id
+	}
+
+	pub fn add_wire_green_safe(
+		&mut self,
+		fanin: Vec<NodeId>,
+		fanout: Vec<NodeId>,
+	) -> Result<NodeId, ()> {
+		for x in &fanin {
+			if !self.is_wire(*x) {
+				return Err(());
+			}
+		}
+		for x in &fanout {
+			if !self.is_wire(*x) {
+				return Err(());
+			}
+		}
+		let id = self.add_node(
+			NodeFunction::WireSum(WireColour::Green),
+			vec![Signal::Everything],
+		);
+		for node_in in fanin {
+			self.connect_green(node_in, id);
+		}
+		for node_out in fanout {
+			self.connect_green(id, node_out);
+		}
+		#[cfg(debug_assertions)]
+		{
+			self.set_description_node(id, "wire_green");
+		}
+		Ok(id)
 	}
 
 	/// It has the same behaviour as a wire in game. Attach the outputs of two combinators together.
@@ -3450,6 +3515,43 @@ impl LogicalDesign {
 
 	pub fn get_port_signal(&self, id: NodeId) -> Option<Signal> {
 		self.ports.iter().find(|v| v.id == id).map(|v| v.signal)
+	}
+
+	pub fn extend(&mut self, other: LogicalDesign, port_prefix: &str) -> (usize, usize) {
+		let offset = self.nodes.len();
+		for mut node in other.nodes {
+			node.id.0 += offset;
+			for fiid in &mut node.fanin_red {
+				fiid.0 += offset;
+			}
+			for fiid in &mut node.fanin_green {
+				fiid.0 += offset;
+			}
+			for foid in &mut node.fanout_red {
+				foid.0 += offset;
+			}
+			for foid in &mut node.fanout_green {
+				foid.0 += offset;
+			}
+
+			self.nodes.push(node);
+		}
+		let offset_ports = self.ports.len();
+		for mut port in other.ports {
+			port.id.0 += offset;
+			port.name = format!("{}.{}", port_prefix, port.name);
+			self.ports.push(port);
+		}
+		(offset, offset_ports)
+	}
+
+	pub(crate) fn truncate(&mut self, offset: usize, offset_ports: usize) {
+		while self.nodes.len() > offset {
+			self.nodes.pop();
+		}
+		while self.ports.len() > offset_ports {
+			self.ports.pop();
+		}
 	}
 }
 
