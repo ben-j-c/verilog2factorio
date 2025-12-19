@@ -2,6 +2,10 @@
 # v2f
 This file describes this repository and tool. v2f is short for "Verilog to Factorio."
 
+[![Tests](https://github.com/ben-j-c/verilog2factorio/actions/workflows/rust.yml/badge.svg)](https://github.com/ben-j-c/verilog2factorio/actions/workflows/rust.yml)
+
+[![Codespaces Prebuilds](https://github.com/ben-j-c/verilog2factorio/actions/workflows/codespaces/create_codespaces_prebuilds/badge.svg)](https://github.com/ben-j-c/verilog2factorio/actions/workflows/codespaces/create_codespaces_prebuilds)
+
 # Purpose
 The purpose of this tool is to allow Factorio players to use Verilog to describe combinator circuits.
 An additional purpose is to provide a simple API for describing combinators, so players can manually
@@ -11,13 +15,21 @@ create designs.
 
 # How to get started
 
-The easiest way is to install VSCode and Docker. Also install the [dev-containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension for VSCode.
+## With prebuilt development image
+
+Click the following to open a dev container on a github hosted machine:
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ben-j-c/verilog2factorio?quickstart=1)
+
+## Local with docker
+
+The second easiest way is to install VSCode and Docker. Also install the [dev-containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension for VSCode.
 
 1. Clone the repo into you preferred working directory.
 2. Open the repo with VSCode, you should be prompted to re-open in a dev-container. Select yes.
    - If not, press ctrl-p and type `>reopen` and select "Dev containers: Reopen in container"
 
-## Lua
+### Lua
 
 Once you have your environment running, you can create a new lua file
 and run it by clicking `"Run and Debug" > "Current lua file"`. This will 
@@ -27,7 +39,7 @@ Subsequent runs should start instantly.
 
 With the "Run and Debug" set to "Current lua file" you can press F5 to run the currently open lua file.
 
-## CLI
+### CLI
 
 You only need to set `V2F_ROOT` to the repo root and update `PATH` to include `$(V2F_ROOT)/target/release`.
 
@@ -38,7 +50,7 @@ Make sure you execute `cargo build --release` before you try to use `v2f`.
 
 For more info use `v2f --help`.
 
-### CLI -- Invoke a Lua Script
+#### CLI -- Invoke a Lua Script
 
 Typical usage would be to execute a lua script and get a blueprint:
 ```bash
@@ -46,7 +58,7 @@ $ v2f -i xyz.lua -o blueprint.json
 ```
 Note: Without `-o` the json will be printed to screen.
 
-### CLI -- Running On Mapped Designs
+#### CLI -- Running On Mapped Designs
 
 If your design is being inefficiently generated, you may want to modify the front-end mapping. Yosys is the rtl and word-level generation.
 

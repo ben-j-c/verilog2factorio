@@ -116,8 +116,6 @@ pub struct PhysicalDesign {
 	idx_combs: HashM<ld::NodeId, PhyId>,
 	space: Vec<Arr2<PhyId>>,
 
-	connected_wires: Vec<Vec<WireId>>,
-
 	global_space: Arr2<PhyId>,
 
 	side_length_single_partition: usize,
@@ -204,7 +202,6 @@ impl PhysicalDesign {
 			wires: vec![],
 			idx_combs: hash_map(),
 			space: vec![],
-			connected_wires: vec![],
 
 			global_space: Arr2::new([2, 1]),
 
@@ -284,7 +281,6 @@ impl PhysicalDesign {
 			&local_to_global,
 			&global_to_local,
 		);
-		self.connected_wires = vec![vec![]; self.nodes.len()];
 		self.validate_against(logical);
 		res
 	}
@@ -324,7 +320,6 @@ impl PhysicalDesign {
 					hop_type: WireHopType::Combinator,
 				});
 				self.idx_combs.insert(ld_node.id, id);
-				self.connected_wires.push(vec![]);
 			},
 			ld::NodeFunction::WireSum(_c) => { /* Do nothing for now */ },
 		});
@@ -1384,8 +1379,6 @@ impl PhysicalDesign {
 			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
-		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
-		self.connected_wires[id_pole.0].push(WireId(id_wire));
 		self.wires.push(Wire {
 			id: WireId(id_wire),
 			node1_id: id_comb_a,
@@ -1459,8 +1452,7 @@ impl PhysicalDesign {
 			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
-		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
-		self.connected_wires[id_comb_b.0].push(WireId(id_wire));
+
 		self.wires.push(Wire {
 			id: WireId(id_wire),
 			node1_id: id_comb_a,
@@ -1512,8 +1504,7 @@ impl PhysicalDesign {
 			},
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
-		self.connected_wires[id_comb_a.0].push(WireId(id_wire));
-		self.connected_wires[id_comb_b.0].push(WireId(id_wire));
+
 		self.wires.push(Wire {
 			id: WireId(id_wire),
 			node1_id: id_comb_a,
@@ -2597,13 +2588,64 @@ impl PhysicalDesign {
 			wire.node2_id.0 += offset;
 			self.wires.push(wire);
 		}
-		for mut entry in other.connected_wires {
-			for id in &mut entry {
-				id.0 += offset_wire;
-			}
-			self.connected_wires.push(entry);
-		}
 		Ok(offset)
+	}
+
+	pub fn check_free_make_space(&mut self, x: usize, y: usize, dimx: usize, dimy: usize) -> bool {
+		for x in x..(x + dimx).min(self.global_space.dims().0) {
+			for y in y..(y + dimy).min(self.global_space.dims().1) {
+				if self.global_space[(x, y)] != PhyId::default() {
+					return false;
+				}
+			}
+		}
+		if x + dimx > self.global_space.dims().0 || y + dimy > self.global_space.dims().1 {
+			let new_dim0 = (x + dimx).max(self.global_space.dims().0);
+			let new_dim1 = (y + dimy).max(self.global_space.dims().1);
+			let mut new_global_space = Arr2::<PhyId>::new([new_dim0, new_dim1]);
+
+			for x in 0..self.global_space.dims().0 {
+				for y in 0..self.global_space.dims().1 {
+					new_global_space[(x, y)] = self.global_space[(x, y)];
+				}
+			}
+			self.global_space = new_global_space;
+		}
+		true
+	}
+
+	pub fn place_new_comb(
+		&mut self,
+		pos: (usize, usize),
+		logical: &LogicalDesign,
+		id: NodeId,
+	) -> Result<PhyId, String> {
+		let node = logical.get_node(id);
+		let hop_type = node.function.wire_hop_type();
+		let hop_spec = hop_type.wire_hop_spec();
+
+		if !self.check_free_make_space(
+			pos.0,
+			pos.1,
+			hop_spec.dim.0 as usize,
+			hop_spec.dim.1 as usize,
+		) {
+			return Err("No space".to_owned());
+		}
+		let phy_id = PhyId(self.nodes.len());
+		self.idx_combs.insert(id, phy_id);
+		self.nodes.push(PhyNode {
+			id: phy_id,
+			logic: id,
+			position: (0.0, 0.0),
+			placed: false,
+			orientation: 4,
+			partition: -1,
+			hop_type,
+		});
+		self.place_comb_physical((pos.0 as f64, pos.1 as f64), phy_id, logical, None)
+			.unwrap();
+		Ok(phy_id)
 	}
 }
 

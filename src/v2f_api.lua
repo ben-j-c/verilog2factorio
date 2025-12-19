@@ -112,6 +112,23 @@ Terminal = {
 	connect = function(a, b) end
 }
 
+---@class EnsembleAPI
+---@field add_decider fun(self: EnsembleAPI, x: integer, y: integer): Decider
+---@field add_constant fun(self: EnsembleAPI, x: integer, y: integer, sigs: (Signal|string)[], counts: integer[]): Constant
+---@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
+---@field add_lamp fun(self: EnsembleAPI, x: integer, y: integer, expr: DeciderExpr): Lamp
+---@field make_svg fun(self: EnsembleAPI)
+---@field new_simulation fun(self: EnsembleAPI): SimStateAPI
+---@field find_out_port fun(self: EnsembleAPI, name: string): Lamp|nil
+---@field find_in_port fun(self: EnsembleAPI, name: string): Constant|nil
+---@field in_ports fun(self: EnsembleAPI): table<string, Constant>
+---@field out_ports fun(self: EnsembleAPI): table<string, Lamp>
+---@field group_io fun(self: EnsembleAPI)
+
+--- Get an empty ensemble
+---@return EnsembleAPI
+function make_esemble() end
+
 --- Get a truely empty design
 ---@return LogicalDesignAPI
 function get_empty_design() end

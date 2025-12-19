@@ -1,13 +1,20 @@
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::{
+	panic::{catch_unwind, AssertUnwindSafe},
+	sync::RwLock,
+};
 
 use graphviz_rust::attributes::root;
 use mlua::prelude::*;
 
 use crate::{
-	logical_design::{NodeId, WireColour},
-	lua::{runtime_err, PhysicalDesignAPI, Terminal, TerminalSide},
+	logical_design::{NodeId, Signal, WireColour},
+	lua::{
+		runtime_err, Arithmetic, ArithmeticExpression, Constant, Decider, DeciderExpression, Lamp,
+		PhysicalDesignAPI, SimRef, SimStateAPI, Terminal, TerminalSide,
+	},
 	mapped_design::Direction,
 	phy::PhyId,
+	sim::SimState,
 	util::HashM,
 };
 
@@ -160,5 +167,165 @@ impl LuaUserData for PhysicalEnsembleAPI {
 				.save_svg(&this.root.logd.read().unwrap(), name)?;
 			Ok(())
 		});
+		methods.add_method("new_simulation", |_, this, _: ()| {
+			Ok(SimStateAPI {
+				log_id: this.root.log_id,
+				logd: this.root.logd.clone(),
+				sim: SimRef::new(RwLock::new(SimState::new(this.root.logd.clone()))),
+			})
+		});
+		methods.add_method("find_out_port", |_, this, name: String| {
+			Ok(this
+				.root
+				.logd
+				.read()
+				.unwrap()
+				.get_out_port_node(name)
+				.map(|id| Lamp {
+					log_id: this.root.log_id,
+					id,
+					logd: this.root.logd.clone(),
+				}))
+		});
+		methods.add_method("find_in_port", |_, this, name: String| {
+			Ok(this
+				.root
+				.logd
+				.read()
+				.unwrap()
+				.get_in_port_node(name)
+				.map(|id| Constant {
+					log_id: this.root.log_id,
+					id,
+					logd: this.root.logd.clone(),
+				}))
+		});
+		methods.add_method("add_decider", |_, this, (x, y): (usize, usize)| {
+			if !this
+				.root
+				.phyd
+				.write()
+				.unwrap()
+				.check_free_make_space(x, y, 2, 1)
+			{
+				return Ok(None);
+			}
+			let mut logd = this.root.logd.write().unwrap();
+			let id = logd.add_decider();
+			this.root
+				.phyd
+				.write()
+				.unwrap()
+				.place_new_comb((x, y), &logd, id)
+				.unwrap();
+			Ok(Some(Decider {
+				log_id: this.root.log_id,
+				id,
+				logd: this.root.logd.clone(),
+			}))
+		});
+		methods.add_method(
+			"add_arithmetic",
+			|_,
+			 this,
+			 (x, y, expr, out, net_left_v, net_right_v): (
+				usize,
+				usize,
+				LuaAnyUserData,
+				Signal,
+				i32,
+				i32,
+			)| {
+				if !this
+					.root
+					.phyd
+					.write()
+					.unwrap()
+					.check_free_make_space(x, y, 2, 1)
+				{
+					return Ok(None);
+				}
+				let expr = expr.borrow::<ArithmeticExpression>()?;
+				let net_left = (net_left_v & 1 > 0, net_left_v & 2 > 0);
+				let net_right = (net_right_v & 1 > 0, net_right_v & 2 > 0);
+				let mut logd = this.root.logd.write().unwrap();
+				let id = logd.add_arithmetic_with_net(
+					(expr.0, expr.1, expr.2),
+					out,
+					net_left,
+					net_right,
+				);
+				this.root
+					.phyd
+					.write()
+					.unwrap()
+					.place_new_comb((x, y), &logd, id)
+					.unwrap();
+				Ok(Some(Arithmetic {
+					log_id: this.root.log_id,
+					id,
+					logd: this.root.logd.clone(),
+				}))
+			},
+		);
+		methods.add_method(
+			"add_lamp",
+			|_, this, args: (usize, usize, LuaAnyUserData)| {
+				let (x, y) = (args.0, args.1);
+				if !this
+					.root
+					.phyd
+					.write()
+					.unwrap()
+					.check_free_make_space(x, y, 1, 1)
+				{
+					return Ok(None);
+				}
+				let expr = args.2.borrow::<DeciderExpression>()?;
+				let mut logd = this.root.logd.write().unwrap();
+				let id = logd.add_lamp((expr.0, expr.1, expr.2));
+				this.root
+					.phyd
+					.write()
+					.unwrap()
+					.place_new_comb((x, y), &logd, id)
+					.unwrap();
+				Ok(Some(Lamp {
+					log_id: this.root.log_id,
+					id,
+					logd: this.root.logd.clone(),
+				}))
+			},
+		);
+		methods.add_method(
+			"add_constant",
+			|_, this, (x, y, sigs, counts): (usize, usize, Vec<Signal>, Vec<i32>)| {
+				if sigs.len() != counts.len() {
+					return runtime_err("Mismatched length.");
+				}
+				if !this
+					.root
+					.phyd
+					.write()
+					.unwrap()
+					.check_free_make_space(x, y, 1, 1)
+				{
+					return Ok(None);
+				}
+				let mut logd = this.root.logd.write().unwrap();
+				let id = logd.add_constant(sigs, counts);
+				this.root
+					.phyd
+					.write()
+					.unwrap()
+					.place_new_comb((x, y), &logd, id)
+					.unwrap();
+				Ok(Some(Constant {
+					log_id: this.root.log_id,
+					id,
+					logd: this.root.logd.clone(),
+				}))
+			},
+		);
 	}
 }
