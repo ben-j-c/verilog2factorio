@@ -21,6 +21,8 @@ Click the following to open a dev container on a github hosted machine:
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ben-j-c/verilog2factorio?quickstart=1)
 
+GitHub may say that you're being charged, but **they provide a free tier that is enabled by default that will cost you nothing**. Once you click through, you will get a development machine ready to use the tool. Follow the [Lua](#lua) or [CLI](#cli) sections to continue.
+
 ## Local with docker
 
 The second easiest way is to install VSCode and Docker. Also install the [dev-containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension for VSCode.
