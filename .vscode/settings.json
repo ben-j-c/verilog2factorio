@@ -10,5 +10,7 @@
 	"Lua.diagnostics.disable": [
 		"lowercase-global"
 	],
-	"terminal.integrated.scrollback": 10000
+	"terminal.integrated.scrollback": 10000,
+	"editor.tabSize": 4,
+	"editor.insertSpaces": false,
 }

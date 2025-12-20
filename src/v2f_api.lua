@@ -124,6 +124,7 @@ Terminal = {
 ---@field in_ports fun(self: EnsembleAPI): table<string, Constant>
 ---@field out_ports fun(self: EnsembleAPI): table<string, Lamp>
 ---@field group_io fun(self: EnsembleAPI)
+---@field connect fun(self: EnsembleAPI, first: Terminal, second: TerminalSide)
 
 --- Get an empty ensemble
 ---@return EnsembleAPI
