@@ -5,6 +5,7 @@
 ---@field add_constant fun(self: LogicalDesignAPI, sigs: (Signal|string)[], counts: integer[]): Constant
 ---@field add_arithmetic fun(self: LogicalDesignAPI, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
 ---@field add_lamp fun(self: LogicalDesignAPI, expr: DeciderExpr): Lamp
+---@field add_display_panel fun(self: LogicalDesignAPI): DisplayPanel
 ---@field print fun(self: LogicalDesignAPI)
 ---@field make_svg fun(self: LogicalDesignAPI)
 ---@field new_simulation fun(self: LogicalDesignAPI): SimStateAPI
@@ -13,6 +14,9 @@
 ---@field in_ports fun(self: LogicalDesignAPI): table<string, Constant>
 ---@field out_ports fun(self: LogicalDesignAPI): table<string, Lamp>
 ---@field group_io fun(self: LogicalDesignAPI)
+---@field make_phy fun(self: LogicalDesignAPI, name: string|nil): PhysicalDesignAPI
+
+---@class PhysicalDesignAPI
 
 ---@class SimStateAPI
 ---@field step fun(self: SimStateAPI, n: integer)
@@ -52,6 +56,10 @@
 ---@class Lamp
 ---@field input TerminalSide
 ---@field signals fun(self: Lamp): Signal[]
+
+---@class DisplayPanel
+---@field input TerminalSide
+---@field add_entry fun(self: DisplayPanel, expr: DeciderExpr, icon: Signal, text: string|nil)
 
 ---@class Constant
 ---@field output TerminalSide
@@ -113,11 +121,13 @@ Terminal = {
 }
 
 ---@class EnsembleAPI
+---@field freeze_and_place fun(self: EnsembleAPI, name: string, design: PhysicalDesignAPI, x: integer, y: integer)
 ---@field add_decider fun(self: EnsembleAPI, x: integer, y: integer): Decider
 ---@field add_constant fun(self: EnsembleAPI, x: integer, y: integer, sigs: (Signal|string)[], counts: integer[]): Constant
 ---@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
 ---@field add_lamp fun(self: EnsembleAPI, x: integer, y: integer, expr: DeciderExpr): Lamp
----@field make_svg fun(self: EnsembleAPI)
+---@field add_display_panel fun(self: EnsembleAPI, x: integer, y: integer): DisplayPanel
+---@field make_svg fun(self: EnsembleAPI, filename: string)
 ---@field new_simulation fun(self: EnsembleAPI): SimStateAPI
 ---@field find_out_port fun(self: EnsembleAPI, name: string): Lamp|nil
 ---@field find_in_port fun(self: EnsembleAPI, name: string): Constant|nil
@@ -125,14 +135,22 @@ Terminal = {
 ---@field out_ports fun(self: EnsembleAPI): table<string, Lamp>
 ---@field group_io fun(self: EnsembleAPI)
 ---@field connect fun(self: EnsembleAPI, first: Terminal, second: TerminalSide)
+---@field width integer
+---@field height integer
+
 
 --- Get an empty ensemble
 ---@return EnsembleAPI
-function make_esemble() end
+function make_ensemble() end
 
 --- Get a truely empty design
 ---@return LogicalDesignAPI
 function get_empty_design() end
+
+--- Parse a mapped rtl json file.
+---@param file string
+---@return LogicalDesignAPI
+function load_mapped_rtl(file) end
 
 ---@class RTL
 ---@field to_design fun(self: RTL): LogicalDesignAPI

@@ -9,8 +9,8 @@ use mlua::prelude::*;
 use crate::{
 	logical_design::{NodeId, Signal, WireColour},
 	lua::{
-		runtime_err, Arithmetic, ArithmeticExpression, Constant, Decider, DeciderExpression, Lamp,
-		PhysicalDesignAPI, SimRef, SimStateAPI, Terminal, TerminalSide,
+		runtime_err, Arithmetic, ArithmeticExpression, Constant, Decider, DeciderExpression,
+		DisplayPanel, Lamp, PhysicalDesignAPI, SimRef, SimStateAPI, Terminal, TerminalSide,
 	},
 	mapped_design::Direction,
 	phy::PhyId,
@@ -33,19 +33,6 @@ impl PhysicalEnsembleAPI {
 			if id.0 < self.offsets_log[&log_id].1 {
 				let offset = self.offsets_log[&log_id].0 .0;
 				return Ok(NodeId(id.0 + offset));
-			}
-		}
-		Err(())
-	}
-
-	fn resolve_phy_id(&self, id: PhyId, log_id: usize) -> Result<PhyId, ()> {
-		if self.root.log_id == log_id {
-			return Ok(id);
-		}
-		if self.offsets_log.contains_key(&log_id) {
-			if id.0 < self.offsets_phy[&log_id].1 {
-				let offset = self.offsets_phy[&log_id].0 .0;
-				return Ok(PhyId(id.0 + offset));
 			}
 		}
 		Err(())
@@ -104,8 +91,15 @@ impl PhysicalEnsembleAPI {
 		};
 		res.map_err(|_| LuaError::runtime("Invalid connection."))?;
 		let mut phyd = self.root.phyd.write().unwrap();
-		phyd.route_single_net(this_id, this_dir, other_id, other_dir)
-			.map_err(|_| LuaError::runtime("Failed to route new connection."))
+		phyd.route_single_net(
+			&self.root.logd.read().unwrap(),
+			this_id,
+			this_dir,
+			other_id,
+			other_dir,
+			this_colour,
+		)
+		.map_err(|_| LuaError::runtime("Failed to route new connection."))
 	}
 }
 
@@ -327,5 +321,49 @@ impl LuaUserData for PhysicalEnsembleAPI {
 				}))
 			},
 		);
+		methods.add_method("add_display_panel", |_, this, (x, y): (usize, usize)| {
+			if !this
+				.root
+				.phyd
+				.write()
+				.unwrap()
+				.check_free_make_space(x, y, 1, 1)
+			{
+				return Ok(None);
+			}
+			let mut logd = this.root.logd.write().unwrap();
+			let id = logd.add_display_panel();
+			this.root
+				.phyd
+				.write()
+				.unwrap()
+				.place_new_comb((x, y), &logd, id)
+				.unwrap();
+			Ok(Some(DisplayPanel {
+				log_id: this.root.log_id,
+				id,
+				logd: this.root.logd.clone(),
+			}))
+		});
+		methods.add_method("make_svg", |_, this, name: String| {
+			let logd = this.root.logd.read().unwrap();
+			let phyd = this.root.phyd.read().unwrap();
+			phyd.save_svg(&logd, name)?;
+			Ok(())
+		});
+		methods.add_method("make_json", |_, this, name: Option<String>| {
+			//
+			Ok(())
+		});
+	}
+	fn add_fields<F: LuaUserDataFields<Self>>(fields: &mut F) {
+		fields.add_field_method_get("width", |_, this| {
+			let phyd = this.root.phyd.read().unwrap();
+			Ok(phyd.width())
+		});
+		fields.add_field_method_get("height", |_, this| {
+			let phyd = this.root.phyd.read().unwrap();
+			Ok(phyd.height())
+		});
 	}
 }

@@ -14,6 +14,8 @@ use mlua::Value;
 use phy::PhysicalDesign;
 use serializable_design::SerializableDesign;
 
+use crate::lua::PhysicalEnsembleAPI;
+
 pub mod checked_design;
 mod connected_design;
 pub mod logical_design;
@@ -141,6 +143,14 @@ pub fn lua_flow(args: Args) -> Result<String> {
 		let mut serd = SerializableDesign::new();
 		let logd = phyd.logd.read().unwrap();
 		let phyd = phyd.phyd.read().unwrap();
+		serd.build_from(phyd.deref(), logd.deref());
+		let blueprint_json = serde_json::to_string(&serd)?;
+
+		Ok(blueprint_json)
+	} else if let Ok(design) = eval.borrow::<PhysicalEnsembleAPI>() {
+		let mut serd = SerializableDesign::new();
+		let logd = design.root.logd.read().unwrap();
+		let phyd = design.root.phyd.read().unwrap();
 		serd.build_from(phyd.deref(), logd.deref());
 		let blueprint_json = serde_json::to_string(&serd)?;
 

@@ -505,6 +505,25 @@ fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
 	})
 }
 
+fn method_load_mapped_rtl<P: AsRef<Path>>(
+	mapped_json: &P,
+) -> Result<LogicalDesignAPI, mlua::Error> {
+	let file = File::open(mapped_json)?;
+	let reader = BufReader::new(file);
+	let mapped_design: MappedDesign =
+		serde_json::from_reader(reader).map_err(|_| Error::runtime("failed to map design."))?;
+	let mut checked_design = CheckedDesign::new();
+	checked_design.build_from(&mapped_design);
+	let mut logd = LogicalDesign::new();
+	logd.build_from(&checked_design, &mapped_design);
+	Ok(LogicalDesignAPI {
+		id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+		logd: Arc::new(RwLock::new(logd)),
+		make_svg: false,
+		group_io: false,
+	})
+}
+
 impl UserData for Terminal {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("connect", |_, this, other: AnyUserData| {
@@ -529,6 +548,13 @@ struct Arithmetic {
 
 #[derive(Debug, Clone)]
 struct Lamp {
+	log_id: usize,
+	id: NodeId,
+	logd: LogDRef,
+}
+
+#[derive(Debug, Clone)]
+struct DisplayPanel {
 	log_id: usize,
 	id: NodeId,
 	logd: LogDRef,
@@ -725,6 +751,25 @@ impl UserData for Lamp {
 	}
 }
 
+impl UserData for DisplayPanel {
+	fn add_methods<F: UserDataMethods<Self>>(methods: &mut F) {
+		methods.add_method("input", |_, this, _: ()| {
+			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
+		});
+		methods.add_method(
+			"add_entry",
+			|_, this, (expr, out, text): (AnyUserData, Signal, Option<String>)| {
+				let expr = expr.borrow::<DeciderExpression>()?;
+				this.logd
+					.write()
+					.unwrap()
+					.add_display_panel_entry(this.id, expr.0, expr.1, expr.2, out, text);
+				Ok(())
+			},
+		);
+	}
+}
+
 impl UserData for LogicalDesignAPI {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("description", |_, this| {
@@ -740,6 +785,14 @@ impl UserData for LogicalDesignAPI {
 		methods.add_method("add_decider", |_, this, _: ()| {
 			let id = this.logd.write().unwrap().add_decider();
 			Ok(Decider {
+				log_id: this.id,
+				id,
+				logd: this.logd.clone(),
+			})
+		});
+		methods.add_method("add_display_panel", |_, this, _: ()| {
+			let id = this.logd.write().unwrap().add_display_panel();
+			Ok(DisplayPanel {
 				log_id: this.id,
 				id,
 				logd: this.logd.clone(),
@@ -1269,6 +1322,11 @@ pub fn get_lua() -> Result<Lua, Error> {
 				group_io: false,
 			})
 		})?,
+	)?;
+
+	lua.globals().set(
+		"load_mapped_rtl",
+		lua.create_function(|_, file: String| method_load_mapped_rtl(&file))?,
 	)?;
 
 	lua.globals().set(

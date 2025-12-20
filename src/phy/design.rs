@@ -220,6 +220,14 @@ impl PhysicalDesign {
 		}
 	}
 
+	pub fn width(&self) -> usize {
+		self.global_space.dims().0
+	}
+
+	pub fn height(&self) -> usize {
+		self.global_space.dims().1
+	}
+
 	pub fn n_nodes(&self) -> usize {
 		self.nodes.len()
 	}
@@ -2510,19 +2518,35 @@ impl PhysicalDesign {
 
 	pub(crate) fn route_single_net(
 		&mut self,
+		logical: &LogicalDesign,
 		id_1: NodeId,
 		dir_1: Direction,
 		id_2: NodeId,
 		dir_2: Direction,
+		colour: WireColour,
 	) -> Result<(), ()> {
+		if self.close_enough_to_connect_phy(logical, self.idx_combs[&id_1], self.idx_combs[&id_2]) {
+			self.connect_wire2(dir_1, id_1, dir_2, id_2, colour, logical);
+			return Ok(());
+		}
 		let terminals = vec![(dir_1, id_1), (dir_2, id_2)];
-		let connected_map = vec![Some(1), Some(2)];
+		let mut connected_map = vec![Some(1), Some(2)];
 		let idx_1 = 0;
 		let idx_2 = 1;
 		let mut cache = RouteCache::default();
-		self.route_partial_net(&terminals, &connected_map, idx_1, idx_2, &mut cache)
+		let path = self
+			.route_partial_net(&terminals, &connected_map, idx_1, idx_2, &mut cache)
 			.map_err(|_| ())?;
-
+		self.commit_route2(
+			path,
+			&terminals,
+			&mut connected_map,
+			idx_1,
+			idx_2,
+			colour,
+			&mut cache,
+			logical,
+		);
 		Ok(())
 	}
 
@@ -2577,10 +2601,13 @@ impl PhysicalDesign {
 				new_global_space[(x + pos.0, y + pos.1)].0 = other.global_space[(x, y)].0 + offset;
 			}
 		}
+		self.global_space = new_global_space;
 
 		for mut node in other.nodes {
 			node.id.0 += offset;
 			node.logic.0 += logical_design_offset;
+			node.position.0 += pos.0 as f64;
+			node.position.1 += pos.1 as f64;
 			self.idx_combs.insert(node.logic, node.id);
 			self.nodes.push(node);
 		}
@@ -2753,22 +2780,18 @@ impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
 	}
 
 	fn distance(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
-		let mut dx = b.0.abs_diff(a.0) as f32;
-		let mut dy = b.1.abs_diff(a.1) as f32;
-		if dx <= 5.0 && dy <= 5.0 {
-			return 0.0;
-		}
-		dx -= 5.0;
-		dy -= 5.0;
-		dx = dx.max(0.0);
-		dy = dy.max(0.0);
+		let dx = b.0.abs_diff(a.0) as f32;
+		let dy = b.1.abs_diff(a.1) as f32;
 		let dist = (dx * dx + dy * dy).sqrt();
-		(dist / 9.0).round() + 1.0
-		//(dx * dx + dy * dy).sqrt()
+		//((dist + 4.5) / 9.0).round()
+		1.0
 	}
 
 	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {
-		self.distance(a, b)
+		let dx = b.0.abs_diff(a.0) as f32;
+		let dy = b.1.abs_diff(a.1) as f32;
+		let dist = (dx * dx + dy * dy).sqrt();
+		((dist + 4.5) / 9.0).round()
 	}
 }
 
