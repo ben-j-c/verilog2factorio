@@ -593,6 +593,7 @@ impl SimState {
 			},
 			NodeFunction::Lamp { .. } => {},
 			NodeFunction::WireSum(_wire_colour) => {},
+			NodeFunction::DisplayPanel { .. } => {},
 		}
 	}
 

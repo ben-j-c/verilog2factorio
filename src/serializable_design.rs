@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use serde::Serialize;
 
 use crate::logical_design::{
@@ -80,6 +80,27 @@ struct Entity {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct DisplayPanelCondition {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	first_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	second_signal: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	constant: Option<i32>,
+	comparator: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DisplayPanelParameter {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	condition: Option<DisplayPanelCondition>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	icon: Option<SignalID>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct ControlBehavior {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	circuit_enabled: Option<bool>, // Used by lamps
@@ -95,6 +116,8 @@ struct ControlBehavior {
 	sections: Option<LogisticSections>, // Used by costant combinators
 	#[serde(skip_serializing_if = "Option::is_none")]
 	use_color: Option<bool>, // Used by lamps
+	#[serde(skip_serializing_if = "Option::is_none")]
+	parameters: Option<Vec<DisplayPanelParameter>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -316,6 +339,7 @@ impl PhyNode {
 			logical_design::NodeFunction::Decider { .. } => "decider-combinator",
 			logical_design::NodeFunction::Constant { .. } => "constant-combinator",
 			logical_design::NodeFunction::Lamp { .. } => "small-lamp",
+			logical_design::NodeFunction::DisplayPanel { .. } => "display-panel",
 			logical_design::NodeFunction::WireSum(_c) => unreachable!(),
 		}
 	}
@@ -350,6 +374,7 @@ impl PhyNode {
 				circuit_condition: None,
 				sections: None,
 				use_color: None,
+				parameters: None,
 			}),
 			logical_design::NodeFunction::Decider {
 				expressions,
@@ -412,6 +437,7 @@ impl PhyNode {
 				circuit_condition: None,
 				sections: None,
 				use_color: None,
+				parameters: None,
 			}),
 			logical_design::NodeFunction::Constant { enabled, constants } => {
 				Some(ControlBehavior {
@@ -442,6 +468,7 @@ impl PhyNode {
 						}],
 					}),
 					use_color: None,
+					parameters: None,
 				})
 			},
 			logical_design::NodeFunction::Lamp { expression } => Some(ControlBehavior {
@@ -460,6 +487,44 @@ impl PhyNode {
 				}),
 				sections: None,
 				use_color: None,
+				parameters: None,
+			}),
+			logical_design::NodeFunction::DisplayPanel {
+				input_1,
+				input_2,
+				op,
+				text,
+			} => Some(ControlBehavior {
+				circuit_enabled: None,
+				is_on: None,
+				arithmetic_conditions: None,
+				decider_conditions: None,
+				circuit_condition: None,
+				sections: None,
+				use_color: None,
+				parameters: Some(
+					izip!(
+						input_1.iter(),
+						input_2.iter(),
+						op.iter(),
+						text.iter(),
+						node.output.iter()
+					)
+					.map(|(input_1, input_2, op, text, output)| {
+						//
+						DisplayPanelParameter {
+							condition: Some(DisplayPanelCondition {
+								first_signal: input_1.resolve_signal_id(),
+								second_signal: input_2.resolve_signal_id(),
+								constant: input_2.resolve_constant(),
+								comparator: op.resolve_string(),
+							}),
+							icon: output.resolve_signal_id(),
+							text: text.clone(),
+						}
+					})
+					.collect_vec(),
+				),
 			}),
 			logical_design::NodeFunction::WireSum(_c) => unreachable!(),
 		}

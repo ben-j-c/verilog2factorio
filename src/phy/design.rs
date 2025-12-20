@@ -308,7 +308,8 @@ impl PhysicalDesign {
 			ld::NodeFunction::Arithmetic { .. }
 			| ld::NodeFunction::Decider { .. }
 			| ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. } => {
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => {
 				let id = PhyId(self.nodes.len());
 				self.nodes.push(PhyNode {
 					id,
@@ -1374,9 +1375,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(colour)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::output_constant(colour)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(colour),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		self.wires.push(Wire {
@@ -1434,9 +1435,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(color)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::output_constant(color)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(color),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		let term_b = match &ld_comb_b.function {
@@ -1447,9 +1448,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(color)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::input(color)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::input(color),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 
@@ -1486,9 +1487,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(colour)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::output_constant(colour)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(colour),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 		let term_b = match &ld_comb_b.function {
@@ -1499,9 +1500,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(colour)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::input(colour)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::input(colour),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		};
 
@@ -1653,7 +1654,10 @@ impl PhysicalDesign {
 				ld::NodeFunction::Lamp { .. } => {
 					(SCALE, SCALE, Some("L"), format_comb_hint(sim, ld, c.logic))
 				},
-				_ => {
+				ld::NodeFunction::DisplayPanel { .. } => {
+					(SCALE, SCALE, Some("P"), format_comb_hint(sim, ld, c.logic))
+				},
+				ld::NodeFunction::WireSum(_) => {
 					unreachable!()
 				},
 			};
@@ -2385,9 +2389,9 @@ impl PhysicalDesign {
 					TerminalId::output_combinator(colour)
 				}
 			},
-			ld::NodeFunction::Constant { .. } | ld::NodeFunction::Lamp { .. } => {
-				TerminalId::output_constant(colour)
-			},
+			ld::NodeFunction::Constant { .. }
+			| ld::NodeFunction::Lamp { .. }
+			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(colour),
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		}
 	}
@@ -2808,6 +2812,7 @@ impl ld::NodeFunction {
 			ld::NodeFunction::Decider { .. } => WireHopType::Combinator,
 			ld::NodeFunction::Constant { .. } => WireHopType::Lamp,
 			ld::NodeFunction::Lamp { .. } => WireHopType::Lamp,
+			ld::NodeFunction::DisplayPanel { .. } => WireHopType::Lamp,
 			ld::NodeFunction::WireSum(_c) => unreachable!(),
 		}
 	}

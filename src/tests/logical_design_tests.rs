@@ -1814,6 +1814,44 @@ fn ram_resetable_dense_full() {
 }
 
 #[test]
+pub(crate) fn simple_display_panel() {
+	use DeciderOperator as Dop;
+	use Signal as Sig;
+	let mut d = LogicalDesign::new();
+	let constant1 = d.add_constant(vec![Sig::Id(1)], vec![10]);
+	let panel = d.add_display_panel();
+	for i in 0..10 {
+		d.add_display_panel_entry(
+			panel,
+			Sig::Id(1),
+			Dop::Equal,
+			Sig::Constant(i),
+			signal_lookup_table::lookup_sig(&format!("signal-{}", i)),
+			Some(format!("{}", i)),
+		);
+	}
+	for i in 10..16 {
+		let character = ('A' as u8 + (i - 10) as u8) as char;
+		d.add_display_panel_entry(
+			panel,
+			Sig::Id(1),
+			Dop::Equal,
+			Sig::Constant(i),
+			signal_lookup_table::lookup_sig(&format!("signal-{}", character)),
+			Some(format!("{}", character)),
+		);
+	}
+	d.add_wire_red_simple(constant1, panel);
+
+	let mut p = PhysicalDesign::new();
+	let mut s = SerializableDesign::new();
+	p.build_from(&d);
+	s.build_from(&p, &d);
+	let blueprint_json = serde_json::to_string(&s).unwrap();
+	println!("{}", blueprint_json);
+}
+
+#[test]
 fn arith_expr() {
 	use chumsky::Parser;
 	//let parser = logical_design::arithmetic_parser::parser();

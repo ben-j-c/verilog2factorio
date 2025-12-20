@@ -242,6 +242,12 @@ pub enum NodeFunction {
 	Lamp {
 		expression: (Signal, DeciderOperator, Signal),
 	},
+	DisplayPanel {
+		input_1: Vec<Signal>,
+		input_2: Vec<Signal>,
+		op: Vec<DeciderOperator>,
+		text: Vec<Option<String>>,
+	},
 	/// All fanin/fanout of this node will be connected with a wire of this colour. A single node can have multiple
 	WireSum(WireColour),
 }
@@ -2717,6 +2723,44 @@ impl LogicalDesign {
 		self.add_node(NodeFunction::Lamp { expression: expr }, vec![])
 	}
 
+	pub fn add_display_panel(&mut self) -> NodeId {
+		self.add_node(
+			NodeFunction::DisplayPanel {
+				input_1: vec![],
+				input_2: vec![],
+				op: vec![],
+				text: vec![],
+			},
+			vec![],
+		)
+	}
+
+	pub fn add_display_panel_entry(
+		&mut self,
+		id: NodeId,
+		left: Signal,
+		operator: DeciderOperator,
+		right: Signal,
+		output: Signal,
+		display_text: Option<String>,
+	) {
+		match &mut self.nodes[id.0].function {
+			NodeFunction::DisplayPanel {
+				input_1,
+				input_2,
+				op,
+				text,
+			} => {
+				input_1.push(left);
+				input_2.push(right);
+				op.push(operator);
+				text.push(display_text);
+				self.nodes[id.0].output.push(output);
+			},
+			_ => assert!(false, "Tried to set count for non-constant combinator node"),
+		}
+	}
+
 	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.
 	///
 	/// Returns the id for the wire you created.
@@ -3613,6 +3657,13 @@ impl Display for Node {
 			NodeFunction::WireSum(wire_colour) => {
 				format!("W {:?}", wire_colour)
 			},
+			NodeFunction::DisplayPanel { .. } => format!(
+				"Display {}",
+				match self.output.first() {
+					Some(v) => *v,
+					None => Signal::None,
+				},
+			),
 		};
 		let mut descr = self
 			.description
@@ -3632,6 +3683,7 @@ impl Display for Node {
 		Ok(())
 	}
 }
+
 impl Debug for Node {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let colour_map = |rg: (bool, bool)| match rg {
@@ -3724,6 +3776,17 @@ impl Debug for Node {
 			},
 			NodeFunction::WireSum(wire_colour) => {
 				writeln!(f, "    WireSum {{ colour: {:?} }}", wire_colour)?;
+			},
+			NodeFunction::DisplayPanel {
+				input_1,
+				input_2,
+				op,
+				text,
+			} => {
+				writeln!(f, "    DisplayPanel {{")?;
+				writeln!(f, "        expression: {:?}", (input_1, op, input_2))?;
+				writeln!(f, "        text: {:?}", text)?;
+				writeln!(f, "    }}")?;
 			},
 		};
 		write!(f, "}}")
