@@ -325,8 +325,18 @@ impl SerializableDesign {
 				source_wire_connector_id: wire.terminal1_id.0 as usize,
 				target_entity_number: idx_entities[&wire.node2_id],
 				target_wire_connector_id: wire.terminal2_id.0 as usize,
-			})
+			});
 		});
+		let copper = physical.build_copper_network();
+		for i in 0..copper.len() {
+			let id = PhyId(i);
+			if !physical.is_pole(id) {
+				continue;
+			}
+			let idx = idx_entities[&id];
+			entities[idx - 1].neighbours =
+				Some(copper[i].iter().map(|id| idx_entities[id]).collect_vec());
+		}
 		self.blueprint.entities = entities;
 		self.blueprint.wires = wires;
 	}

@@ -752,10 +752,12 @@ impl UserData for Lamp {
 }
 
 impl UserData for DisplayPanel {
-	fn add_methods<F: UserDataMethods<Self>>(methods: &mut F) {
-		methods.add_method("input", |_, this, _: ()| {
+	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
+		fields.add_field_method_get("input", |_, this| {
 			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
 		});
+	}
+	fn add_methods<F: UserDataMethods<Self>>(methods: &mut F) {
 		methods.add_method(
 			"add_entry",
 			|_, this, (expr, out, text): (AnyUserData, Signal, Option<String>)| {

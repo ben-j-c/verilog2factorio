@@ -35,6 +35,12 @@ pub fn main() -> Result<(), v2f::Error> {
 		},
 		Err(e) => {
 			println!("Couldn't complete compilation due to error.");
+			match &e {
+				v2f::Error::LuaError(error) => {
+					println!("{error:#?}");
+				},
+				_ => {},
+			}
 			Err(e)
 		},
 	}

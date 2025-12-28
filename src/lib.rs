@@ -114,11 +114,12 @@ pub fn lua_flow(args: Args) -> Result<String> {
 	let lua = get_lua()?;
 	let chunk = lua.load(input_file.clone());
 	let eval = chunk.eval::<Value>();
-	let eval = if let Ok(e) = eval {
-		e
-	} else {
-		println!("{eval:#?}");
-		return Ok("".to_owned());
+	let eval = match eval {
+		Ok(v) => v,
+		Err(err) => {
+			println!("{err:#>}");
+			return Ok("".to_string());
+		},
 	};
 	let eval = match eval {
 		Value::UserData(d) => d,

@@ -1,9 +1,5 @@
-use std::{
-	panic::{catch_unwind, AssertUnwindSafe},
-	sync::RwLock,
-};
+use std::sync::RwLock;
 
-use graphviz_rust::attributes::root;
 use mlua::prelude::*;
 
 use crate::{
@@ -349,10 +345,6 @@ impl LuaUserData for PhysicalEnsembleAPI {
 			let logd = this.root.logd.read().unwrap();
 			let phyd = this.root.phyd.read().unwrap();
 			phyd.save_svg(&logd, name)?;
-			Ok(())
-		});
-		methods.add_method("make_json", |_, this, name: Option<String>| {
-			//
 			Ok(())
 		});
 	}

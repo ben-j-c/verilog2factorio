@@ -1547,9 +1547,9 @@ impl CheckedDesign {
 					logic_map[nodeid].unwrap(),
 					format!("{}:{}", node.mapped_id, port).as_str(),
 				),
-				NodeType::PortOutput { .. } => logical_design
+				NodeType::PortOutput { .. } => {},
+				NodeType::PortBody { .. } => logical_design
 					.append_description(logic_map[nodeid].unwrap(), node.mapped_id.as_str()),
-				NodeType::PortBody { .. } => {},
 				NodeType::CellBody { .. } => {},
 			}
 		}

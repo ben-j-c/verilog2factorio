@@ -369,6 +369,21 @@ impl Node {
 		}
 	}
 
+	pub(crate) fn fanin_first(&self, colour: WireColour) -> Option<NodeId> {
+		match colour {
+			WireColour::Red => self.fanin_red.first().cloned(),
+			WireColour::Green => self.fanin_green.first().cloned(),
+		}
+	}
+
+	/// Iterate the fanout of a specific colour.
+	pub(crate) fn fanout_first(&self, colour: WireColour) -> Option<NodeId> {
+		match colour {
+			WireColour::Red => self.fanout_red.first().cloned(),
+			WireColour::Green => self.fanout_green.first().cloned(),
+		}
+	}
+
 	/// Iterate the fanout of both colours.
 	pub(crate) fn iter_fanout_both(
 		&self,
@@ -2794,12 +2809,12 @@ impl LogicalDesign {
 		fanout: Vec<NodeId>,
 	) -> Result<NodeId, ()> {
 		for x in &fanin {
-			if !self.is_wire(*x) {
+			if self.is_wire(*x) {
 				return Err(());
 			}
 		}
 		for x in &fanout {
-			if !self.is_wire(*x) {
+			if self.is_wire(*x) {
 				return Err(());
 			}
 		}
@@ -3463,6 +3478,26 @@ impl LogicalDesign {
 			}
 		}
 		retval.into_iter().collect_vec()
+	}
+
+	pub(crate) fn get_wire_network_on_cell(
+		&self,
+		id: NodeId,
+		colour: WireColour,
+		direction: Direction,
+	) -> Vec<NodeId> {
+		assert!(!self.is_wire(id));
+		let node = self.get_node(id);
+		let wire = match direction {
+			Direction::Inout => unreachable!(),
+			Direction::Input => node.fanin_first(colour),
+			Direction::Output => node.fanout_first(colour),
+		};
+		if let Some(wire) = wire {
+			self.get_wire_network(wire)
+		} else {
+			vec![]
+		}
 	}
 
 	pub fn set_description_node<S: Into<String>>(&mut self, id: NodeId, desc: S) {

@@ -131,7 +131,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"phy::design::test::synthetic_n_mcmc_dense",
+				"tests::logical_design_tests::test::two_wire_sum",
 			],
 			"cwd": "${workspaceFolder}"
 		},

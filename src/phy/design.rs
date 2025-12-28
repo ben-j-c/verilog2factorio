@@ -5,6 +5,7 @@ use super::*;
 use core::{f64, panic};
 use itertools::Itertools;
 use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use std::ops::Rem;
 use std::usize;
@@ -61,14 +62,6 @@ impl TerminalId {
 	fn output_constant(color: ld::WireColour) -> TerminalId {
 		Self::input(color)
 	}
-}
-
-#[derive(Debug, Clone)]
-pub struct Route {
-	input_sided: bool,
-	far_side_id: PhyId,
-	near_side_pole_id: PhyId,
-	far_side_pole_id: PhyId,
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +283,7 @@ impl PhysicalDesign {
 			&global_to_local,
 		);
 		self.validate_against(logical);
+		self.make_assertions(logical);
 		res
 	}
 
@@ -1360,117 +1354,6 @@ impl PhysicalDesign {
 			< min_distance * min_distance
 	}
 
-	fn connect_wire_to_pole(
-		&mut self,
-		fanin_a: bool,
-		id_comb_a: PhyId,
-		id_pole: PhyId,
-		logical: &LogicalDesign,
-		colour: WireColour,
-	) {
-		assert!(
-			self.nodes[id_pole.0].is_pole(),
-			"Tried to connect wire to pole, but pole_id is not a pole!"
-		);
-		let id_wire = self.wires.len();
-		let comb_a = &self.nodes[id_comb_a.0];
-		let ld_comb_a = logical.get_node(comb_a.logic);
-		let term_a = match &ld_comb_a.function {
-			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
-				if fanin_a {
-					TerminalId::input(colour)
-				} else {
-					TerminalId::output_combinator(colour)
-				}
-			},
-			ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. }
-			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(colour),
-			ld::NodeFunction::WireSum(_c) => unreachable!(),
-		};
-		self.wires.push(Wire {
-			id: WireId(id_wire),
-			node1_id: id_comb_a,
-			node2_id: id_pole,
-			terminal1_id: term_a,
-			terminal2_id: TerminalId::input(colour),
-		});
-	}
-
-	fn connect_wire(
-		&mut self,
-		ld_id_wire: ld::NodeId,
-		fanin_a: bool,
-		id_comb_a: PhyId,
-		fanin_b: bool,
-		id_comb_b: PhyId,
-		logical: &LogicalDesign,
-	) {
-		let id_wire = self.wires.len();
-		let comb_a = &self.nodes[id_comb_a.0];
-		let comb_b = &self.nodes[id_comb_b.0];
-		let ld_comb_a = logical.get_node(comb_a.logic);
-		let ld_comb_b = logical.get_node(comb_b.logic);
-		let color = if let ld::NodeFunction::WireSum(color) = logical.get_node(ld_id_wire).function
-		{
-			match color {
-				WireColour::Red => assert!(
-					ld_comb_a.fanout_red.contains(&ld_id_wire)
-						&& ld_comb_b.fanin_red.contains(&ld_id_wire)
-						|| ld_comb_a.fanin_red.contains(&ld_id_wire)
-							&& ld_comb_b.fanin_red.contains(&ld_id_wire)
-						|| ld_comb_a.fanout_red.contains(&ld_id_wire)
-							&& ld_comb_b.fanout_red.contains(&ld_id_wire)
-				),
-				WireColour::Green => assert!(
-					ld_comb_a.fanout_green.contains(&ld_id_wire)
-						&& ld_comb_b.fanin_green.contains(&ld_id_wire)
-						|| ld_comb_a.fanin_green.contains(&ld_id_wire)
-							&& ld_comb_b.fanin_green.contains(&ld_id_wire)
-						|| ld_comb_a.fanout_green.contains(&ld_id_wire)
-							&& ld_comb_b.fanout_green.contains(&ld_id_wire)
-				),
-			}
-			color
-		} else {
-			panic!("Tried to connect two combinators over a non-wire node. All combinators should have a wire between eachother.");
-		};
-		let term_a = match &ld_comb_a.function {
-			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
-				if fanin_a {
-					TerminalId::input(color)
-				} else {
-					TerminalId::output_combinator(color)
-				}
-			},
-			ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. }
-			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::output_constant(color),
-			ld::NodeFunction::WireSum(_c) => unreachable!(),
-		};
-		let term_b = match &ld_comb_b.function {
-			ld::NodeFunction::Arithmetic { .. } | ld::NodeFunction::Decider { .. } => {
-				if fanin_b {
-					TerminalId::input(color)
-				} else {
-					TerminalId::output_combinator(color)
-				}
-			},
-			ld::NodeFunction::Constant { .. }
-			| ld::NodeFunction::Lamp { .. }
-			| ld::NodeFunction::DisplayPanel { .. } => TerminalId::input(color),
-			ld::NodeFunction::WireSum(_c) => unreachable!(),
-		};
-
-		self.wires.push(Wire {
-			id: WireId(id_wire),
-			node1_id: id_comb_a,
-			node2_id: id_comb_b,
-			terminal1_id: term_a,
-			terminal2_id: term_b,
-		});
-	}
-
 	fn connect_wire2(
 		&mut self,
 		direction_a: Direction,
@@ -1714,61 +1597,174 @@ impl PhysicalDesign {
 		self.save_svg_full(None, ld, filename)
 	}
 
-	fn validate_against(&self, _ld: &LogicalDesign) {
-		/*
-		unreachable!();
-		for c in &self.nodes {
-			let ld_comb = ld.get_node(c.logic);
-			if ld_comb.is_constant() {
-				let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
-				let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
-				let n3 = self
-					.get_network(c.id, TerminalId::output_constant(WireColour::Red))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				let n4 = self
-					.get_network(c.id, TerminalId::output_constant(WireColour::Green))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				println!("\n\n{:?}", self.connected_wires);
-				assert_eq!(n1, n3);
-				assert_eq!(n2, n4);
+	fn validate_against(&self, logd: &LogicalDesign) {
+		let (wire_groups, membership) = self.get_wire_networks();
+		for wire_group in &wire_groups {
+			let wire = &self.wires[wire_group[0].0];
+			let mut node = &self.nodes[wire.node1_id.0];
+			let (dir1, colour) = if node.is_pole() {
+				node = &self.nodes[wire.node2_id.0];
+				if node.is_pole() {
+					continue;
+				}
+				self.terminal_id_to_direction_colour(wire.node2_id, wire.terminal2_id, logd)
 			} else {
-				let n1 = ld.get_fanin_network(c.logic, WireColour::Red);
-				let n2 = ld.get_fanin_network(c.logic, WireColour::Green);
-				let n3 = self
-					.get_network(c.id, TerminalId::input(WireColour::Red))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				let n4 = self
-					.get_network(c.id, TerminalId::input(WireColour::Green))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				assert_eq!(n1, n3);
-				assert_eq!(n2, n4);
-			}
-			if ld_comb.is_arithmetic() || ld_comb.is_decider() {
-				let n1 = ld.get_fanout_network(c.logic, WireColour::Red);
-				let n2 = ld.get_fanout_network(c.logic, WireColour::Green);
-				let n3 = self
-					.get_network(c.id, TerminalId::output_combinator(WireColour::Red))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				let n4 = self
-					.get_network(c.id, TerminalId::output_combinator(WireColour::Green))
-					.iter()
-					.map(|(coid, _)| self.nodes[coid.0].logic)
-					.collect();
-				assert_eq!(n1, n3);
-				assert_eq!(n2, n4);
+				self.terminal_id_to_direction_colour(wire.node1_id, wire.terminal1_id, logd)
+			};
+
+			let logd_wires = logd.get_wire_network_on_cell(node.logic, colour, dir1);
+			let phyd_wires = &wire_groups[membership[wire.id.0].expect("Membership unknown")];
+			let phy_connections: HashS<(PhyId, TerminalId)> = phyd_wires
+				.iter()
+				.flat_map(|wire_id| {
+					//
+					let wire = &self.wires[wire_id.0];
+					[
+						(wire.node1_id, wire.terminal1_id),
+						(wire.node2_id, wire.terminal2_id),
+					]
+				})
+				.filter(|(id, _)| !self.nodes[id.0].is_pole())
+				.collect();
+			let logd_connections: HashS<(NodeId, Direction)> = logd_wires
+				.iter()
+				.flat_map(|wire_id| {
+					//
+					let node = logd.get_node(*wire_id);
+					node.iter_fanin(colour)
+						.map(|x| (*x, Direction::Output))
+						.chain(node.iter_fanout(colour).map(|x| (*x, Direction::Input)))
+				})
+				.collect();
+			assert_eq!(phy_connections.len(), logd_connections.len());
+			for (phy_id, terminal) in &phy_connections {
+				let logd_id = self.nodes[phy_id.0].logic;
+				let (dir, _) = self.terminal_id_to_direction_colour(*phy_id, *terminal, logd);
+				if !logd_connections.contains(&(logd_id, dir)) {
+					println!("{:?}", phy_connections);
+					println!("{:?}", logd_connections);
+					panic!("Physical design has a connection the logical design does not!");
+				}
 			}
 		}
-		 */
+	}
+
+	fn get_wire_networks(&self) -> (Vec<Vec<WireId>>, Vec<Option<usize>>) {
+		let mut membership = vec![None; self.wires.len()];
+		let mut groups = vec![];
+		let mut index: HashM<(PhyId, TerminalId), Vec<WireId>> = hash_map();
+		for wire in &self.wires {
+			let key = (wire.node1_id, wire.terminal1_id);
+			index.entry(key).or_default().push(wire.id);
+			let key = (wire.node2_id, wire.terminal2_id);
+			index.entry(key).or_default().push(wire.id);
+		}
+		#[cfg(false)]
+		for i in 0..self.nodes.len() {
+			for j in 1..=4 {
+				match index.entry((PhyId(i), TerminalId(j))) {
+					std::collections::hash_map::Entry::Occupied(entry) => {
+						//
+						println!(
+							"{:?} -> {:?}",
+							entry.key(),
+							entry.get().iter().map(|x| x.0).collect_vec()
+						);
+					},
+					std::collections::hash_map::Entry::Vacant(_) => {},
+				}
+			}
+		}
+		for wire in &self.wires {
+			if membership[wire.id.0].is_some() {
+				continue;
+			}
+			let mut stack = vec![wire.id];
+			let group_id = Some(groups.len());
+			groups.push(vec![]);
+			while !stack.is_empty() {
+				let wire_id = stack.pop().unwrap();
+				let wire = &self.wires[wire_id.0];
+				if membership[wire_id.0].is_some() {
+					continue;
+				}
+				membership[wire_id.0] = group_id;
+				groups[group_id.unwrap()].push(wire_id);
+				for &other_wire in &index[&(wire.node1_id, wire.terminal1_id)] {
+					if other_wire == wire_id {
+						continue;
+					}
+					assert!(
+						membership[other_wire.0].is_none() || membership[other_wire.0] == group_id,
+						"Should only have one group at this point"
+					);
+					if membership[other_wire.0].is_some() {
+						continue;
+					}
+					stack.push(other_wire);
+				}
+				for &other_wire in &index[&(wire.node2_id, wire.terminal2_id)] {
+					if other_wire == wire_id {
+						continue;
+					}
+					assert!(
+						membership[other_wire.0].is_none() || membership[other_wire.0] == group_id,
+						"Should only have one group at this point"
+					);
+					if membership[other_wire.0].is_some() {
+						continue;
+					}
+					stack.push(other_wire);
+				}
+			}
+		}
+		(groups, membership)
+	}
+
+	fn terminal_id_to_direction_colour(
+		&self,
+		id: PhyId,
+		terminal: TerminalId,
+		logd: &LogicalDesign,
+	) -> (Direction, WireColour) {
+		let node = &self.nodes[id.0];
+		let logd_node = logd.get_node(node.logic);
+		match logd_node.function {
+			NodeFunction::Arithmetic { .. } | NodeFunction::Decider { .. } => {
+				if terminal == TerminalId::input(WireColour::Red)
+					|| terminal == TerminalId::input(WireColour::Green)
+				{
+					if terminal == TerminalId::input(WireColour::Red) {
+						(Direction::Input, WireColour::Red)
+					} else {
+						(Direction::Input, WireColour::Green)
+					}
+				} else {
+					if terminal == TerminalId::output_combinator(WireColour::Red) {
+						(Direction::Output, WireColour::Red)
+					} else {
+						(Direction::Output, WireColour::Green)
+					}
+				}
+			},
+			NodeFunction::Constant { .. } => {
+				let colour = if terminal == TerminalId::output_constant(WireColour::Red) {
+					WireColour::Red
+				} else {
+					WireColour::Green
+				};
+				(Direction::Output, colour)
+			},
+			NodeFunction::DisplayPanel { .. } | NodeFunction::Lamp { .. } => {
+				let colour = if terminal == TerminalId::input(WireColour::Red) {
+					WireColour::Red
+				} else {
+					WireColour::Green
+				};
+				(Direction::Input, colour)
+			},
+			NodeFunction::WireSum(..) => unreachable!(),
+		}
 	}
 
 	fn get_bfs_order(coid: usize, connections: &Vec<Vec<usize>>) -> Vec<usize> {
@@ -2107,7 +2103,9 @@ impl PhysicalDesign {
 	fn route_nets(&mut self, logical: &LogicalDesign) -> bool {
 		let mut success = true;
 		let nets = Netlist::compute_networks(logical);
+		let mut _net_id = 0;
 		for net in nets.networks {
+			_net_id += 1;
 			let terminals = net
 				.fanin
 				.iter()
@@ -2117,30 +2115,6 @@ impl PhysicalDesign {
 			let mut connected_group_count = 0;
 			let mut connected_map: Vec<Option<usize>> = vec![None; terminals.len()];
 			let mut cache = RouteCache::default();
-			for (idx_1, (dir_1, node_1)) in terminals.iter().enumerate() {
-				if connected_map[idx_1].is_some() {
-					continue;
-				}
-				for (idx_2, (dir_2, node_2)) in terminals.iter().enumerate() {
-					if idx_1 == idx_2 {
-						continue;
-					}
-					if connected_map[idx_1] == connected_map[idx_2] {
-						continue;
-					}
-					if !self.close_enough_to_connect(logical, *node_1, *node_2) {
-						continue;
-					}
-					self.connect_wire2(*dir_1, *node_1, *dir_2, *node_2, net.colour, logical);
-					if connected_map[idx_2].is_some() {
-						connected_map[idx_1] = connected_map[idx_2];
-						break;
-					}
-					connected_group_count += 1;
-					connected_map[idx_1] = Some(connected_group_count);
-					connected_map[idx_2] = Some(connected_group_count);
-				}
-			}
 			for v in connected_map.iter_mut() {
 				if v.is_none() {
 					connected_group_count += 1;
@@ -2266,6 +2240,14 @@ impl PhysicalDesign {
 		logical: &LogicalDesign,
 	) {
 		path.reverse();
+		let path = path;
+		for i in 1..path.len() {
+			let p1 = path[i - 1];
+			let p2 = path[i];
+			let dx = p2.0 - p1.0;
+			let dy = p2.1 - p1.1;
+			assert!(((dx * dx + dy * dy) as f64).sqrt() <= 11.0);
+		}
 		let group_1 = connected_map[idx_1];
 		let group_2 = connected_map[idx_2];
 		// find closest PhyId to path[end]
@@ -2292,9 +2274,9 @@ impl PhysicalDesign {
 			.min_by(|(left, _), (right, _)| {
 				let comb_left = self.nodes[left.0].position;
 				let comb_right = self.nodes[right.0].position;
-				let dist_left = distance_diff(&(end_pole.0 as f64, end_pole.1 as f64), &comb_left);
-				let dist_right =
-					distance_diff(&(end_pole.0 as f64, end_pole.1 as f64), &comb_right);
+				let end_pole_pos = (end_pole.0 as f64, end_pole.1 as f64);
+				let dist_left = distance_diff(&end_pole_pos, &comb_left);
+				let dist_right = distance_diff(&end_pole_pos, &comb_right);
 				dist_left.partial_cmp(&dist_right).unwrap()
 			})
 			.unwrap();
@@ -2352,6 +2334,10 @@ impl PhysicalDesign {
 				),
 				terminal2_id: TerminalId::input(colour),
 			});
+			let p1 = self.nodes[attachment_2.0 .0].position;
+			let p2 = self.nodes[poles[poles.len() - 1].0].position;
+			let ds = distance_diff(&p1, &p2);
+			assert!(ds <= 11.0);
 		}
 		for pole in poles {
 			cache
@@ -2475,7 +2461,7 @@ impl PhysicalDesign {
 				for pos in neig3 {
 					b.push(pos);
 				}
-				for pole_id in cache.existing_poles.entry(group_1.unwrap()).or_default() {
+				for pole_id in cache.existing_poles.entry(group_2.unwrap()).or_default() {
 					let pole = &self.nodes[pole_id.0];
 					let neig_pole = self.get_neighbors(
 						&SpaceIndex(pole.position.0 as usize, pole.position.1 as usize),
@@ -2548,6 +2534,100 @@ impl PhysicalDesign {
 			logical,
 		);
 		Ok(())
+	}
+
+	pub(crate) fn build_copper_network(&self) -> Vec<Vec<PhyId>> {
+		//let mut power_coverage: Arr2<bool> =
+		//	Arr2::new([self.global_space.dims().0, self.global_space.dims().1]);
+		let mut all_neighbours = vec![vec![]; self.n_nodes()];
+		let mut rng = rand::rng();
+		for x in 0..self.global_space.dims().0 {
+			for y in 0..self.global_space.dims().1 {
+				if self.global_space[(x, y)] == PhyId::default() {
+					continue;
+				}
+				let id = self.global_space[(x, y)];
+				let node = &self.nodes[id.0];
+				if !node.is_pole() {
+					continue;
+				}
+				let mut potential_neighbors = vec![];
+				let spec = node.hop_type.wire_hop_spec();
+				for i in -spec.reach as usize..=spec.reach as usize {
+					for j in -spec.reach as usize..=spec.reach as usize {
+						if !self.global_space.index_good((x + i, y + j)) {
+							continue;
+						}
+						let dist_sq = (i * i + j * j) as f64;
+						if dist_sq > spec.reach * spec.reach {
+							continue;
+						}
+						let id2 = self.global_space[(x + i, y + j)];
+						if id2 == PhyId::default() {
+							continue;
+						}
+						let node2 = &self.nodes[id2.0];
+						let spec2 = node2.hop_type.wire_hop_spec();
+						if !node2.is_pole() {
+							continue;
+						}
+						let dist_sq2 = (i * i + j * j) as f64;
+						if dist_sq2 > spec2.reach * spec2.reach {
+							continue;
+						}
+						potential_neighbors.push((id2, dist_sq));
+					}
+				}
+				//potential_neighbors.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+				potential_neighbors.shuffle(&mut rng);
+				all_neighbours[id.0] = potential_neighbors
+					.iter()
+					.map(|x| x.0)
+					.unique()
+					.collect_vec();
+			}
+		}
+
+		let mut ret = vec![vec![]; self.n_nodes()];
+		let mut seen = vec![false; self.n_nodes()];
+		while seen
+			.iter()
+			.enumerate()
+			.any(|(idx, x)| !*x && self.nodes[idx].is_pole())
+		{
+			let mut queue = all_neighbours
+				.iter()
+				.enumerate()
+				.find(|x| !x.1.is_empty() && !seen[x.0])
+				.map(|(idx, _)| (PhyId(idx), PhyId::default()))
+				.into_iter()
+				.collect_vec();
+			loop {
+				let (id, last) = if let Some(x) = queue.pop() {
+					x
+				} else {
+					break;
+				};
+				if seen[id.0] {
+					continue;
+				}
+				seen[id.0] = true;
+				if last != PhyId::default() {
+					ret[id.0].push(last);
+					ret[last.0].push(id);
+				}
+				let mut counter = 0;
+				for x in all_neighbours[id.0].iter() {
+					if seen[x.0] {
+						continue;
+					}
+					queue.push((*x, id));
+					counter += 1;
+				}
+			}
+		}
+		ret
 	}
 
 	fn get_neighbors(&self, index: &SpaceIndex, _goal: &SpaceIndex) -> SpaceIter {
@@ -2678,6 +2758,34 @@ impl PhysicalDesign {
 			.unwrap();
 		Ok(phy_id)
 	}
+
+	pub(crate) fn is_pole(&self, id: PhyId) -> bool {
+		self.nodes[id.0].is_pole()
+	}
+
+	fn make_assertions(&self, _logical: &LogicalDesign) {
+		let mut failed = false;
+		for wire in &self.wires {
+			let id1 = wire.node1_id.0;
+			let id2 = wire.node2_id.0;
+			let node1 = &self.nodes[id1];
+			let node2 = &self.nodes[id2];
+			if node1.id != wire.node1_id {
+				println!("Mismatch for {id1:?}, {id2:?} and {wire:?}");
+				failed = true;
+			}
+			if node2.id != wire.node2_id {
+				println!("Mismatch for {id1:?}, {id2:?} and {wire:?}");
+				failed = true;
+			}
+			let ds = distance_diff(&node1.position, &node2.position);
+			if ds > 11.0 {
+				println!("Wire too long for {id1:?}, {id2:?} and {wire:?}: ds = {ds}");
+				failed = true;
+			}
+		}
+		assert!(!failed, "Design failed assertions");
+	}
 }
 
 pub(crate) fn calculate_minimum_partition_dim(
@@ -2783,8 +2891,7 @@ impl<'iter> Topology<'iter, PhyId, SpaceIndex> for PhysicalDesign {
 		let dx = b.0.abs_diff(a.0) as f32;
 		let dy = b.1.abs_diff(a.1) as f32;
 		let dist = (dx * dx + dy * dy).sqrt();
-		//((dist + 4.5) / 9.0).round()
-		1.0
+		1.0 + dist / 100.0
 	}
 
 	fn heuristic(&self, a: &SpaceIndex, b: &SpaceIndex) -> f32 {

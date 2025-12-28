@@ -122,11 +122,11 @@ Terminal = {
 
 ---@class EnsembleAPI
 ---@field freeze_and_place fun(self: EnsembleAPI, name: string, design: PhysicalDesignAPI, x: integer, y: integer)
----@field add_decider fun(self: EnsembleAPI, x: integer, y: integer): Decider
----@field add_constant fun(self: EnsembleAPI, x: integer, y: integer, sigs: (Signal|string)[], counts: integer[]): Constant
----@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
----@field add_lamp fun(self: EnsembleAPI, x: integer, y: integer, expr: DeciderExpr): Lamp
----@field add_display_panel fun(self: EnsembleAPI, x: integer, y: integer): DisplayPanel
+---@field add_decider fun(self: EnsembleAPI, x: integer, y: integer): Decider|nil
+---@field add_constant fun(self: EnsembleAPI, x: integer, y: integer, sigs: (Signal|string)[], counts: integer[]): Constant|nil
+---@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic|nil
+---@field add_lamp fun(self: EnsembleAPI, x: integer, y: integer, expr: DeciderExpr): Lamp|nil
+---@field add_display_panel fun(self: EnsembleAPI, x: integer, y: integer): DisplayPanel|nil
 ---@field make_svg fun(self: EnsembleAPI, filename: string)
 ---@field new_simulation fun(self: EnsembleAPI): SimStateAPI
 ---@field find_out_port fun(self: EnsembleAPI, name: string): Lamp|nil

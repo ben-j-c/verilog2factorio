@@ -165,7 +165,7 @@ impl BitSliceOps for Vec<Bit> {
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitId(pub u64);
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
 	Input,
@@ -697,7 +697,7 @@ impl<'de> Deserialize<'de> for Cell {
 			"v2f_shl" => ImplementableOp::Shl,
 			"v2f_sshl" => ImplementableOp::Shl,
 			"v2f_sshr" => ImplementableOp::Sshr,
-			"v2f_srl" => ImplementableOp::Srl,
+			"v2f_shr" => ImplementableOp::Srl,
 			"v2f_mul" => ImplementableOp::Mul,
 			"v2f_div" => ImplementableOp::Div,
 			"v2f_mod" => ImplementableOp::Mod,
