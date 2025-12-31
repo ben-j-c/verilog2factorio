@@ -223,8 +223,8 @@ impl LuaUserData for PhysicalEnsembleAPI {
 				usize,
 				LuaAnyUserData,
 				Signal,
-				i32,
-				i32,
+				Option<i32>,
+				Option<i32>,
 			)| {
 				if !this
 					.root
@@ -235,6 +235,8 @@ impl LuaUserData for PhysicalEnsembleAPI {
 				{
 					return Ok(None);
 				}
+				let net_left_v = net_left_v.unwrap_or(3);
+				let net_right_v = net_right_v.unwrap_or(3);
 				let expr = expr.borrow::<ArithmeticExpression>()?;
 				let net_left = (net_left_v & 1 > 0, net_left_v & 2 > 0);
 				let net_right = (net_right_v & 1 > 0, net_right_v & 2 > 0);

@@ -22,7 +22,7 @@ digraph CheckedDesign {
 9"]
   n13[shape=box,label="$8
 v2f_pmux"]
-  n16[shape=box,label="$168
+  n14[shape=box,label="$170
 $sop"]
   n19[shape=rarrow,label="sel_i
 0"]
@@ -112,41 +112,41 @@ S7"]
 v2f_pmux
 40
 Y"]
-  n61[shape=larrow,label="$168
+  n55[shape=larrow,label="$170
 $sop
 43
 A0"]
-  n62[shape=larrow,label="$168
+  n56[shape=larrow,label="$170
 $sop
 43
 A1"]
-  n63[shape=larrow,label="$168
+  n57[shape=larrow,label="$170
 $sop
 43
 A2"]
-  n64[shape=rarrow,label="$168
+  n58[shape=rarrow,label="$170
 $sop
 42
 Y"]
-  n81[shape=box,label="$swizzle"]
-  n82[shape=rarrow,label="$swizzle
+  n77[shape=box,label="$swizzle"]
+  n78[shape=rarrow,label="$swizzle
 45
 Y"]
-  n83[shape=larrow,label="$swizzle
+  n79[shape=larrow,label="$swizzle
 48
 A"]
-  n84[shape=box,label="$swizzle"]
-  n85[shape=rarrow,label="$swizzle
+  n80[shape=box,label="$swizzle"]
+  n81[shape=rarrow,label="$swizzle
 49
 Y"]
-  n86[shape=larrow,label="$swizzle
+  n82[shape=larrow,label="$swizzle
 50
 A"]
-  n87[shape=box,label="$swizzle"]
-  n88[shape=rarrow,label="$swizzle
+  n83[shape=box,label="$swizzle"]
+  n84[shape=rarrow,label="$swizzle
 51
 Y"]
-  n89[shape=larrow,label="$swizzle
+  n85[shape=larrow,label="$swizzle
 54
 A"]
   n0 -> n19
@@ -159,10 +159,10 @@ A"]
   n7 -> n26
   n8 -> n27
   n13 -> n54
-  n16 -> n64
-  n19 -> n83 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n86 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n89 [label="wooden-chest(0)",syle=bold,color=blue]
+  n14 -> n58
+  n19 -> n79 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n82 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n85 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n46 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n47 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n48 [label="wooden-chest(0)",syle=bold,color=blue]
@@ -196,17 +196,17 @@ A"]
   n52 -> n13
   n53 -> n13
   n54 -> n28 [label="express-underground-belt(9)",syle=bold,color=blue]
-  n61 -> n16
-  n62 -> n16
-  n63 -> n16
-  n64 -> n53 [label="express-underground-belt(9)",syle=bold,color=blue]
-  n81 -> n82
-  n82 -> n61 [label="wooden-chest(0)",syle=bold,color=blue]
-  n83 -> n81
-  n84 -> n85
-  n85 -> n62 [label="iron-chest(1)",syle=bold,color=blue]
-  n86 -> n84
-  n87 -> n88
-  n88 -> n63 [label="steel-chest(2)",syle=bold,color=blue]
-  n89 -> n87
+  n55 -> n14
+  n56 -> n14
+  n57 -> n14
+  n58 -> n53 [label="express-underground-belt(9)",syle=bold,color=blue]
+  n77 -> n78
+  n78 -> n55 [label="wooden-chest(0)",syle=bold,color=blue]
+  n79 -> n77
+  n80 -> n81
+  n81 -> n56 [label="iron-chest(1)",syle=bold,color=blue]
+  n82 -> n80
+  n83 -> n84
+  n84 -> n57 [label="steel-chest(2)",syle=bold,color=blue]
+  n85 -> n83
 }

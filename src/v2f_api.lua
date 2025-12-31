@@ -3,7 +3,7 @@
 ---@field description string
 ---@field add_decider fun(self: LogicalDesignAPI): Decider
 ---@field add_constant fun(self: LogicalDesignAPI, sigs: (Signal|string)[], counts: integer[]): Constant
----@field add_arithmetic fun(self: LogicalDesignAPI, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic
+---@field add_arithmetic fun(self: LogicalDesignAPI, expr: ArithmeticExpr, out: Signal, network_left: Network|nil, network_right: Network|nil): Arithmetic
 ---@field add_lamp fun(self: LogicalDesignAPI, expr: DeciderExpr): Lamp
 ---@field add_display_panel fun(self: LogicalDesignAPI): DisplayPanel
 ---@field print fun(self: LogicalDesignAPI)
@@ -47,11 +47,13 @@
 ---@field add_condition fun(self: Decider, row: DeciderRowConjDisj, expr: DeciderExpr, network_left: Network, network_right: Network)
 ---@field add_output fun(self: Decider, sig: Signal|string, constant_or_use_input_count: integer|nil, network: Network)
 ---@field signals fun(self: Decider): Signal[]
+---@field set_description fun(self: Decider, description: string)
 
 ---@class Arithmetic
 ---@field input TerminalSide
 ---@field output TerminalSide
 ---@field signals fun(self: Arithmetic): Signal[]
+---@field set_description fun(self: Arithmetic, description: string)
 
 ---@class Lamp
 ---@field input TerminalSide
@@ -67,6 +69,7 @@
 ---@field set_ith_output_count fun(self: Constant, idx: integer, value: integer)
 ---@field set_enabled fun(self: Constant, status: boolean)
 ---@field signals fun(self: Constant): Signal[]
+---@field set_description fun(self: Constant, description: string)
 
 ---@class Terminal
 ---@field connect fun(self: Terminal, other: TerminalSide)
@@ -124,7 +127,7 @@ Terminal = {
 ---@field freeze_and_place fun(self: EnsembleAPI, name: string, design: PhysicalDesignAPI, x: integer, y: integer)
 ---@field add_decider fun(self: EnsembleAPI, x: integer, y: integer): Decider|nil
 ---@field add_constant fun(self: EnsembleAPI, x: integer, y: integer, sigs: (Signal|string)[], counts: integer[]): Constant|nil
----@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network, network_right: Network): Arithmetic|nil
+---@field add_arithmetic fun(self: EnsembleAPI, x: integer, y: integer, expr: ArithmeticExpr, out: Signal, network_left: Network|nil, network_right: Network|nil): Arithmetic|nil
 ---@field add_lamp fun(self: EnsembleAPI, x: integer, y: integer, expr: DeciderExpr): Lamp|nil
 ---@field add_display_panel fun(self: EnsembleAPI, x: integer, y: integer): DisplayPanel|nil
 ---@field make_svg fun(self: EnsembleAPI, filename: string)

@@ -1626,7 +1626,7 @@ impl PhysicalDesign {
 				})
 				.filter(|(id, _)| !self.nodes[id.0].is_pole())
 				.collect();
-			let logd_connections: HashS<(NodeId, Direction)> = logd_wires
+			let mut logd_connections: HashS<(NodeId, Direction)> = logd_wires
 				.iter()
 				.flat_map(|wire_id| {
 					//
@@ -1645,7 +1645,9 @@ impl PhysicalDesign {
 					println!("{:?}", logd_connections);
 					panic!("Physical design has a connection the logical design does not!");
 				}
+				logd_connections.remove(&(logd_id, dir));
 			}
+			assert!(logd_connections.is_empty());
 		}
 	}
 
@@ -2537,8 +2539,6 @@ impl PhysicalDesign {
 	}
 
 	pub(crate) fn build_copper_network(&self) -> Vec<Vec<PhyId>> {
-		//let mut power_coverage: Arr2<bool> =
-		//	Arr2::new([self.global_space.dims().0, self.global_space.dims().1]);
 		let mut all_neighbours = vec![vec![]; self.n_nodes()];
 		let mut rng = rand::rng();
 		for x in 0..self.global_space.dims().0 {
@@ -2591,6 +2591,7 @@ impl PhysicalDesign {
 
 		let mut ret = vec![vec![]; self.n_nodes()];
 		let mut seen = vec![false; self.n_nodes()];
+		let mut n_neighbors = vec![0; self.n_nodes()];
 		while seen
 			.iter()
 			.enumerate()
@@ -2609,18 +2610,20 @@ impl PhysicalDesign {
 				} else {
 					break;
 				};
+				if last != PhyId::default() && n_neighbors[last.0] < 4 {
+					ret[id.0].push(last);
+					ret[last.0].push(id);
+					n_neighbors[id.0] += 1;
+					n_neighbors[last.0] += 1;
+				}
 				if seen[id.0] {
 					continue;
 				}
 				seen[id.0] = true;
-				if last != PhyId::default() {
-					ret[id.0].push(last);
-					ret[last.0].push(id);
-				}
 				let mut counter = 0;
 				for x in all_neighbours[id.0].iter() {
-					if seen[x.0] {
-						continue;
+					if counter > 2 {
+						break;
 					}
 					queue.push((*x, id));
 					counter += 1;

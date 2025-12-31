@@ -288,3 +288,215 @@ module v2f_rule_adff_narrow(CLK, ARST, EN, D, Q);
 		end
 	endgenerate
 endmodule
+
+(* techmap_celltype = "$lt" *)
+module v2f_rule_lt_signed_expand(A, B, Y);
+	parameter A_SIGNED = 1;
+	parameter B_SIGNED = 1;
+	parameter A_WIDTH = 32;
+	parameter B_WIDTH = 32;
+	parameter Y_WIDTH = 1;
+
+	wire _TECHMAP_FAIL_ =
+		A_WIDTH == 32 && B_WIDTH == 32
+		|| Y_WIDTH != 1
+		|| A_SIGNED != B_SIGNED;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output Y;
+
+	localparam A_EXT = 32 - A_WIDTH;
+	localparam B_EXT = 32 - B_WIDTH;
+
+	generate
+		wire [31:0] A_internal;
+		wire [31:0] B_internal;
+		if (A_WIDTH < 32) begin
+			if (A_SIGNED)
+				assign A_internal = {{A_EXT{A[A_WIDTH-1]}}, A};
+			else
+				assign A_internal = {{A_EXT{1'b0}}, A};
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end
+			else
+				assign B_internal = B;
+		end else begin
+			assign A_internal = A;
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end else begin
+				assign B_internal = B;
+			end
+		end
+		if (A_SIGNED && B_SIGNED)
+			assign Y = $signed(A_internal) < $signed(B_internal);
+		else
+			assign Y = A_internal < B_internal;
+	endgenerate
+endmodule
+
+(* techmap_celltype = "$gt" *)
+module v2f_rule_gt_signed_expand(A, B, Y);
+	parameter A_SIGNED = 1;
+	parameter B_SIGNED = 1;
+	parameter A_WIDTH = 32;
+	parameter B_WIDTH = 32;
+	parameter Y_WIDTH = 1;
+
+	wire _TECHMAP_FAIL_ =
+		A_WIDTH == 32 && B_WIDTH == 32
+		|| Y_WIDTH != 1
+		|| A_SIGNED != B_SIGNED;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output Y;
+
+	localparam A_EXT = 32 - A_WIDTH;
+	localparam B_EXT = 32 - B_WIDTH;
+
+	generate
+		wire [31:0] A_internal;
+		wire [31:0] B_internal;
+		if (A_WIDTH < 32) begin
+			if (A_SIGNED)
+				assign A_internal = {{A_EXT{A[A_WIDTH-1]}}, A};
+			else
+				assign A_internal = {{A_EXT{1'b0}}, A};
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end
+			else
+				assign B_internal = B;
+		end else begin
+			assign A_internal = A;
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end else begin
+				assign B_internal = B;
+			end
+		end
+		if (A_SIGNED && B_SIGNED)
+			assign Y = $signed(A_internal) > $signed(B_internal);
+		else
+			assign Y = A_internal > B_internal;
+	endgenerate
+endmodule
+
+(* techmap_celltype = "$le" *)
+module v2f_rule_lt_signed_expand(A, B, Y);
+	parameter A_SIGNED = 1;
+	parameter B_SIGNED = 1;
+	parameter A_WIDTH = 32;
+	parameter B_WIDTH = 32;
+	parameter Y_WIDTH = 1;
+
+	wire _TECHMAP_FAIL_ =
+		A_WIDTH == 32 && B_WIDTH == 32
+		|| Y_WIDTH != 1
+		|| A_SIGNED != B_SIGNED;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output Y;
+
+	localparam A_EXT = 32 - A_WIDTH;
+	localparam B_EXT = 32 - B_WIDTH;
+
+	generate
+		wire [31:0] A_internal;
+		wire [31:0] B_internal;
+		if (A_WIDTH < 32) begin
+			if (A_SIGNED)
+				assign A_internal = {{A_EXT{A[A_WIDTH-1]}}, A};
+			else
+				assign A_internal = {{A_EXT{1'b0}}, A};
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end
+			else
+				assign B_internal = B;
+		end else begin
+			assign A_internal = A;
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end else begin
+				assign B_internal = B;
+			end
+		end
+		if (A_SIGNED && B_SIGNED)
+			assign Y = $signed(A_internal) <= $signed(B_internal);
+		else
+			assign Y = A_internal <= B_internal;
+	endgenerate
+endmodule
+
+(* techmap_celltype = "$ge" *)
+module v2f_rule_gt_signed_expand(A, B, Y);
+	parameter A_SIGNED = 1;
+	parameter B_SIGNED = 1;
+	parameter A_WIDTH = 32;
+	parameter B_WIDTH = 32;
+	parameter Y_WIDTH = 1;
+
+	wire _TECHMAP_FAIL_ =
+		A_WIDTH == 32 && B_WIDTH == 32
+		|| Y_WIDTH != 1
+		|| A_SIGNED != B_SIGNED;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output Y;
+
+	localparam A_EXT = 32 - A_WIDTH;
+	localparam B_EXT = 32 - B_WIDTH;
+
+	generate
+		wire [31:0] A_internal;
+		wire [31:0] B_internal;
+		if (A_WIDTH < 32) begin
+			if (A_SIGNED)
+				assign A_internal = {{A_EXT{A[A_WIDTH-1]}}, A};
+			else
+				assign A_internal = {{A_EXT{1'b0}}, A};
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end
+			else
+				assign B_internal = B;
+		end else begin
+			assign A_internal = A;
+			if (B_WIDTH < 32) begin
+				if (B_SIGNED)
+					assign B_internal = {{B_EXT{B[B_WIDTH-1]}}, B};
+				else
+					assign B_internal = {{B_EXT{1'b0}}, B};
+			end else begin
+				assign B_internal = B;
+			end
+		end
+		if (A_SIGNED && B_SIGNED)
+			assign Y = $signed(A_internal) >= $signed(B_internal);
+		else
+			assign Y = A_internal >= B_internal;
+	endgenerate
+endmodule

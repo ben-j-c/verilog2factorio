@@ -348,14 +348,14 @@ impl SimState {
 
 	fn execute_arith_op(left: i32, op: ArithmeticOperator, right: i32) -> i32 {
 		match op {
-			ArithmeticOperator::Mult => left.wrapping_mul(right),
+			ArithmeticOperator::Mult => left.overflowing_mul(right).0,
 			ArithmeticOperator::Div => left.checked_div(right).unwrap_or(0),
-			ArithmeticOperator::Add => left.wrapping_add(right),
-			ArithmeticOperator::Sub => left.wrapping_sub(right),
+			ArithmeticOperator::Add => left.overflowing_add(right).0,
+			ArithmeticOperator::Sub => left.overflowing_sub(right).0,
 			ArithmeticOperator::Mod => left.checked_rem(right).unwrap_or(0),
 			ArithmeticOperator::Exp => left.overflowing_pow(right as u32).0,
-			ArithmeticOperator::Shl => left.shl((right as u32) & 0x1F),
-			ArithmeticOperator::Sshr => left.shr((right as u32) & 0x1F),
+			ArithmeticOperator::Shl => left.overflowing_shl((right as u32) & 0x1F).0,
+			ArithmeticOperator::Sshr => left.overflowing_shr((right as u32) & 0x1F).0,
 			ArithmeticOperator::And => left.bitand(right),
 			ArithmeticOperator::Or => left.bitor(right),
 			ArithmeticOperator::Xor => left.bitxor(right),

@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="622" height="557"><rect x="0" y="0" width="622" height="557" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="560" height="500" fill="rgba(255,255,255,1)"></rect><rect x="33" y="407" width="20" height="20" fill="rgba(100,100,230,1)"><title>signal_2_1
+signal_2_1
 Outputs:
 	Red: []
 	Green: []
@@ -19,6 +20,7 @@ Outputs:
 Inputs:
 	Red: []
 	Green: []</title></rect><text x="131" y="439" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="121" y="473" width="20" height="20" fill="rgba(100,100,230,1)"><title>signal_2_2
+signal_2_2
 Outputs:
 	Red: []
 	Green: []

@@ -1,0 +1,43 @@
+read_verilog ./compare.v
+
+read_verilog -lib /home/ben/repo/verilog2factorio/v2flib/v2f_primitives.v
+hierarchy -libdir /home/ben/repo/verilog2factorio/v2flib  -check -top compare
+
+#coarse
+proc
+flatten -noscopeinfo
+opt_expr
+opt_clean
+check
+opt -nodffe -nosdff
+fsm
+opt
+wreduce
+peepopt
+opt_clean
+#share
+opt
+
+opt_mem_priority
+opt_mem_feedback
+memory_bmux2rom
+memory_dff
+opt_clean
+memory_share
+opt_mem_widen
+memory_memx
+opt_clean
+memory_collect
+
+opt_expr
+opt_merge -share_all -nomux
+opt_muxtree
+opt_reduce
+opt_merge -share_all
+#opt_share
+opt_dff -sat
+opt_clean
+opt_expr
+muxpack
+opt_clean
+write_json compare_rtl.json

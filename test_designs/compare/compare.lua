@@ -1,8 +1,10 @@
-name = "pmux"
+name = "compare"
 module = name
 module_file = "./" .. module .. ".v"
-vcd_file = "." .. name .. "_tb.vcd"
-delay = 6
+vcd_file = name .. "_tb.vcd"
+delay = 10
+
+print("starting " .. name)
 
 rtl = yosys_load_rtl(module_file, module)
 logd = yosys_map_rtl(rtl)
@@ -24,7 +26,7 @@ end
 sim = logd:new_simulation()
 if not sim:apply_vcd(vcd_file, inputs, outputs, delay, true) then
 	sim:save_svg(name .. "_failure.svg")
-	sim:inspect()
+	--sim:inspect()
 	error("apply vcd failed")
 end
 print(name .. " sim matches VCD")

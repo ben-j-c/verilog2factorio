@@ -579,6 +579,15 @@ impl UserData for Decider {
 				this.logd.clone(),
 			))
 		});
+		fields.add_field_method_get("signals", |_, this| {
+			let binding = this.logd.clone();
+			let logd = binding.write().unwrap();
+			Ok(logd
+				.get_output_signals(this.id)
+				.iter()
+				.copied()
+				.collect_vec())
+		});
 	}
 
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
@@ -638,14 +647,12 @@ impl UserData for Decider {
 				Ok(())
 			}
 		});
-		methods.add_method("signals", |_, this, _: ()| {
-			let binding = this.logd.clone();
-			let logd = binding.write().unwrap();
-			Ok(logd
-				.get_output_signals(this.id)
-				.iter()
-				.copied()
-				.collect_vec())
+		methods.add_method("set_description", |_, this, name: String| {
+			this.logd
+				.write()
+				.unwrap()
+				.set_description_node(this.id, name);
+			Ok(())
 		});
 	}
 }
@@ -662,9 +669,7 @@ impl UserData for Arithmetic {
 				this.logd.clone(),
 			))
 		});
-	}
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method("signals", |_, this, _: ()| {
+		fields.add_field_method_get("signals", |_, this| {
 			let binding = this.logd.clone();
 			let logd = binding.write().unwrap();
 			Ok(logd
@@ -672,6 +677,16 @@ impl UserData for Arithmetic {
 				.iter()
 				.copied()
 				.collect_vec())
+		});
+	}
+
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("set_description", |_, this, name: String| {
+			this.logd
+				.write()
+				.unwrap()
+				.set_description_node(this.id, name);
+			Ok(())
 		});
 	}
 }
@@ -684,6 +699,14 @@ impl UserData for Constant {
 				this.id,
 				this.logd.clone(),
 			))
+		});
+		fields.add_field_method_get("signals", |_, this| {
+			let binding = this.logd.clone();
+			let logd = binding.read().unwrap();
+			if logd.is_port(this.id).is_some() {
+				return Ok(logd.get_port_signal(this.id).into_iter().collect_vec());
+			}
+			Ok(vec![])
 		});
 	}
 
@@ -720,14 +743,12 @@ impl UserData for Constant {
 			Ok(())
 		});
 
-		methods.add_method("signals", |_, this, _: ()| {
-			let binding = this.logd.clone();
-			let logd = binding.read().unwrap();
-			Ok(logd
-				.get_output_signals(this.id)
-				.iter()
-				.copied()
-				.collect_vec())
+		methods.add_method("set_description", |_, this, name: String| {
+			this.logd
+				.write()
+				.unwrap()
+				.set_description_node(this.id, name);
+			Ok(())
 		});
 	}
 }
@@ -737,10 +758,7 @@ impl UserData for Lamp {
 		fields.add_field_method_get("input", |_, this| {
 			Ok(TerminalSide::Input(this.log_id, this.id, this.logd.clone()))
 		});
-	}
-
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method("signals", |_, this, _: ()| {
+		fields.add_field_method_get("signals", |_, this| {
 			let binding = this.logd.clone();
 			let logd = binding.read().unwrap();
 			if logd.is_port(this.id).is_some() {
@@ -749,6 +767,8 @@ impl UserData for Lamp {
 			Ok(vec![])
 		});
 	}
+
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {}
 }
 
 impl UserData for DisplayPanel {
@@ -802,10 +822,12 @@ impl UserData for LogicalDesignAPI {
 		});
 		methods.add_method(
 			"add_arithmetic",
-			|_, this, args: (AnyUserData, Signal, i32, i32)| {
+			|_, this, args: (AnyUserData, Signal, Option<i32>, Option<i32>)| {
 				let expr = args.0.borrow::<ArithmeticExpression>()?;
-				let net_left = (args.2 & 1 > 0, args.2 & 2 > 0);
-				let net_right = (args.3 & 1 > 0, args.3 & 2 > 0);
+				let net_left_v = args.2.unwrap_or(3);
+				let net_right_v = args.3.unwrap_or(3);
+				let net_left = (net_left_v & 1 > 0, net_left_v & 2 > 0);
+				let net_right = (net_right_v & 1 > 0, net_right_v & 2 > 0);
 				let out = args.1;
 				let id = this.logd.write().unwrap().add_arithmetic_with_net(
 					(expr.0, expr.1, expr.2),

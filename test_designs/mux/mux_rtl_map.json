@@ -29,7 +29,7 @@
         }
       },
       "cells": {
-        "$abc$159$auto$blifparse.cc:519:parse_blif$160": {
+        "$abc$161$auto$blifparse.cc:519:parse_blif$162": {
           "hide_name": 1,
           "type": "$sop",
           "parameters": {
@@ -48,7 +48,7 @@
             "Y": [ 104 ]
           }
         },
-        "$auto$flowmap.cc:1414:pack_cells$163": {
+        "$auto$flowmap.cc:1414:pack_cells$165": {
           "hide_name": 1,
           "type": "$lut",
           "parameters": {
@@ -131,27 +131,27 @@
         }
       },
       "netnames": {
-        "$abc$159$auto$blifparse.cc:586:parse_blif$161": {
+        "$abc$161$auto$blifparse.cc:586:parse_blif$163": {
           "hide_name": 1,
           "bits": [ 104 ],
           "attributes": {
           }
         },
-        "$abc$159$auto$wreduce.cc:514:run$13[0]": {
+        "$abc$161$auto$wreduce.cc:514:run$13[0]": {
           "hide_name": 1,
           "bits": [ 101 ],
           "attributes": {
             "src": "./mux.v:9.35-9.37"
           }
         },
-        "$abc$159$auto$wreduce.cc:514:run$14[0]": {
+        "$abc$161$auto$wreduce.cc:514:run$14[0]": {
           "hide_name": 1,
           "bits": [ 103 ],
           "attributes": {
             "src": "./mux.v:9.14-9.16"
           }
         },
-        "$abc$159$auto$wreduce.cc:514:run$15[0]": {
+        "$abc$161$auto$wreduce.cc:514:run$15[0]": {
           "hide_name": 1,
           "bits": [ 102 ],
           "attributes": {

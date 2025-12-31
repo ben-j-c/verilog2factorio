@@ -21,7 +21,7 @@
         }
       },
       "cells": {
-        "$abc$161$auto$blifparse.cc:519:parse_blif$162": {
+        "$abc$163$auto$blifparse.cc:519:parse_blif$164": {
           "hide_name": 1,
           "type": "$sop",
           "parameters": {
@@ -53,7 +53,7 @@
           "attributes": {
             "full_case": "00000000000000000000000000000001",
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:368.3-368.41"
+            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:376.3-376.41"
           },
           "port_directions": {
             "A": "input",
@@ -79,7 +79,7 @@
           "attributes": {
             "full_case": "00000000000000000000000000000001",
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:368.3-368.41"
+            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:376.3-376.41"
           },
           "port_directions": {
             "A": "input",
@@ -105,7 +105,7 @@
           "attributes": {
             "full_case": "00000000000000000000000000000001",
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:368.3-368.41"
+            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:376.3-376.41"
           },
           "port_directions": {
             "A": "input",
@@ -128,7 +128,7 @@
           "attributes": {
             "full_case": "00000000000000000000000000000001",
             "module_not_derived": "00000000000000000000000000000001",
-            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:382.3-382.48"
+            "src": "./pmux.v:0.0-0.0|./pmux.v:7.3-12.10|/home/ben/repo/verilog2factorio/techmap/v2f_techmap.v:390.3-390.48"
           },
           "port_directions": {
             "A": "input",
@@ -145,7 +145,7 @@
         }
       },
       "netnames": {
-        "$abc$161$procmux$9_CMP": {
+        "$abc$163$procmux$9_CMP": {
           "hide_name": 1,
           "bits": [ 68 ],
           "attributes": {

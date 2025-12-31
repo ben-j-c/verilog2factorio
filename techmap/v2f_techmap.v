@@ -269,7 +269,9 @@ module v2f_rule_gt (A, B, Y);
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
 		|| B_WIDTH > 32
 		|| A_SIGNED == 0 && A_WIDTH > 31
-		|| B_SIGNED == 0 && B_WIDTH > 31;
+		|| B_SIGNED == 0 && B_WIDTH > 31
+		|| A_SIGNED == 1 && A_WIDTH != 32
+		|| B_SIGNED == 1 && B_WIDTH != 32;
 	v2f_gt #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
@@ -289,7 +291,9 @@ module v2f_rule_lt (A, B, Y);
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
 		|| B_WIDTH > 32
 		|| A_SIGNED == 0 && A_WIDTH > 31
-		|| B_SIGNED == 0 && B_WIDTH > 31;
+		|| B_SIGNED == 0 && B_WIDTH > 31
+		|| A_SIGNED == 1 && A_WIDTH != 32
+		|| B_SIGNED == 1 && B_WIDTH != 32;
 	v2f_lt #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
@@ -309,7 +313,9 @@ module v2f_rule_ge (A, B, Y);
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
 		|| B_WIDTH > 32
 		|| A_SIGNED == 0 && A_WIDTH > 31
-		|| B_SIGNED == 0 && B_WIDTH > 31;
+		|| B_SIGNED == 0 && B_WIDTH > 31
+		|| A_SIGNED == 1 && A_WIDTH != 32
+		|| B_SIGNED == 1 && B_WIDTH != 32;
 	v2f_ge #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
@@ -329,7 +335,9 @@ module v2f_rule_le (A, B, Y);
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
 		|| B_WIDTH > 32
 		|| A_SIGNED == 0 && A_WIDTH > 31
-		|| B_SIGNED == 0 && B_WIDTH > 31;
+		|| B_SIGNED == 0 && B_WIDTH > 31
+		|| A_SIGNED == 1 && A_WIDTH != 32
+		|| B_SIGNED == 1 && B_WIDTH != 32;
 	v2f_le #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule

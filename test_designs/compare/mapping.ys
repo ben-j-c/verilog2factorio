@@ -1,0 +1,17 @@
+read_json compare_rtl.json
+techmap -autoproc -map /home/ben/repo/verilog2factorio/techmap/v2f_simplify.v;;
+muxpack
+techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
+techmap -dont_map $adff -dont_map $adffe -dont_map $dff -dont_map $dffe -dont_map $sdff -dont_map $sdffe
+abc -sop
+techmap -map /home/ben/repo/verilog2factorio/yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 10
+clean; opt_lut
+flowmap -maxlut 10
+opt -fast
+abc -fast
+abc -fast -lut 10
+opt -fast
+opt_lut
+opt_clean
+select compare
+write_json -selected compare_rtl_map.json
