@@ -6,7 +6,7 @@ digraph CheckedDesign {
 1"]
   n2[shape=box,label="q_o
 2"]
-  n3[shape=box,label="$164
+  n3[shape=box,label="$168
 $sop"]
   n5[shape=box,label="$8
 v2f_pmux"]
@@ -16,15 +16,15 @@ v2f_pmux"]
 1"]
   n10[shape=larrow,label="q_o
 21"]
-  n11[shape=larrow,label="$164
+  n11[shape=larrow,label="$168
 $sop
 4
 A0"]
-  n12[shape=larrow,label="$164
+  n12[shape=larrow,label="$168
 $sop
 4
 A1"]
-  n13[shape=rarrow,label="$164
+  n13[shape=rarrow,label="$168
 $sop
 3
 Y"]

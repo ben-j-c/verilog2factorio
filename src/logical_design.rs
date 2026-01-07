@@ -985,33 +985,35 @@ impl LogicalDesign {
 		let latch_1 = self.add_latch_arst_mem_cell(clk, arst);
 		let latch_2 = self.add_latch_arst_mem_cell(clk, arst);
 
-		let reset_emitter_2 = self.add_decider();
-		self.set_decider_inputs(reset_emitter_2, format!("{arst:?}[G] == 1"));
-		for i in 0..density {
-			let reset_value = reset_value[i];
-			self.add_decider_out_constant(
-				reset_emitter_2,
-				Signal::Id(i as i32),
-				reset_value,
-				NET_RED,
-			);
+		let needs_reset_emitter = reset_value.iter().any(|x| *x != 0);
+		if needs_reset_emitter {
+			let reset_emitter_2 = self.add_decider();
+			self.set_decider_inputs(reset_emitter_2, format!("{arst:?}[G] == 1"));
+			for i in 0..density {
+				let reset_value = reset_value[i];
+				self.add_decider_out_constant(
+					reset_emitter_2,
+					Signal::Id(i as i32),
+					reset_value,
+					NET_RED,
+				);
+			}
+			self.add_wire_red(vec![reset_emitter_2, latch_2.out_comb], vec![]);
+			self.add_wire_green(vec![], vec![reset_emitter_2, latch_2.in_comb]);
+			let reset_emitter_1 = self.add_decider();
+			self.set_decider_inputs(reset_emitter_1, format!("{arst:?}[G] == 1"));
+			for i in 0..density {
+				let reset_value = reset_value[i];
+				self.add_decider_out_constant(
+					reset_emitter_1,
+					Signal::Id(i as i32),
+					reset_value,
+					NET_RED,
+				);
+			}
+			self.add_wire_red(vec![reset_emitter_1, latch_1.out_comb], vec![]);
+			self.add_wire_green(vec![], vec![reset_emitter_1, latch_1.in_comb]);
 		}
-		self.add_wire_red(vec![reset_emitter_2, latch_2.out_comb], vec![]);
-		self.add_wire_green(vec![], vec![reset_emitter_2, latch_2.in_comb]);
-
-		let reset_emitter_1 = self.add_decider();
-		self.set_decider_inputs(reset_emitter_1, format!("{arst:?}[G] == 1"));
-		for i in 0..density {
-			let reset_value = reset_value[i];
-			self.add_decider_out_constant(
-				reset_emitter_1,
-				Signal::Id(i as i32),
-				reset_value,
-				NET_RED,
-			);
-		}
-		self.add_wire_red(vec![reset_emitter_1, latch_1.out_comb], vec![]);
-		self.add_wire_green(vec![], vec![reset_emitter_1, latch_1.in_comb]);
 
 		self.add_wire_red_simple(latch_1.out_comb, latch_2.in_comb);
 
@@ -1051,8 +1053,8 @@ impl LogicalDesign {
 			self.set_description_node(latch_2.out_comb, "latch_pos_out".to_owned());
 			self.set_description_node(latch_1.in_comb, "latch_neg_in".to_owned());
 			self.set_description_node(latch_1.out_comb, "latch_neg_out".to_owned());
-			self.set_description_node(reset_emitter_1, "reset_emitter_neg".to_owned());
-			self.set_description_node(reset_emitter_2, "reset_emitter_pos".to_owned());
+			//self.set_description_node(reset_emitter_1, "reset_emitter_neg".to_owned());
+			//self.set_description_node(reset_emitter_2, "reset_emitter_pos".to_owned());
 		}
 
 		MemoryCellConnections {

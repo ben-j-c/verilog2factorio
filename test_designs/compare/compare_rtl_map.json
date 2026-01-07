@@ -265,7 +265,7 @@
             "Y": [ 587 ]
           }
         },
-        "$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85": {
+        "$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -290,7 +290,7 @@
             "Y": [ 579 ]
           }
         },
-        "$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84": {
+        "$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -315,7 +315,7 @@
             "Y": [ 580 ]
           }
         },
-        "$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85": {
+        "$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -340,7 +340,7 @@
             "Y": [ 582 ]
           }
         },
-        "$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84": {
+        "$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -365,7 +365,7 @@
             "Y": [ 583 ]
           }
         },
-        "$techmap$lt$./compare.v:55$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$80": {
+        "$techmap$lt$./compare.v:55$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$84": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -390,7 +390,7 @@
             "Y": [ 585 ]
           }
         },
-        "$techmap$lt$./compare.v:56$9.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$79": {
+        "$techmap$lt$./compare.v:56$9.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$83": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -415,7 +415,7 @@
             "Y": [ 586 ]
           }
         },
-        "$techmap$lt$./compare.v:58$11.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$80": {
+        "$techmap$lt$./compare.v:58$11.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$84": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -440,7 +440,7 @@
             "Y": [ 588 ]
           }
         },
-        "$techmap$lt$./compare.v:59$12.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$79": {
+        "$techmap$lt$./compare.v:59$12.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:339$83": {
           "hide_name": 1,
           "type": "v2f_lt",
           "parameters": {
@@ -465,7 +465,7 @@
             "Y": [ 589 ]
           }
         },
-        "$techmap$techmap89$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap93$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -490,7 +490,7 @@
             "Y": [ 654, 655, 656, 657, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673, 674, 675, 676, 677, 678, 679, 680, 681, 682, 683, 684, 685 ]
           }
         },
-        "$techmap$techmap89$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap93$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -515,7 +515,7 @@
             "Y": [ 686, 687, 688, 689, 690, 691, 692, 693, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 716, 717 ]
           }
         },
-        "$techmap$techmap90$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap94$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -540,7 +540,7 @@
             "Y": [ 590, 591, 592, 593, 594, 595, 596, 597, 598, 599, 600, 601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 620, 621 ]
           }
         },
-        "$techmap$techmap90$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap94$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -565,7 +565,7 @@
             "Y": [ 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653 ]
           }
         },
-        "$techmap$techmap91$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap95$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -590,7 +590,7 @@
             "Y": [ 910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 921, 922, 923, 924, 925, 926, 927, 928, 929, 930, 931, 932, 933, 934, 935, 936, 937, 938, 939, 940, 941 ]
           }
         },
-        "$techmap$techmap91$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap95$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -615,7 +615,7 @@
             "Y": [ 942, 943, 944, 945, 946, 947, 948, 949, 950, 951, 952, 953, 954, 955, 956, 957, 958, 959, 960, 961, 962, 963, 964, 965, 966, 967, 968, 969, 970, 971, 972, 973 ]
           }
         },
-        "$techmap$techmap92$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap96$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -640,7 +640,7 @@
             "Y": [ 846, 847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858, 859, 860, 861, 862, 863, 864, 865, 866, 867, 868, 869, 870, 871, 872, 873, 874, 875, 876, 877 ]
           }
         },
-        "$techmap$techmap92$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap96$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -665,7 +665,7 @@
             "Y": [ 878, 879, 880, 881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901, 902, 903, 904, 905, 906, 907, 908, 909 ]
           }
         },
-        "$techmap$techmap93$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap97$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -690,7 +690,7 @@
             "Y": [ 782, 783, 784, 785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796, 797, 798, 799, 800, 801, 802, 803, 804, 805, 806, 807, 808, 809, 810, 811, 812, 813 ]
           }
         },
-        "$techmap$techmap93$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap97$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -715,7 +715,7 @@
             "Y": [ 814, 815, 816, 817, 818, 819, 820, 821, 822, 823, 824, 825, 826, 827, 828, 829, 830, 831, 832, 833, 834, 835, 836, 837, 838, 839, 840, 841, 842, 843, 844, 845 ]
           }
         },
-        "$techmap$techmap94$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87": {
+        "$techmap$techmap98$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -740,7 +740,7 @@
             "Y": [ 718, 719, 720, 721, 722, 723, 724, 725, 726, 727, 728, 729, 730, 731, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 742, 743, 744, 745, 746, 747, 748, 749 ]
           }
         },
-        "$techmap$techmap94$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88": {
+        "$techmap$techmap98$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92": {
           "hide_name": 1,
           "type": "v2f_add",
           "parameters": {
@@ -767,84 +767,84 @@
         }
       },
       "netnames": {
-        "$techmap$techmap89$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap93$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 654, 655, 656, 657, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673, 674, 675, 676, 677, 678, 679, 680, 681, 682, 683, 684, 685 ],
           "attributes": {
             "src": "./compare.v:50.18-50.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap89$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap93$lt$./compare.v:50$4.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 686, 687, 688, 689, 690, 691, 692, 693, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 716, 717 ],
           "attributes": {
             "src": "./compare.v:50.18-50.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90.16-90.32"
           }
         },
-        "$techmap$techmap90$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap94$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 590, 591, 592, 593, 594, 595, 596, 597, 598, 599, 600, 601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 620, 621 ],
           "attributes": {
             "src": "./compare.v:47.18-47.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap90$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap94$lt$./compare.v:47$1.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653 ],
           "attributes": {
             "src": "./compare.v:47.18-47.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90.16-90.32"
           }
         },
-        "$techmap$techmap91$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap95$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 921, 922, 923, 924, 925, 926, 927, 928, 929, 930, 931, 932, 933, 934, 935, 936, 937, 938, 939, 940, 941 ],
           "attributes": {
             "src": "./compare.v:52.18-52.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap91$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap95$techmap$lt$./compare.v:52$6.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 942, 943, 944, 945, 946, 947, 948, 949, 950, 951, 952, 953, 954, 955, 956, 957, 958, 959, 960, 961, 962, 963, 964, 965, 966, 967, 968, 969, 970, 971, 972, 973 ],
           "attributes": {
             "src": "./compare.v:52.18-52.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90.16-90.32"
           }
         },
-        "$techmap$techmap92$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap96$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 846, 847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858, 859, 860, 861, 862, 863, 864, 865, 866, 867, 868, 869, 870, 871, 872, 873, 874, 875, 876, 877 ],
           "attributes": {
             "src": "./compare.v:51.18-51.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap92$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap96$techmap$lt$./compare.v:51$5.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 878, 879, 880, 881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901, 902, 903, 904, 905, 906, 907, 908, 909 ],
           "attributes": {
             "src": "./compare.v:51.18-51.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90.16-90.32"
           }
         },
-        "$techmap$techmap93$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap97$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 782, 783, 784, 785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796, 797, 798, 799, 800, 801, 802, 803, 804, 805, 806, 807, 808, 809, 810, 811, 812, 813 ],
           "attributes": {
             "src": "./compare.v:49.18-49.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap93$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$84.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap97$techmap$lt$./compare.v:49$3.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$88.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 814, 815, 816, 817, 818, 819, 820, 821, 822, 823, 824, 825, 826, 827, 828, 829, 830, 831, 832, 833, 834, 835, 836, 837, 838, 839, 840, 841, 842, 843, 844, 845 ],
           "attributes": {
             "src": "./compare.v:49.18-49.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90.16-90.32"
           }
         },
-        "$techmap$techmap94$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$87_Y": {
+        "$techmap$techmap98$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$91_Y": {
           "hide_name": 1,
           "bits": [ 718, 719, 720, 721, 722, 723, 724, 725, 726, 727, 728, 729, 730, 731, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 742, 743, 744, 745, 746, 747, 748, 749 ],
           "attributes": {
             "src": "./compare.v:48.18-48.37|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341.15-341.38|/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89.16-89.32"
           }
         },
-        "$techmap$techmap94$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$85.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$88_Y": {
+        "$techmap$techmap98$techmap$lt$./compare.v:48$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$89.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$92_Y": {
           "hide_name": 1,
           "bits": [ 750, 751, 752, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768, 769, 770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 780, 781 ],
           "attributes": {

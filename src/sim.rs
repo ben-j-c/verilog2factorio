@@ -99,6 +99,8 @@ pub struct SimState {
 	step_number: usize,
 	/// Indexed by Logical id
 	state: Vec<SimStateRow>,
+	first_wire_red: Vec<NodeId>,
+	first_wire_green: Vec<NodeId>,
 
 	traces: Vec<Trace>,
 	trace_set: Vec<NodeId>,
@@ -126,6 +128,8 @@ impl SimState {
 			trace_set: vec![],
 			new_state_green: vec![],
 			new_state_red: vec![],
+			first_wire_red: vec![],
+			first_wire_green: vec![],
 		};
 		ret.update_logical_design();
 		ret
@@ -141,6 +145,8 @@ impl SimState {
 				red: vec![],
 				green: vec![],
 			});
+			self.first_wire_red.push(NodeId(usize::MAX));
+			self.first_wire_green.push(NodeId(usize::MAX));
 		}
 		for (nodeid, node) in logd.nodes.iter().enumerate().skip(state_len) {
 			let colour = if let NodeFunction::WireSum(colour) = node.function {
@@ -152,6 +158,15 @@ impl SimState {
 				continue;
 			}
 			let network_wires = logd.get_wire_network(node.id);
+			match colour {
+				WireColour::Red => {
+					self.first_wire_red[nodeid] = network_wires.first().unwrap().clone();
+				},
+				WireColour::Green => {
+					self.first_wire_green[nodeid] = network_wires.first().unwrap().clone();
+				},
+			}
+
 			assert!(
 				!network_wires.is_empty(),
 				"A \"wire\" network was found with no wires."
@@ -190,6 +205,26 @@ impl SimState {
 				wires: network_wires,
 				colour,
 			});
+		}
+		for (nodeid, _node) in logd.nodes.iter().enumerate().skip(state_len) {
+			let output_red_entry = self.state[nodeid].netmap.output_red;
+			if output_red_entry.is_some() {
+				let first_wire = self.network[output_red_entry.unwrap().0]
+					.wires
+					.first()
+					.unwrap()
+					.0;
+				self.first_wire_red[nodeid] = NodeId(first_wire);
+			}
+			let output_green_entry = self.state[nodeid].netmap.output_green;
+			if output_green_entry.is_some() {
+				let first_wire = self.network[output_green_entry.unwrap().0]
+					.wires
+					.first()
+					.unwrap()
+					.0;
+				self.first_wire_green[nodeid] = NodeId(first_wire);
+			}
 		}
 	}
 
@@ -366,12 +401,12 @@ impl SimState {
 		let mut ret = 0;
 		let output_red_entry = self.state[node.0].netmap.output_red;
 		if colours.0 && output_red_entry.is_some() {
-			let first_wire = self.network[output_red_entry.unwrap().0].wires[0].0;
+			let first_wire = self.first_wire_red[node.0].0;
 			ret += self.state[first_wire].red[id];
 		}
 		let output_green_entry = self.state[node.0].netmap.output_green;
 		if colours.1 && output_green_entry.is_some() {
-			let first_wire = self.network[output_green_entry.unwrap().0].wires[0].0;
+			let first_wire = self.first_wire_green[node.0].0;
 			ret += self.state[first_wire].green[id];
 		}
 		ret
@@ -604,30 +639,27 @@ impl SimState {
 	) {
 		let logd = self.logd.read().unwrap();
 
-		#[cfg(debug_assertions)]
-		logd.nodes
-			.iter()
-			.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
-			.for_each(|(node, (new_state_red, new_state_green))| {
-				self.do_compute_step(node, new_state_red, new_state_green);
-			});
-		#[cfg(not(debug_assertions))]
+		//#[cfg(debug_assertions)]
+		//logd.nodes
+		//	.iter()
+		//	.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
+		//	.for_each(|(node, (new_state_red, new_state_green))| {
+		//		self.do_compute_step(node, new_state_red, new_state_green);
+		//	});
+		//#[cfg(not(debug_assertions))]
 		let chunk_size = 2048;
-		#[cfg(not(debug_assertions))]
+		//#[cfg(not(debug_assertions))]
 		logd.nodes
-			.par_chunks(chunk_size)
+			.par_iter()
+			.with_min_len(chunk_size)
 			.zip(
 				new_state_red
-					.par_chunks_mut(chunk_size)
-					.zip(new_state_green.par_chunks_mut(chunk_size)),
+					.par_iter_mut()
+					.with_min_len(chunk_size)
+					.zip(new_state_green.par_iter_mut().with_min_len(chunk_size)),
 			)
 			.for_each(|(node, (new_state_red, new_state_green))| {
-				for i in 0..node.len() {
-					let node = &node[i];
-					let new_state_red = &mut new_state_red[i];
-					let new_state_green = &mut new_state_green[i];
-					self.do_compute_step(node, new_state_red, new_state_green);
-				}
+				self.do_compute_step(node, new_state_red, new_state_green);
 			});
 	}
 
