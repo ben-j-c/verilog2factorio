@@ -1010,8 +1010,8 @@ impl SimState {
 	pub fn apply_vcd(
 		&mut self,
 		vcd: &VCD,
-		inputs: HashM2<String, NodeId>,
-		outputs: HashM2<String, (Signal, NodeId)>,
+		inputs: HashM<String, NodeId>,
+		outputs: HashM<String, (Signal, NodeId)>,
 		propagation_delay: u32,
 		reset: bool,
 	) -> bool {
