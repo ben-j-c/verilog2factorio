@@ -454,7 +454,7 @@ impl SimState {
 					.red
 					.data
 					.iter()
-					.min_by(|a, b| a.0.cmp(b.0))
+					.min_by(|a, b| a.0.cmp(&b.0))
 					.unwrap();
 				ret_red = *count;
 				id_red = *sig_id;
@@ -473,7 +473,7 @@ impl SimState {
 					.green
 					.data
 					.iter()
-					.min_by(|a, b| a.0.cmp(b.0))
+					.min_by(|a, b| a.0.cmp(&b.0))
 					.unwrap();
 				ret_green = *count;
 				id_green = *sig_id;
@@ -519,8 +519,8 @@ impl SimState {
 				let left = self.get_seen_output_state(node.id, input_left_network);
 				let right = self.get_seen_output_state(node.id, input_right_network);
 				let mut union = hash_set();
-				union.extend(left.data.keys().cloned());
-				union.extend(right.data.keys().cloned());
+				union.extend(left.keys());
+				union.extend(right.keys());
 				for sig_id in union {
 					if output_each {
 						output = sig_id;
@@ -541,11 +541,11 @@ impl SimState {
 				} else {
 					0
 				};
-				for sig_id in left.data.keys() {
+				for sig_id in left.keys() {
 					if output_each {
-						output = *sig_id;
+						output = sig_id;
 					}
-					let res = Self::execute_arith_op(left[*sig_id], op, right);
+					let res = Self::execute_arith_op(left[sig_id], op, right);
 					if res != 0 {
 						new_state_red[output] += res;
 						new_state_green[output] += res;
@@ -561,11 +561,11 @@ impl SimState {
 					0
 				};
 				let right = self.get_seen_output_state(node.id, input_right_network);
-				for sig_id in right.data.keys() {
+				for sig_id in right.keys() {
 					if output_each {
-						output = *sig_id;
+						output = sig_id;
 					}
-					let res = Self::execute_arith_op(left, op, right[*sig_id]);
+					let res = Self::execute_arith_op(left, op, right[sig_id]);
 					if res != 0 {
 						new_state_red[output] += res;
 						new_state_green[output] += res;
@@ -640,132 +640,33 @@ impl SimState {
 		let logd = self.logd.read().unwrap();
 
 		//#[cfg(debug_assertions)]
-		//logd.nodes
-		//	.iter()
-		//	.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
-		//	.for_each(|(node, (new_state_red, new_state_green))| {
-		//		self.do_compute_step(node, new_state_red, new_state_green);
-		//	});
-		//#[cfg(not(debug_assertions))]
-		let chunk_size = 2048;
-		//#[cfg(not(debug_assertions))]
 		logd.nodes
-			.par_iter()
-			.with_min_len(chunk_size)
-			.zip(
-				new_state_red
-					.par_iter_mut()
-					.with_min_len(chunk_size)
-					.zip(new_state_green.par_iter_mut().with_min_len(chunk_size)),
-			)
+			.iter()
+			.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
 			.for_each(|(node, (new_state_red, new_state_green))| {
 				self.do_compute_step(node, new_state_red, new_state_green);
 			});
+
+		//#[cfg(not(debug_assertions))]
+		#[cfg(false)]
+		{
+			let chunk_size = 1024;
+			logd.nodes
+				.par_iter()
+				.with_min_len(chunk_size)
+				.zip(
+					new_state_red
+						.par_iter_mut()
+						.with_min_len(chunk_size)
+						.zip(new_state_green.par_iter_mut().with_min_len(chunk_size)),
+				)
+				.for_each(|(node, (new_state_red, new_state_green))| {
+					self.do_compute_step(node, new_state_red, new_state_green);
+				});
+		}
 	}
 
 	#[cfg(false)]
-	pub fn compute_nets(
-		&self,
-		new_state_red: &mut Vec<OutputState>,
-		new_state_green: &mut Vec<OutputState>,
-	) {
-		let mut network_states = vec![OutputState::default(); self.network.len()];
-
-		network_states
-			.par_iter_mut()
-			.enumerate()
-			.chunks(1024)
-			.for_each(|mut c| {
-				for (idx, new_state) in c.iter_mut() {
-					let net = &self.network[*idx];
-					for fiid in &net.fanin {
-						let fanin_state = match net.colour {
-							WireColour::Red => &new_state_red[fiid.0],
-							WireColour::Green => &new_state_green[fiid.0],
-						};
-						for (sigid, x) in fanin_state.data.iter() {
-							new_state[*sigid] += x;
-						}
-					}
-				}
-			});
-
-		self.network_ownership
-			.par_iter()
-			.zip(
-				new_state_red
-					.par_iter_mut()
-					.zip(new_state_green.par_iter_mut()),
-			)
-			.chunks(512)
-			.for_each(|mut c| {
-				for (netid, (new_state_red, new_state_green)) in c.iter_mut() {
-					if *netid == &NetId::default() {
-						continue;
-					}
-					let net = &self.network[netid.0];
-					let wire_state = match net.colour {
-						WireColour::Red => new_state_red,
-						WireColour::Green => new_state_green,
-					};
-					for (sigid, x) in network_states[netid.0].data.iter() {
-						wire_state[*sigid] = *x
-					}
-				}
-			});
-	}
-
-	#[cfg(false)]
-	pub fn compute_nets(
-		&self,
-		new_state_red: &mut Vec<OutputState>,
-		new_state_green: &mut Vec<OutputState>,
-	) {
-		let mut network_states = vec![OutputState::default(); self.network.len()];
-
-		network_states
-			.iter_mut()
-			.enumerate()
-			.chunks(1024)
-			.into_iter()
-			.for_each(|c| {
-				for (idx, new_state) in c.into_iter() {
-					let net = &self.network[idx];
-					for fiid in &net.fanin {
-						let fanin_state = match net.colour {
-							WireColour::Red => &new_state_red[fiid.0],
-							WireColour::Green => &new_state_green[fiid.0],
-						};
-						for (sigid, x) in fanin_state.data.iter() {
-							new_state[*sigid] += x;
-						}
-					}
-				}
-			});
-
-		self.network_ownership
-			.iter()
-			.zip(new_state_red.iter_mut().zip(new_state_green.iter_mut()))
-			.chunks(512)
-			.into_iter()
-			.for_each(|c| {
-				for (netid, (new_state_red, new_state_green)) in c.into_iter() {
-					if *netid == NetId::default() {
-						continue;
-					}
-					let net = &self.network[netid.0];
-					let wire_state = match net.colour {
-						WireColour::Red => new_state_red,
-						WireColour::Green => new_state_green,
-					};
-					for (sigid, x) in network_states[netid.0].data.iter() {
-						wire_state[*sigid] = *x
-					}
-				}
-			});
-	}
-
-	#[cfg(true)]
 	pub fn compute_nets(
 		&self,
 		new_state_red: &mut Vec<OutputState>,
@@ -802,6 +703,64 @@ impl SimState {
 				new_state_red
 					.par_chunks_mut(chunk_size)
 					.zip(new_state_green.par_chunks_mut(chunk_size)),
+			)
+			.for_each(|(netid, (new_state_red, new_state_green))| {
+				for i in 0..netid.len() {
+					let netid = netid[i];
+					let new_state_red = &mut new_state_red[i];
+					let new_state_green = &mut new_state_green[i];
+					if netid == NetId::default() {
+						continue;
+					}
+					let net = &self.network[netid.0];
+					let wire_state = match net.colour {
+						WireColour::Red => new_state_red,
+						WireColour::Green => new_state_green,
+					};
+					for (sigid, x) in network_states[netid.0].data.iter() {
+						wire_state[*sigid] = *x
+					}
+				}
+			});
+	}
+
+	#[cfg(true)]
+	pub fn compute_nets(
+		&self,
+		new_state_red: &mut Vec<OutputState>,
+		new_state_green: &mut Vec<OutputState>,
+		network_states: &mut Vec<OutputState>,
+	) {
+		network_states.resize(self.network.len(), OutputState::default());
+		let chunk_size = 128;
+		network_states
+			.chunks_mut(chunk_size)
+			.enumerate()
+			.for_each(|(idx, new_state)| {
+				for i in 0..new_state.len() {
+					let new_state = &mut new_state[i];
+					new_state.clear();
+					let idx = idx * chunk_size + i;
+					let net = &self.network[idx];
+					for fiid in &net.fanin {
+						let fanin_state = match net.colour {
+							WireColour::Red => &new_state_red[fiid.0],
+							WireColour::Green => &new_state_green[fiid.0],
+						};
+						for (sigid, x) in fanin_state.data.iter() {
+							new_state[*sigid] += x;
+						}
+					}
+				}
+			});
+
+		let chunk_size = 16;
+		self.network_ownership
+			.chunks(chunk_size)
+			.zip(
+				new_state_red
+					.chunks_mut(chunk_size)
+					.zip(new_state_green.chunks_mut(chunk_size)),
 			)
 			.for_each(|(netid, (new_state_red, new_state_green))| {
 				for i in 0..netid.len() {
@@ -1051,8 +1010,8 @@ impl SimState {
 	pub fn apply_vcd(
 		&mut self,
 		vcd: &VCD,
-		inputs: HashM<String, NodeId>,
-		outputs: HashM<String, (Signal, NodeId)>,
+		inputs: HashM2<String, NodeId>,
+		outputs: HashM2<String, (Signal, NodeId)>,
 		propagation_delay: u32,
 		reset: bool,
 	) -> bool {
@@ -1480,6 +1439,10 @@ impl OutputState {
 		for x in &other.data {
 			self.data.insert(*x.0, *x.1);
 		}
+	}
+
+	fn keys(&self) -> impl Iterator<Item = i32> + '_ {
+		self.data.iter().map(|(id, _)| *id)
 	}
 }
 
