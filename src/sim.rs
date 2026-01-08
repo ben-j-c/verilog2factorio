@@ -652,13 +652,12 @@ impl SimState {
 			let chunk_size = 512;
 			logd.nodes
 				.par_iter()
-				.with_min_len(chunk_size)
 				.zip(
 					new_state_red
 						.par_iter_mut()
-						.with_min_len(chunk_size)
-						.zip(new_state_green.par_iter_mut().with_min_len(chunk_size)),
+						.zip(new_state_green.par_iter_mut()),
 				)
+				.with_min_len(chunk_size)
 				.for_each(|(node, (new_state_red, new_state_green))| {
 					self.do_compute_step(node, new_state_red, new_state_green);
 				});

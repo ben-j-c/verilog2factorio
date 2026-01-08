@@ -4,6 +4,10 @@ use clap::Parser as _;
 use v2f::{lua_flow, mapped_flow, Args};
 
 pub fn main() -> Result<(), v2f::Error> {
+	rayon::ThreadPoolBuilder::new()
+		.num_threads(5)
+		.build_global()
+		.unwrap();
 	let args = Args::parse();
 	if args.dump_phy_cfg {
 		v2f::dump_phy_cfg();
