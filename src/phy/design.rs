@@ -284,6 +284,7 @@ impl PhysicalDesign {
 		);
 		self.validate_against(logical);
 		self.make_assertions(logical);
+		self.fill_coverage();
 		res
 	}
 
@@ -2018,8 +2019,8 @@ impl PhysicalDesign {
 		local_to_global: &Vec<Vec<usize>>,
 	) {
 		self.global_space = Arr2::new([
-			self.side_length_partitions * (partition_dims.0 + margin) + margin,
-			self.side_length_partitions * (partition_dims.1 + margin) + margin,
+			self.side_length_partitions * (partition_dims.0 + margin) + 2 * margin,
+			self.side_length_partitions * (partition_dims.1 + margin) + 2 * margin,
 		]);
 		for (part, (part_x, part_y)) in self.partition_assignments.clone().iter().enumerate() {
 			let mut failure = Ok(());
@@ -2538,6 +2539,112 @@ impl PhysicalDesign {
 		Ok(())
 	}
 
+	fn fill_coverage(&mut self) {
+		let mut coverage = Arr2::new([self.global_space.dims().0, self.global_space.dims().1]);
+		for x in 0..self.global_space.dims().0 {
+			for y in 0..self.global_space.dims().1 {
+				if self.global_space[(x, y)] == PhyId::default() {
+					continue;
+				}
+				let id = self.global_space[(x, y)];
+				let node = &self.nodes[id.0];
+				if !node.is_pole() {
+					continue;
+				}
+				let spec = WireHopType::Medium.wire_hop_spec();
+				for i in -spec.reach as usize..=((spec.area - 1) / 2) as usize {
+					for j in -spec.reach as usize..=((spec.area - 1) / 2) as usize {
+						if !self.global_space.index_good((x + i, y + j)) {
+							continue;
+						}
+						coverage[(x + i, y + j)] = true;
+					}
+				}
+			}
+		}
+		let mut no_coverage: HashS<_> = (0..self.n_nodes())
+			.filter(|idx| !self.nodes[*idx].is_pole())
+			.collect();
+		for x in 0..self.global_space.dims().0 {
+			for y in 0..self.global_space.dims().1 {
+				if self.global_space[(x, y)] == PhyId::default() {
+					continue;
+				}
+				if coverage[(x, y)] {
+					no_coverage.remove(&self.global_space[(x, y)].0);
+				}
+			}
+		}
+
+		loop {
+			let target = no_coverage.iter().find(|_| true);
+			let target = if let Some(idx) = target {
+				PhyId(*idx)
+			} else {
+				break;
+			};
+			no_coverage.remove(&target.0);
+			let x = self.nodes[target.0].position.0 as usize;
+			let y = self.nodes[target.0].position.1 as usize;
+			let reach = WireHopType::Medium.wire_hop_spec().area as isize / 2;
+			let mut best_pos = (x, y);
+			let mut best_count = 0;
+			for i in -reach..=reach {
+				for j in -reach..=reach {
+					let pos = (x + i as usize, y + j as usize);
+					if !self.global_space.index_good(pos) {
+						continue;
+					}
+					if self.global_space[pos] != PhyId::default() {
+						continue;
+					}
+					let (x, y) = pos;
+					let mut seen = hash_set();
+					let mut count = 0;
+					for i in -reach..=reach {
+						for j in -reach..=reach {
+							let pos = (x + i as usize, y + j as usize);
+							if !self.global_space.index_good(pos) {
+								continue;
+							}
+							if self.global_space[pos] == PhyId::default() {
+								continue;
+							}
+							let new_seen = &self.global_space[pos].0;
+							if seen.contains(&new_seen) {
+								continue;
+							}
+							seen.insert(new_seen);
+							if no_coverage.contains(new_seen) || *new_seen == target.0 {
+								count += 1
+							}
+						}
+					}
+					if count > best_count {
+						best_count = count;
+						best_pos = (x, y);
+					}
+				}
+			}
+			if self.global_space[best_pos] == PhyId::default() {
+				self.add_pole(SpaceIndex(best_pos.0, best_pos.1), NodeId(usize::MAX));
+				let (x, y) = best_pos;
+				for i in -reach..=reach {
+					for j in -reach..=reach {
+						let pos = (x + i as usize, y + j as usize);
+						if !self.global_space.index_good(pos) {
+							continue;
+						}
+						coverage[pos] = true;
+						if self.global_space[pos] != PhyId::default() {
+							no_coverage.remove(&self.global_space[pos].0);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	pub(crate) fn build_copper_network(&self) -> Vec<Vec<PhyId>> {
 		let mut all_neighbours = vec![vec![]; self.n_nodes()];
 		let mut rng = rand::rng();
@@ -2929,7 +3036,7 @@ impl WireHopType {
 	fn wire_hop_spec(&self) -> WireHopSpec {
 		match self {
 			WireHopType::Small => WireHopSpec::new((1.0, 1.0), 7.5, 5),
-			WireHopType::Medium => WireHopSpec::new((1.0, 1.0), 9.0, 11),
+			WireHopType::Medium => WireHopSpec::new((1.0, 1.0), 9.0, 7),
 			WireHopType::Big => WireHopSpec::new((2.0, 2.0), 32.0, 4),
 			WireHopType::Substation => WireHopSpec::new((2.0, 2.0), 18.0, 18),
 			WireHopType::Combinator => WireHopSpec::new((2.0, 1.0), 10.0, 0),
