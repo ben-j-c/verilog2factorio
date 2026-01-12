@@ -31,6 +31,8 @@ The second easiest way is to install VSCode and Docker. Also install the [dev-co
 
 ### Lua
 
+The Lua API reference is [here](https://github.com/ben-j-c/verilog2factorio/blob/master/src/v2f_api.lua). It contains all the functions and constructs that let you make a design, simulate it, and realize the physical representation.
+
 Once you have your environment running, you can create a new lua file
 and run it by clicking `"Run and Debug" > "Current lua file"`. This will 
 cause the project to compile, so the first run may take ~30 seconds to start.
