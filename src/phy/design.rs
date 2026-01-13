@@ -431,7 +431,10 @@ impl PhysicalDesign {
 		local_to_global: &Vec<Vec<usize>>,
 	) {
 		for partition in 0..self.n_partitions {
-			println!("=====PARTITION {partition}=====");
+			if self.n_partitions > 1 {
+				println!("=====PARTITION {partition}=====");
+			}
+
 			let initializations =
 				Self::get_initializations(&partition_local_connectivity[partition as usize]);
 			self.space[partition as usize] = Arr2::new([
@@ -498,7 +501,9 @@ impl PhysicalDesign {
 				panic!("Have to bail due to failure in placement");
 			}
 			self.local_assignments[partition as usize] = comb_positions;
-			println!("=====DONE PARTITION=====");
+			if self.n_partitions > 1 {
+				println!("=====DONE PARTITION=====");
+			}
 		}
 	}
 
@@ -2400,15 +2405,19 @@ impl PhysicalDesign {
 		_global_to_local: &Vec<HashM<usize, usize>>,
 	) -> bool {
 		let partition_dims = calculate_minimum_partition_dim(&self.local_assignments);
-		println!(
-			"Starting global freeze and route with partition dims ({}, {}).",
-			partition_dims.0, partition_dims.1
-		);
+		if self.n_partitions > 1 {
+			println!(
+				"Starting global freeze and route with partition dims ({}, {}).",
+				partition_dims.0, partition_dims.1
+			);
+		}
 		let margin_range = self.user_partition_margin.map(|m| m..=m).unwrap_or(1..=10);
 		let mut success = false;
 
 		for margin in margin_range {
-			println!("Starting routing with margin {margin}");
+			if self.n_partitions > 1 {
+				println!("Starting routing with margin {margin}");
+			}
 			success = true;
 			self.intra_partition_margin = margin;
 			self.reset_place_route();

@@ -1858,3 +1858,161 @@ fn arith_expr() {
 	//let v = parser.parse("signal_A + signal_B").unwrap();
 	//println!("{v:?}")
 }
+
+struct TestRow {
+	left: Signal,
+	right: Signal,
+	net_left: (bool, bool),
+	net_right: (bool, bool),
+	op: ArithmeticOperator,
+	output: Signal,
+
+	c1_sig: Signal,
+	c2_sig: Signal,
+	c1_v: i32,
+	c2_v: i32,
+
+	expected: Vec<(i32, i32)>,
+}
+
+#[test]
+fn arith_stress_test() {
+	use ArithmeticOperator::*;
+	use Signal::*;
+	let tests = vec![
+		TestRow {
+			left: Each,
+			right: Id(0),
+			net_left: NET_RED_GREEN,
+			net_right: NET_GREEN,
+			op: Mult,
+			output: Id(0),
+			c1_sig: Id(0),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: -10,
+			expected: vec![],
+		},
+		TestRow {
+			left: Each,
+			right: Id(0),
+			net_left: NET_RED_GREEN,
+			net_right: NET_GREEN,
+			op: Mult,
+			output: Id(0),
+			c1_sig: Id(0),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 200)],
+		},
+		TestRow {
+			left: Each,
+			right: Each,
+			net_left: NET_RED_GREEN,
+			net_right: NET_RED_GREEN,
+			op: Mult,
+			output: Id(0),
+			c1_sig: Id(0),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 400)],
+		},
+		TestRow {
+			left: Each,
+			right: Each,
+			net_left: NET_RED_GREEN,
+			net_right: NET_GREEN,
+			op: Mult,
+			output: Id(0),
+			c1_sig: Id(1),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 100)],
+		},
+		TestRow {
+			left: Each,
+			right: Each,
+			net_left: NET_RED_GREEN,
+			net_right: NET_RED_GREEN,
+			op: Mult,
+			output: Id(0),
+			c1_sig: Id(1),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 200)],
+		},
+		TestRow {
+			left: Each,
+			right: Each,
+			net_left: NET_RED_GREEN,
+			net_right: NET_RED_GREEN,
+			op: Mult,
+			output: Each,
+			c1_sig: Id(1),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 100), (1, 100)],
+		},
+		TestRow {
+			left: Each,
+			right: Each,
+			net_left: NET_RED_GREEN,
+			net_right: NET_GREEN,
+			op: Mult,
+			output: Each,
+			c1_sig: Id(1),
+			c2_sig: Id(0),
+			c1_v: 10,
+			c2_v: 10,
+			expected: vec![(0, 100)],
+		},
+	];
+
+	let mut passed = true;
+
+	let mut i = 0;
+	for row in tests {
+		println!("{i:5}: STARTING TEST");
+		let mut logd = LogicalDesign::new();
+		let c1 = logd.add_constant(vec![row.c1_sig], vec![row.c1_v]);
+		let c2 = logd.add_constant(vec![row.c2_sig], vec![row.c2_v]);
+		let op = logd.add_arithmetic_with_net(
+			(row.left, row.op, row.right),
+			row.output,
+			row.net_left,
+			row.net_right,
+		);
+		logd.add_wire_red_simple(c1, op);
+		logd.add_wire_green_simple(c2, op);
+		let logd = Arc::new(RwLock::new(logd));
+		let mut sim = SimState::new(logd.clone());
+		sim.step(2);
+		let mut result = sim.probe_red_out(op);
+		result.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+		if result != row.expected {
+			passed = false;
+			println!(
+				"{i:5}: FAILED, expected {:?}, got {:?}",
+				row.expected, result
+			);
+		} else {
+			println!("{i:5}: PASSED")
+		}
+		let mut p = PhysicalDesign::new();
+		let mut s = SerializableDesign::new();
+		p.build_from(&logd.read().unwrap());
+		s.build_from(&p, &logd.read().unwrap());
+		let blueprint_json = serde_json::to_string(&s).unwrap();
+		println!("{}", blueprint_json);
+		println!("{i:5}: TEST DONE");
+		i += 1;
+	}
+
+	assert!(passed);
+	println!("ALL TESTS PASSED");
+}

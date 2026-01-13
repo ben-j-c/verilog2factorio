@@ -1,6 +1,7 @@
 use std::{
 	cell::RefCell,
-	collections::{BTreeSet, HashSet, LinkedList},
+	collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList},
+	ops::AddAssign,
 };
 
 type NodeId = usize;
@@ -15,7 +16,7 @@ use crate::{
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
-	util::{self, hash_set, index_of, HashS},
+	util::{self, hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
 
@@ -61,6 +62,47 @@ pub enum ImplementableOp {
 }
 
 impl ImplementableOp {
+	pub(crate) fn simple_string(&self) -> &'static str {
+		match self {
+			ImplementableOp::AndBitwise => "AndBitwise",
+			ImplementableOp::OrBitwise => "OrBitwise",
+			ImplementableOp::XorBitwise => "XorBitwise",
+			ImplementableOp::Shl => "Shl",
+			ImplementableOp::Sshr => "Sshr",
+			ImplementableOp::Srl => "Srl",
+			ImplementableOp::Mul => "Mul",
+			ImplementableOp::Div => "Div",
+			ImplementableOp::Mod => "Mod",
+			ImplementableOp::Pow => "Pow",
+			ImplementableOp::Add => "Add",
+			ImplementableOp::Sub => "Sub",
+			ImplementableOp::LessThan => "LessThan",
+			ImplementableOp::GreaterThan => "GreaterThan",
+			ImplementableOp::Equal => "Equal",
+			ImplementableOp::NotEqual => "NotEqual",
+			ImplementableOp::GreaterThanEqual => "GreaterThanEqual",
+			ImplementableOp::LessThanEqual => "LessThanEqual",
+			ImplementableOp::ReduceAnd => "ReduceAnd",
+			ImplementableOp::ReduceOr => "ReduceOr",
+			ImplementableOp::Neg => "Neg",
+			ImplementableOp::Not => "Not",
+			ImplementableOp::V2FRollingAccumulate => "V2FRollingAccumulate",
+			ImplementableOp::V2FProgRam => "V2FProgRam",
+			ImplementableOp::DFF => "DFF",
+			ImplementableOp::SDFF => "SDFF",
+			ImplementableOp::SDFFE => "SDFFE",
+			ImplementableOp::ADFFE => "ADFFE",
+			ImplementableOp::ADFF => "ADFF",
+			ImplementableOp::DFFE => "DFFE",
+			ImplementableOp::LUT(_) => "LUT",
+			ImplementableOp::PMux(_, _) => "PMux",
+			ImplementableOp::Mux => "Mux",
+			ImplementableOp::Memory => "Memory",
+			ImplementableOp::Sop(_) => "Sop",
+			ImplementableOp::Swizzle => "Swizzle",
+		}
+	}
+
 	pub(crate) fn get_body_type(&self) -> BodyType {
 		match self {
 			ImplementableOp::AndBitwise => BodyType::ABY,
@@ -537,7 +579,7 @@ impl CheckedDesign {
 				};
 				let driver = self.connected_design.node_info[fiid_cnxn].n_bits();
 				let sink = exprs[0].n_bits();
-				if driver == sink {
+				if driver <= sink {
 					continue;
 				}
 			}
@@ -1372,6 +1414,7 @@ impl CheckedDesign {
 		use logical_design::Signal;
 		logical_design.set_description(mapped_design.get_top_source());
 		let mut logic_map: Vec<Option<LID>> = vec![None; self.nodes.len()];
+		let mut histogram: BTreeMap<&str, usize> = BTreeMap::<_, _>::new();
 		for (nodeid, node) in self.nodes.iter().enumerate() {
 			match &node.node_type {
 				NodeType::Pruned => {},
@@ -1426,6 +1469,15 @@ impl CheckedDesign {
 				},
 				NodeType::CellBody { cell_type } => match cell_type {
 					BodyType::ABY => {
+						histogram
+							.entry(
+								mapped_design
+									.get_cell(&node.mapped_id)
+									.cell_type
+									.simple_string(),
+							)
+							.or_default()
+							.add_assign(1);
 						let sig_left = self.signals[node.fanin[0]];
 						let sig_right = self.signals[node.fanin[1]];
 						let sig_out = self.signals[node.fanout[0]];
@@ -1440,17 +1492,28 @@ impl CheckedDesign {
 						logic_map[node.fanout[0]] = Some(output)
 					},
 					BodyType::Constant { value } => {
+						histogram.entry("Constant").or_default().add_assign(1);
 						logic_map[nodeid] = Some(
 							logical_design
 								.add_constant(vec![self.signals[node.fanout[0]]], vec![*value]),
 						);
 					},
 					BodyType::Nop => {
+						histogram.entry("Nop").or_default().add_assign(1);
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
 						logic_map[nodeid] = Some(logical_design.add_nop(sig_in, sig_out))
 					},
 					BodyType::AY => {
+						histogram
+							.entry(
+								mapped_design
+									.get_cell(&node.mapped_id)
+									.cell_type
+									.simple_string(),
+							)
+							.or_default()
+							.add_assign(1);
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
 						let (input, output) = self.apply_unary_op(
@@ -1463,6 +1526,14 @@ impl CheckedDesign {
 						logic_map[node.fanout[0]] = Some(output)
 					},
 					BodyType::MultiPart => {
+						let impl_op = mapped_design
+							.get_cell_option(&node.mapped_id)
+							.map(|cell| cell.cell_type)
+							.unwrap_or(ImplementableOp::Swizzle);
+						histogram
+							.entry(impl_op.simple_string())
+							.or_default()
+							.add_assign(1);
 						let sig_in = node
 							.fanin
 							.iter()
@@ -1487,10 +1558,7 @@ impl CheckedDesign {
 							nodeid,
 							logical_design,
 							mapped_design,
-							mapped_design
-								.get_cell_option(&node.mapped_id)
-								.map(|cell| cell.cell_type)
-								.unwrap_or(ImplementableOp::Swizzle),
+							impl_op,
 							mapped_design.get_cell_option(&node.mapped_id),
 							sig_in,
 							sig_out,
@@ -1507,6 +1575,13 @@ impl CheckedDesign {
 				},
 			}
 		}
+		{
+			println!("Cell counts:");
+			for (name, count) in histogram.iter() {
+				println!("    {name}: {count}");
+			}
+		}
+
 		for (nodeid, node) in self.nodes.iter().enumerate() {
 			match &node.node_type {
 				NodeType::CellInput { .. } | NodeType::PortInput { .. } => {

@@ -366,7 +366,7 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("defender");
 	sig_def!("distractor");
 	sig_def!("destroyer");
-	println!("{}", m.len());
+	//println!("{}", m.len());
 	(m, m2)
 });
 

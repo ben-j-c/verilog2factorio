@@ -131,7 +131,7 @@
 				"--nocapture",
 				"--show-output",
 				"--exact",
-				"tests::logical_design_tests::test::two_wire_sum",
+				"tests::logical_design_tests::arith_stress_test",
 			],
 			"cwd": "${workspaceFolder}"
 		},
