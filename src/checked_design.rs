@@ -1628,6 +1628,16 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => {},
 			}
 		}
+		for (nodeid, node) in logical_design.nodes.iter_mut().enumerate() {
+			if node.is_arithmetic() || node.is_decider() || node.is_constant() {
+				match &mut node.description {
+					Some(descr) => descr.add_assign(&format!("\nNodeId({})", nodeid)),
+					None => {
+						node.description = Some(format!("NodeId({})", nodeid));
+					},
+				}
+			}
+		}
 		self.associated_logic.replace(logic_map);
 		let mut bad_design = false;
 		for node in &logical_design.nodes {
