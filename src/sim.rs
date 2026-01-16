@@ -16,6 +16,7 @@ use rayon::{
 };
 
 mod decider_model;
+mod snapshot;
 pub mod vcd;
 
 use crate::{
@@ -24,7 +25,7 @@ use crate::{
 		NET_RED_GREEN,
 	},
 	signal_lookup_table::{self},
-	sim::vcd::VCD,
+	sim::{snapshot::GameTrace, vcd::VCD},
 	svg::SVG,
 	util::{hash_map, hash_set, HashM},
 };
@@ -1124,6 +1125,14 @@ impl SimState {
 		}
 		println!("VCD Playback finished.");
 		true
+	}
+
+	pub fn apply_snapshot(&mut self, trace: &GameTrace, reset: bool) -> bool {
+		if reset {
+			self.reset();
+		}
+		println!("Snapshot Playback finished.");
+		todo!()
 	}
 
 	pub fn compare_vcd_val_to_i32(actual: i32, expected: &Option<Vec<Value>>) -> bool {

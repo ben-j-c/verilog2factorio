@@ -1,0 +1,11 @@
+{
+	"name": "circuit-net-tracer",
+	"version": "0.1.0",
+	"title": "Circuit Net Tracer",
+	"author": "Ben",
+	"factorio_version": "2.0",
+	"dependencies": [
+		"base >= 2.0"
+	],
+	"description": "Used to dump network state and inputs."
+}
