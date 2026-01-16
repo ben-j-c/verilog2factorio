@@ -1,3 +1,4 @@
+use graphviz_rust::dot_structures::Node;
 use serde::Deserialize;
 
 use crate::{
@@ -54,6 +55,7 @@ struct Constant {
 
 pub struct GameTrace {
 	pub states: Vec<HashM<NodeId, OutputState>>,
+	pub constants: Vec<HashM<NodeId, i32>>,
 }
 
 fn load_snapshot<P: AsRef<std::path::Path>>(path: P) -> Option<Snapshot> {
@@ -92,19 +94,19 @@ fn load_trace<P: AsRef<std::path::Path>>(path: P) -> GameTrace {
 		states.push(tick);
 	}
 	body.pop();
-	for body in body.iter().skip(1) {
+	let mut constants = vec![];
+	for body in body.iter() {
 		let mut tick = hash_map();
 		for ent in &body.constants {
 			let matches = id_regex.captures(&ent.description).unwrap();
 			let id = NodeId(matches.get(1).unwrap().as_str().parse::<usize>().unwrap());
-			let mut row = OutputState::default();
-			let sig = signal_lookup_table::lookup_sig_opt(&ent.signal).unwrap();
 			if ent.enabled {
-				row[sig.id()] = ent.count;
+				tick.insert(id, ent.count);
+			} else {
+				tick.insert(id, 0);
 			}
-			tick.insert(id, row);
 		}
-		states.push(tick);
+		constants.push(tick);
 	}
-	GameTrace { states }
+	GameTrace { states, constants }
 }

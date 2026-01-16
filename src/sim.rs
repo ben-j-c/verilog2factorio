@@ -240,6 +240,10 @@ impl SimState {
 		};
 	}
 
+	pub fn probe_out_state_red(&self, id: NodeId) -> &OutputState {
+		&self.state[id.0].red
+	}
+
 	pub fn probe_red_out(&self, id: NodeId) -> Vec<(i32, i32)> {
 		let state = &self.state[id.0].red;
 		let red = state
@@ -1127,12 +1131,52 @@ impl SimState {
 		true
 	}
 
-	pub fn apply_snapshot(&mut self, trace: &GameTrace, reset: bool) -> bool {
+	pub fn apply_trace(&mut self, trace: &GameTrace, reset: bool) -> bool {
 		if reset {
 			self.reset();
 		}
-		println!("Snapshot Playback finished.");
-		todo!()
+		let t_end = trace.constants.len();
+		println!("Snapshot Playback started. {} steps in file.", t_end);
+		let mut err = false;
+		for t in 0..t_end {
+			{
+				let mut logd = self.logd.write().unwrap();
+				for (id, count) in trace.constants[t].iter() {
+					logd.set_ith_output_count(*id, 0, *count);
+				}
+			}
+			self.step(1);
+			{
+				let logd = self.logd.read().unwrap();
+				for (id, expected_state) in trace.states[t].iter() {
+					let actual_state = self.probe_out_state_red(*id);
+					if *actual_state != *expected_state {
+						if !err {
+							println!("Mismatch at time {t}:");
+						}
+						println!("{}:", id);
+						println!(
+							"    expected: {:?}",
+							expected_state.data.iter().sorted().collect_vec()
+						);
+						println!(
+							"    actual:   {:?}",
+							actual_state.data.iter().sorted().collect_vec()
+						);
+						err = true;
+					}
+				}
+			}
+			if err {
+				break;
+			}
+		}
+		if err {
+			println!("Snapshot Playback failed.");
+		} else {
+			println!("Snapshot Playback finished.");
+		}
+		!err
 	}
 
 	pub fn compare_vcd_val_to_i32(actual: i32, expected: &Option<Vec<Value>>) -> bool {
@@ -1403,6 +1447,12 @@ pub struct OutputState {
 	data: HashM<i32, i32>,
 }
 
+impl PartialEq for OutputState {
+	fn eq(&self, other: &Self) -> bool {
+		self.is_subset(other) && other.is_subset(self)
+	}
+}
+
 impl Index<i32> for OutputState {
 	type Output = i32;
 
@@ -1443,6 +1493,22 @@ impl OutputState {
 
 	fn keys(&self) -> impl Iterator<Item = i32> + '_ {
 		self.data.iter().map(|(id, _)| *id)
+	}
+
+	fn is_subset(&self, other: &Self) -> bool {
+		for (id, count) in &self.data {
+			let other_get = other.data.get(id);
+			if *count != 0 {
+				if other_get != Some(count) {
+					return false;
+				}
+			} else {
+				if other_get != Some(&0) && other_get != None {
+					return false;
+				}
+			}
+		}
+		true
 	}
 }
 
