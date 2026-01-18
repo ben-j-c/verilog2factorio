@@ -16,6 +16,8 @@ pub static SIGNAL_MAP: Lazy<(
 	let mut signal_type = Some("virtual");
 	macro_rules! sig_def {
 		($name:expr) => {{
+			assert!(!m.contains_key(&_id));
+			assert!(!m2.contains_key($name));
 			m.insert(_id, ($name, signal_type));
 			m2.insert($name, (_id, signal_type));
 			_id += 1;
