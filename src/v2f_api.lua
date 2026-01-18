@@ -17,6 +17,8 @@
 ---@field make_phy fun(self: LogicalDesignAPI, name: string|nil): PhysicalDesignAPI
 
 ---@class PhysicalDesignAPI
+---@field save_blueprint fun(self: PhysicalDesignAPI, filename: string)
+---@field save_svg fun(self: PhysicalDesignAPI, filename: string)
 
 ---@class SimStateAPI
 ---@field step fun(self: SimStateAPI, n: integer)
@@ -27,6 +29,7 @@
 ---@field add_trace fun(self: SimStateAPI, node: Arithmetic|Decider|Lamp|Constant|number)
 ---@field inspect fun(self: SimStateAPI)
 ---@field apply_vcd fun(self: SimStateAPI, filename: string, inputs_lua: table, outputs_lua: table, propagation_delay: integer, reset: boolean): boolean
+---@field apply_snapshot fun(self: SimStateAPI, filename: string, reset: boolean): boolean
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr

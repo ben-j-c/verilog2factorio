@@ -12,6 +12,7 @@ use std::{
 	fmt::Display,
 	fs::File,
 	io::{BufReader, Read, Write},
+	ops::Deref,
 	panic::{catch_unwind, AssertUnwindSafe},
 	path::{Path, PathBuf},
 	sync::{atomic::AtomicUsize, Arc, RwLock},
@@ -29,7 +30,8 @@ use crate::{
 		WireColour, NET_GREEN, NET_RED, NET_RED_GREEN,
 	},
 	mapped_design::MappedDesign,
-	phy::{PhyId, PhysicalDesign},
+	phy::PhysicalDesign,
+	serializable_design::SerializableDesign,
 	signal_lookup_table,
 	sim::{self, vcd::VCD, SimState},
 	util::{hash_map, HashM},
@@ -1147,6 +1149,14 @@ impl UserData for SimStateAPI {
 				))
 			},
 		);
+
+		methods.add_method_mut(
+			"apply_snapshot",
+			|_, this, (filename, reset): (String, bool)| {
+				let trace = sim::snapshot::load_trace(filename);
+				Ok(this.sim.write().unwrap().apply_trace(&trace, reset))
+			},
+		);
 	}
 }
 
@@ -1291,7 +1301,24 @@ impl UserData for VCD {
 }
 
 impl UserData for PhysicalDesignAPI {
-	fn add_methods<M: UserDataMethods<Self>>(_methods: &mut M) {}
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		methods.add_method("save_svg", |_, this, filename: String| {
+			this.phyd
+				.read()
+				.unwrap()
+				.save_svg(&this.logd.read().unwrap(), filename)?;
+			Ok(())
+		});
+		methods.add_method("save_blueprint", |_, this, filename: String| {
+			let mut serd = SerializableDesign::new();
+			let logd = this.logd.read().unwrap();
+			let phyd = this.phyd.read().unwrap();
+			serd.build_from(phyd.deref(), logd.deref());
+			let blueprint_json = serde_json::to_string(&serd).unwrap();
+			std::fs::write(filename, blueprint_json)?;
+			Ok(())
+		});
+	}
 }
 
 impl FromLua for PhysicalDesignAPI {

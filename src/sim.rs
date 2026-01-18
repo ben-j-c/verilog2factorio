@@ -16,7 +16,7 @@ use rayon::{
 };
 
 mod decider_model;
-mod snapshot;
+pub mod snapshot;
 pub mod vcd;
 
 use crate::{
@@ -24,6 +24,7 @@ use crate::{
 		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
 		NET_RED_GREEN,
 	},
+	mapped_design::Direction,
 	signal_lookup_table::{self},
 	sim::{snapshot::GameTrace, vcd::VCD},
 	svg::SVG,
@@ -319,6 +320,23 @@ impl SimState {
 			j += 1;
 		}
 		ret
+	}
+
+	pub fn probe_input_state(&self, id: NodeId) -> (OutputState, OutputState) {
+		let netmap = &self.state[id.0].netmap;
+		let red = if let Some(input_red) = netmap.output_red {
+			let wire_id = self.network[input_red.0].wires.first().unwrap();
+			self.state[wire_id.0].red.clone()
+		} else {
+			OutputState::default()
+		};
+		let green = if let Some(input_green) = netmap.output_green {
+			let wire_id = self.network[input_green.0].wires.first().unwrap();
+			self.state[wire_id.0].green.clone()
+		} else {
+			OutputState::default()
+		};
+		(red, green)
 	}
 
 	pub fn probe_lamp_state(&self, id: NodeId) -> Option<bool> {
@@ -1150,19 +1168,45 @@ impl SimState {
 				let logd = self.logd.read().unwrap();
 				for (id, expected_state) in trace.states[t].iter() {
 					let actual_state = self.probe_out_state_red(*id);
+
 					if *actual_state != *expected_state {
+						let (actual_red_in, actual_green_in) = self.probe_input_state(*id);
+						let expected_red_in = trace.net_states[t]
+							.get(&(*id, WireColour::Red, Direction::Input))
+							.cloned()
+							.unwrap_or_default();
+						let expected_green_in = trace.net_states[t]
+							.get(&(*id, WireColour::Green, Direction::Input))
+							.cloned()
+							.unwrap_or_default();
 						if !err {
 							println!("Mismatch at time {t}:");
 						}
-						println!("{}:", id);
-						println!(
-							"    expected: {:?}",
-							expected_state.data.iter().sorted().collect_vec()
-						);
-						println!(
-							"    actual:   {:?}",
-							actual_state.data.iter().sorted().collect_vec()
-						);
+						print!("{}: ", id);
+						if actual_red_in == expected_red_in && actual_green_in == expected_green_in
+						{
+							println!();
+							println!(
+								"    expected: {:?}",
+								expected_state.data.iter().sorted().collect_vec()
+							);
+							println!(
+								"    actual:   {:?}",
+								actual_state.data.iter().sorted().collect_vec()
+							);
+							println!(
+								"    input red: {:?}",
+								actual_red_in.data.iter().sorted().collect_vec()
+							);
+							println!(
+								"    input green: {:?}",
+								actual_green_in.data.iter().sorted().collect_vec()
+							);
+							println!("    Node: {}", logd.get_node(*id));
+						} else {
+							println!("Bad input.");
+						}
+
 						err = true;
 					}
 				}

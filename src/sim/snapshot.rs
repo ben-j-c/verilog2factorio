@@ -1,8 +1,8 @@
-use graphviz_rust::dot_structures::Node;
 use serde::Deserialize;
 
 use crate::{
-	logical_design::NodeId,
+	logical_design::{NodeId, WireColour},
+	mapped_design::Direction,
 	signal_lookup_table,
 	sim::OutputState,
 	util::{hash_map, HashM},
@@ -31,6 +31,14 @@ struct Event {
 struct Entity {
 	#[serde(default)]
 	signals: Vec<SnapSignal>,
+	#[serde(default)]
+	net_red_in: Vec<SnapSignal>,
+	#[serde(default)]
+	net_red_out: Vec<SnapSignal>,
+	#[serde(default)]
+	net_green_in: Vec<SnapSignal>,
+	#[serde(default)]
+	net_green_out: Vec<SnapSignal>,
 	description: String,
 }
 
@@ -55,6 +63,7 @@ struct Constant {
 
 pub struct GameTrace {
 	pub states: Vec<HashM<NodeId, OutputState>>,
+	pub net_states: Vec<HashM<(NodeId, WireColour, Direction), OutputState>>,
 	pub constants: Vec<HashM<NodeId, i32>>,
 }
 
@@ -74,7 +83,7 @@ fn load_snapshot<P: AsRef<std::path::Path>>(path: P) -> Option<Snapshot> {
 	snapshot.ok()
 }
 
-fn load_trace<P: AsRef<std::path::Path>>(path: P) -> GameTrace {
+pub fn load_trace<P: AsRef<std::path::Path>>(path: P) -> GameTrace {
 	let snapshot = load_snapshot(path).unwrap();
 	let mut body = snapshot.body;
 	let mut states = vec![];
@@ -95,6 +104,7 @@ fn load_trace<P: AsRef<std::path::Path>>(path: P) -> GameTrace {
 	}
 	body.pop();
 	let mut constants = vec![];
+	let mut net_states = vec![];
 	for body in body.iter() {
 		let mut tick = hash_map();
 		for ent in &body.constants {
@@ -107,6 +117,48 @@ fn load_trace<P: AsRef<std::path::Path>>(path: P) -> GameTrace {
 			}
 		}
 		constants.push(tick);
+		let mut tick = hash_map();
+		for ent in &body.entities {
+			let matches = id_regex.captures(&ent.description).unwrap();
+			let id = NodeId(matches.get(1).unwrap().as_str().parse::<usize>().unwrap());
+			{
+				let mut row = OutputState::default();
+				for signal in &ent.net_red_in {
+					let sig = signal_lookup_table::lookup_sig_opt(&signal.signal.name).unwrap();
+					row[sig.id()] = signal.count;
+				}
+				tick.insert((id, WireColour::Red, Direction::Input), row);
+			}
+			{
+				let mut row = OutputState::default();
+				for signal in &ent.net_red_out {
+					let sig = signal_lookup_table::lookup_sig_opt(&signal.signal.name).unwrap();
+					row[sig.id()] = signal.count;
+				}
+				tick.insert((id, WireColour::Red, Direction::Output), row);
+			}
+			{
+				let mut row = OutputState::default();
+				for signal in &ent.net_green_in {
+					let sig = signal_lookup_table::lookup_sig_opt(&signal.signal.name).unwrap();
+					row[sig.id()] = signal.count;
+				}
+				tick.insert((id, WireColour::Green, Direction::Input), row);
+			}
+			{
+				let mut row = OutputState::default();
+				for signal in &ent.net_green_out {
+					let sig = signal_lookup_table::lookup_sig_opt(&signal.signal.name).unwrap();
+					row[sig.id()] = signal.count;
+				}
+				tick.insert((id, WireColour::Green, Direction::Output), row);
+			}
+		}
+		net_states.push(tick);
 	}
-	GameTrace { states, constants }
+	GameTrace {
+		states,
+		net_states,
+		constants,
+	}
 }

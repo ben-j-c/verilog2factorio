@@ -14,8 +14,8 @@ local function stop_tracer(arg)
 	helpers.write_file(filename, text, false)
 end
 
-commands.add_command("trace", nil, start_tracer)
-commands.add_command("strace", nil, stop_tracer)
+commands.add_command("cap", nil, start_tracer)
+commands.add_command("scap", nil, stop_tracer)
 
 
 local function take_snapshot(ev)
@@ -37,9 +37,17 @@ local function take_snapshot(ev)
 		end
 		local description = ent.combinator_description
 		local signals = behaviour.signals_last_tick
+		local net_red_in = ent.get_signals(defines.wire_connector_id.combinator_input_red)
+		local net_green_in = ent.get_signals(defines.wire_connector_id.combinator_input_green)
+		local net_red_out = ent.get_signals(defines.wire_connector_id.combinator_output_red)
+		local net_green_out = ent.get_signals(defines.wire_connector_id.combinator_output_green)
 		sampled_entities[#sampled_entities + 1] = {
 			description = description,
 			signals = signals,
+			net_red_in = net_red_in,
+			net_green_in = net_green_in,
+			net_red_out = net_red_out,
+			net_green_out = net_green_out,
 		}
 		::continue::
 	end
@@ -53,12 +61,16 @@ local function take_snapshot(ev)
 		end
 		local section = behaviour.get_section(1)
 		local filter = section.filters[1]
+		local net_red_out = ent.get_signals(defines.wire_connector_id.combinator_output_red)
+		local net_green_out = ent.get_signals(defines.wire_connector_id.combinator_output_green)
 
 		local constant = {
 			enabled = behaviour.enabled,
 			signal = filter.value.name,
 			count = filter.min,
 			description = ent.combinator_description,
+			net_red_out = net_red_out,
+			net_green_out = net_green_out,
 		}
 		constants[#constants + 1] = constant
 		::continue::

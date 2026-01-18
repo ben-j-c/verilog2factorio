@@ -143,13 +143,6 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("heavy-oil-barrel");
 	sig_def!("lubricant-barrel");
 	sig_def!("sulfuric-acid-barrel");
-	sig_def!("water-barrel");
-	sig_def!("crude-oil-barrel");
-	sig_def!("petroleum-gas-barrel");
-	sig_def!("light-oil-barrel");
-	sig_def!("heavy-oil-barrel");
-	sig_def!("lubricant-barrel");
-	sig_def!("sulfuric-acid-barrel");
 	sig_def!("iron-gear-wheel");
 	sig_def!("iron-stick");
 	sig_def!("copper-cable");
@@ -362,7 +355,6 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("character");
 	sig_def!("big-sand-rock");
 	sig_def!("huge-rock");
-	sig_def!("crude-oil");
 	sig_def!("defender");
 	sig_def!("distractor");
 	sig_def!("destroyer");
