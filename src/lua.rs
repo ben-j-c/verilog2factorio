@@ -1318,6 +1318,21 @@ impl UserData for PhysicalDesignAPI {
 			std::fs::write(filename, blueprint_json)?;
 			Ok(())
 		});
+		methods.add_method(
+			"save_json",
+			|_, this, (phy_filename, logd_filename): (String, String)| {
+				//
+				let logd = this.logd.read().unwrap();
+				let phyd = this.phyd.read().unwrap();
+				let logd = serde_json::to_string(logd.deref())
+					.map_err(|_| Error::runtime("Can't serialize"))?;
+				let phyd = serde_json::to_string(phyd.deref())
+					.map_err(|_| Error::runtime("Can't serialize"))?;
+				std::fs::write(logd_filename, logd)?;
+				std::fs::write(phy_filename, phyd)?;
+				Ok(())
+			},
+		);
 	}
 }
 
@@ -1525,6 +1540,32 @@ pub fn get_lua() -> Result<Lua, Error> {
 				offsets_phy: hash_map(),
 			};
 			Ok(ret)
+		})?,
+	)?;
+
+	lua.globals().set(
+		"load_design",
+		lua.create_function(|_, (phy_filename, logd_filename): (String, String)| {
+			let file = File::open(phy_filename)?;
+			let reader = BufReader::new(file);
+			let phyd: PhysicalDesign =
+				serde_json::from_reader(reader).map_err(|_| Error::runtime("Can't deserialize"))?;
+			let file = File::open(logd_filename)?;
+			let reader = BufReader::new(file);
+			let logd: LogicalDesign =
+				serde_json::from_reader(reader).map_err(|_| Error::runtime("Can't deserialize"))?;
+			let phyd = PhysicalDesignAPI {
+				log_id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+				logd: Arc::new(RwLock::new(logd)),
+				phyd: Arc::new(RwLock::new(phyd)),
+			};
+			let logd = LogicalDesignAPI {
+				id: phyd.log_id,
+				logd: phyd.logd.clone(),
+				make_svg: false,
+				group_io: false,
+			};
+			Ok((phyd, logd))
 		})?,
 	)?;
 

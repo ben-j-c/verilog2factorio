@@ -444,6 +444,23 @@ impl SVG {
 			r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}">"#,
 			svg_w, svg_h
 		);
+		svg_data.push_str(
+			r#"
+            <style>
+                .search-match {
+                    stroke: #ff00ff !important;
+                    stroke-width: 4px !important;
+                    stroke-dasharray: none !important;
+                    animation: pulse 0.75s infinite;
+                }
+                @keyframes pulse {
+                    0% { stroke-opacity: 1; }
+                    50% { stroke-opacity: 0.4; }
+                    100% { stroke-opacity: 1; }
+                }
+            </style>
+        "#,
+		);
 
 		{
 			let colour_str = rgb_to_string((255, 255, 255));
@@ -635,6 +652,48 @@ impl SVG {
 				},
 			}
 		}
+
+		svg_data.push_str(r#"
+            <foreignObject x="10" y="10" width="250" height="40">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                    <input type="text" 
+                           id="svg-search" 
+                           placeholder="Search hover text..." 
+                           style="position: fixed; width: 100%; padding: 5px; border: 2px solid #333; border-radius: 4px; font-family: sans-serif; opacity: 0.9;"
+                           oninput="performSearch(this.value)" 
+                    />
+                </div>
+            </foreignObject>
+        "#);
+
+		svg_data.push_str(
+			r#"
+            <script><![CDATA[
+                function performSearch(query) {
+                    // Normalize query
+                    query = query.toLowerCase();
+                    
+                    // Get all shapes (rects and circles)
+                    // We look for any element that has a <title> child
+                    const shapes = document.querySelectorAll("rect, circle");
+                    
+                    shapes.forEach(shape => {
+                        const titleEl = shape.querySelector("title");
+                        
+                        // Clear previous highlight
+                        shape.classList.remove("search-match");
+                        
+                        if (query.length > 0 && titleEl) {
+                            const hoverText = titleEl.textContent.toLowerCase();
+                            if (hoverText.includes(query)) {
+                                shape.classList.add("search-match");
+                            }
+                        }
+                    });
+                }
+            ]]></script>
+        "#,
+		);
 
 		svg_data.push_str("</svg>");
 

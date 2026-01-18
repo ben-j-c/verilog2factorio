@@ -19,6 +19,7 @@
 ---@class PhysicalDesignAPI
 ---@field save_blueprint fun(self: PhysicalDesignAPI, filename: string)
 ---@field save_svg fun(self: PhysicalDesignAPI, filename: string)
+---@field save_json fun(self: PhysicalDesignAPI, filename: string, logd_filename: string)
 
 ---@class SimStateAPI
 ---@field step fun(self: SimStateAPI, n: integer)
@@ -174,6 +175,12 @@ function yosys_load_rtl(filename, top_mod, include_dir) end
 ---@param rtl RTL|string
 ---@return LogicalDesignAPI
 function yosys_map_rtl(rtl) end
+
+---comment
+---@param phyd_filename string
+---@param logd_filename string
+---@return PhysicalDesignAPI, LogicalDesignAPI
+function load_design(phyd_filename, logd_filename) end
 
 --- Enter an interactive terminal.
 ---@param filename string|nil

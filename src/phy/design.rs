@@ -7,6 +7,7 @@ use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::ops::Rem;
 use std::usize;
 
@@ -29,7 +30,7 @@ use crate::{
 
 use super::placement::Placement;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PhyId(pub(crate) usize);
 
 impl Default for PhyId {
@@ -38,10 +39,10 @@ impl Default for PhyId {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WireId(usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct TerminalId(pub u32);
 
 impl TerminalId {
@@ -64,7 +65,7 @@ impl TerminalId {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhyNode {
 	pub id: PhyId,
 	pub logic: ld::NodeId,
@@ -75,7 +76,7 @@ pub struct PhyNode {
 	pub hop_type: WireHopType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Wire {
 	pub id: WireId,
 	pub node1_id: PhyId,
@@ -84,7 +85,7 @@ pub struct Wire {
 	pub terminal2_id: TerminalId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WireHopType {
 	Small,
 	Medium,
@@ -94,12 +95,12 @@ pub enum WireHopType {
 	Lamp,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Settings {
 	pub group_io: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhysicalDesign {
 	settings: Settings,
 

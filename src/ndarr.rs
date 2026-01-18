@@ -1,6 +1,8 @@
 use std::ops::{Index, IndexMut};
 
-#[derive(Clone, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Arr2<T> {
 	data: Vec<T>,
 	dims: [usize; 2],

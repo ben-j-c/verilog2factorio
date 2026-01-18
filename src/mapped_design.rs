@@ -3,7 +3,7 @@ use std::fmt::Display;
 use itertools::{chain, izip, Itertools};
 use serde::{
 	de::{self, Visitor},
-	Deserialize, Deserializer,
+	Deserialize, Deserializer, Serialize,
 };
 
 use crate::{
@@ -165,7 +165,7 @@ impl BitSliceOps for Vec<Bit> {
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitId(pub u64);
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Direction {
 	Input,

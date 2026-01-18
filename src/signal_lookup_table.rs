@@ -8,10 +8,12 @@ use crate::logical_design::Signal;
 pub static SIGNAL_MAP: Lazy<(
 	HashMap<i32, (&'static str, Option<&'static str>)>,
 	HashMap<&'static str, (i32, Option<&'static str>)>,
+	HashMap<String, (i32, Option<&'static str>)>,
 )> = Lazy::new(|| {
 	let mut _id = 0;
 	let mut m = HashMap::new();
 	let mut m2 = HashMap::new();
+	let mut m3 = HashMap::new();
 	#[allow(unused_assignments)]
 	let mut signal_type = Some("virtual");
 	macro_rules! sig_def {
@@ -20,6 +22,7 @@ pub static SIGNAL_MAP: Lazy<(
 			assert!(!m2.contains_key($name));
 			m.insert(_id, ($name, signal_type));
 			m2.insert($name, (_id, signal_type));
+			m3.insert($name.to_lowercase(), (_id, signal_type));
 			_id += 1;
 		}};
 	}
@@ -361,7 +364,7 @@ pub static SIGNAL_MAP: Lazy<(
 	sig_def!("distractor");
 	sig_def!("destroyer");
 	//println!("{}", m.len());
-	(m, m2)
+	(m, m2, m3)
 });
 
 pub fn lookup_str(id: i32) -> (&'static str, Option<&'static str>) {
@@ -378,6 +381,11 @@ pub fn lookup_id(mapped_name: &str) -> Option<i32> {
 	None
 }
 
+pub fn lookup_id_ignore_case(mapped_name: &str) -> Option<i32> {
+	let id_name = mapped_name.replace("_", "-").to_lowercase();
+	SIGNAL_MAP.2.get(id_name.as_str()).map(|x| x.0)
+}
+
 pub fn lookup_sig(mapped_name: &str) -> crate::logical_design::Signal {
 	if let Some(id) = lookup_id(mapped_name) {
 		return crate::logical_design::Signal::Id(id);
@@ -389,7 +397,9 @@ pub fn lookup_sig_opt<S>(mapped_name: &S) -> Option<crate::logical_design::Signa
 where
 	S: AsRef<str>,
 {
-	if let Some(id) = lookup_id(mapped_name.as_ref()) {
+	let mapped_name = mapped_name.as_ref();
+	let mapped_name = mapped_name.replace("_", "-").to_lowercase();
+	if let Some(id) = lookup_id_ignore_case(mapped_name.as_ref()) {
 		return Some(crate::logical_design::Signal::Id(id));
 	}
 	match mapped_name.as_ref() {

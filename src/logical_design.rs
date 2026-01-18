@@ -36,6 +36,7 @@ use std::{
 };
 
 use itertools::{izip, Itertools};
+use serde::{Deserialize, Serialize};
 
 use crate::{
 	checked_design::CheckedDesign,
@@ -52,7 +53,7 @@ pub const NET_GREEN: (bool, bool) = (false, true);
 pub const NET_NONE: (bool, bool) = (false, false);
 
 // Supported Arithmetic Combinator operations as in the game.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ArithmeticOperator {
 	Mult,
 	Div,
@@ -69,7 +70,7 @@ pub enum ArithmeticOperator {
 
 // Supported Decider Combinator operations as in the game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,
@@ -112,7 +113,7 @@ impl DeciderOperator {
 ///
 /// This enum can be thought of as an OR or an AND prefix to every expression in the decider.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeciderRowConjDisj {
 	And,
 	Or,
@@ -123,7 +124,7 @@ pub enum DeciderRowConjDisj {
 ///
 /// See [crate::signal_lookup_table] for exact mapping between ids and names in game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, Serialize, Deserialize)]
 pub enum Signal {
 	/// An unset signal. i.e., a blank spot on the left hand side of an expression in a combinator.
 	None,
@@ -195,7 +196,7 @@ impl Signal {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, Serialize, Deserialize)]
 pub enum WireColour {
 	Red,
 	Green,
@@ -216,7 +217,7 @@ pub enum WireColour {
 ///  - A WireSum must be connected between combinators, combinators can not connect directly to eachother.
 ///
 /// Note: I may or may not check any of these invariants. I am too lazy to find it in the code. Some things might fail, some things may not until you import and realize its wrong.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NodeFunction {
 	/// Game entity.
 	Arithmetic {
@@ -319,7 +320,7 @@ impl NodeFunction {
 }
 
 /// An id that is unique in a design. Can be used to uniquely identify a node in a design. Use this id to make connections.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub(crate) usize);
 
 impl NodeId {
@@ -339,7 +340,7 @@ impl From<usize> for NodeId {
 }
 
 /// The internal representation of a design. No warranty on changing these directly.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Node {
 	pub id: NodeId,
 	pub function: NodeFunction,
@@ -509,7 +510,7 @@ pub struct MemoryPortWriteFilled {
 	pub en_wire: Option<NodeId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct LogicalPort {
 	id: NodeId,
 	direction: Direction,
@@ -518,7 +519,7 @@ pub(crate) struct LogicalPort {
 }
 
 /// A design you want to build up and save.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LogicalDesign {
 	pub(crate) nodes: Vec<Node>,
 	pub(crate) ports: Vec<LogicalPort>,
