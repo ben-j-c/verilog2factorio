@@ -11,12 +11,12 @@ digraph CheckedDesign {
   n4[shape=box,label="$2
 v2f_add
 8"]
-  n5[shape=box,label="$19
-$adffe"]
-  n6[shape=box,label="$103
+  n5[shape=box,label="$139
 $adff"]
-  n7[shape=box,label="$99
+  n6[shape=box,label="$135
 v2f_mux"]
+  n7[shape=box,label="$19
+$adffe"]
   n8[shape=rarrow,label="clk_i
 2"]
   n9[shape=rarrow,label="rst_i
@@ -37,58 +37,58 @@ B"]
 v2f_add
 8
 Y"]
-  n15[shape=larrow,label="$19
-$adffe
-34
+  n15[shape=larrow,label="$139
+$adff
+17
 D"]
-  n16[shape=larrow,label="$19
-$adffe
+  n16[shape=larrow,label="$139
+$adff
 23
 CLK"]
-  n17[shape=larrow,label="$19
-$adffe
-32
-EN"]
-  n18[shape=larrow,label="$19
-$adffe
+  n17[shape=larrow,label="$139
+$adff
 24
 ARST"]
-  n19[shape=rarrow,label="$19
-$adffe
+  n18[shape=rarrow,label="$139
+$adff
 25
 Q"]
-  n20[shape=larrow,label="$103
-$adff
-44
-D"]
-  n21[shape=larrow,label="$103
-$adff
-50
-CLK"]
-  n22[shape=larrow,label="$103
-$adff
-51
-ARST"]
-  n23[shape=rarrow,label="$103
-$adff
-52
-Q"]
-  n24[shape=larrow,label="$99
+  n19[shape=larrow,label="$135
 v2f_mux
-56
+29
 A"]
-  n25[shape=larrow,label="$99
+  n20[shape=larrow,label="$135
 v2f_mux
-56
+29
 B"]
-  n26[shape=larrow,label="$99
+  n21[shape=larrow,label="$135
 v2f_mux
-56
+29
 S"]
-  n27[shape=rarrow,label="$99
+  n22[shape=rarrow,label="$135
 v2f_mux
-58
+31
 Y"]
+  n23[shape=larrow,label="$19
+$adffe
+58
+D"]
+  n24[shape=larrow,label="$19
+$adffe
+47
+CLK"]
+  n25[shape=larrow,label="$19
+$adffe
+56
+EN"]
+  n26[shape=larrow,label="$19
+$adffe
+48
+ARST"]
+  n27[shape=rarrow,label="$19
+$adffe
+49
+Q"]
   n28[shape=box,label="$swizzle"]
   n29[shape=rarrow,label="$swizzle
 63
@@ -107,34 +107,34 @@ A0"]
   n1 -> n9
   n3 -> n11
   n4 -> n14
-  n5 -> n19
-  n6 -> n23
+  n5 -> n18
+  n6 -> n22
   n7 -> n27
   n10 -> n2
-  n11 -> n17 [label="storage-tank(3)",syle=bold,color=blue]
-  n11 -> n26 [label="storage-tank(3)",syle=bold,color=blue]
+  n11 -> n21 [label="storage-tank(3)",syle=bold,color=blue]
+  n11 -> n25 [label="storage-tank(3)",syle=bold,color=blue]
   n12 -> n4
   n13 -> n4
-  n14 -> n15 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n14 -> n23 [label="fast-transport-belt(5)",syle=bold,color=blue]
   n15 -> n5
   n16 -> n5
   n17 -> n5
-  n18 -> n5
-  n19 -> n12 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n35 [label="wooden-chest(0)",syle=bold,color=blue]
+  n18 -> n19 [label="steel-chest(2)",syle=bold,color=blue]
+  n18 -> n30 [label="steel-chest(2)",syle=bold,color=blue]
+  n19 -> n6
   n20 -> n6
   n21 -> n6
-  n22 -> n6
-  n23 -> n24 [label="steel-chest(2)",syle=bold,color=blue]
-  n23 -> n30 [label="steel-chest(2)",syle=bold,color=blue]
+  n22 -> n15 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n23 -> n7
   n24 -> n7
   n25 -> n7
   n26 -> n7
-  n27 -> n20 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n27 -> n12 [label="wooden-chest(0)",syle=bold,color=blue]
+  n27 -> n35 [label="wooden-chest(0)",syle=bold,color=blue]
   n28 -> n29
   n29 -> n10 [label="steel-chest(2)",syle=bold,color=blue]
   n30 -> n28
   n33 -> n34
-  n34 -> n25 [label="transport-belt(4)",syle=bold,color=blue]
+  n34 -> n20 [label="transport-belt(4)",syle=bold,color=blue]
   n35 -> n33
 }

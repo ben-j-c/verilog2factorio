@@ -14,9 +14,9 @@ digraph CheckedDesign {
 v2f_reduce_or"]
   n6[shape=box,label="$3
 v2f_reduce_or"]
-  n7[shape=box,label="$166
+  n7[shape=box,label="$194
 $sop"]
-  n8[shape=box,label="$169
+  n8[shape=box,label="$197
 $lut"]
   n9[shape=box,label="$4
 v2f_reduce_and"]
@@ -294,35 +294,35 @@ A31"]
 v2f_reduce_or
 7
 Y"]
-  n81[shape=larrow,label="$166
+  n81[shape=larrow,label="$194
 $sop
 10
 A0"]
-  n82[shape=larrow,label="$166
+  n82[shape=larrow,label="$194
 $sop
 10
 A1"]
-  n83[shape=larrow,label="$166
+  n83[shape=larrow,label="$194
 $sop
 10
 A2"]
-  n84[shape=larrow,label="$166
+  n84[shape=larrow,label="$194
 $sop
 10
 A3"]
-  n85[shape=larrow,label="$166
+  n85[shape=larrow,label="$194
 $sop
 10
 A4"]
-  n86[shape=rarrow,label="$166
+  n86[shape=rarrow,label="$194
 $sop
 9
 Y"]
-  n87[shape=larrow,label="$169
+  n87[shape=larrow,label="$197
 $lut
 12
 A0"]
-  n88[shape=rarrow,label="$169
+  n88[shape=rarrow,label="$197
 $lut
 11
 Y"]

@@ -60,7 +60,7 @@ impl NodeIo {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CoarseExpr {
 	DriverChunk {
 		driver_ioid: NodeId,

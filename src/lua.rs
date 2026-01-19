@@ -321,9 +321,9 @@ fn method_check_yosys() -> Result<(), mlua::Error> {
 	}
 	let result =
 		String::from_utf8(output.stdout).map_err(|_| Error::runtime("Can't get the version."))?;
-	if !result.starts_with("Yosys 0.52 (git sha1 fee39a328") {
+	if !result.starts_with("Yosys 0.52") && !result.starts_with("Yosys 0.61") {
 		Err(Error::runtime(
-			"Wrong yosys version, expected \"Yosys 0.52 (git sha1 fee39a328\"",
+			"Wrong yosys version, expected \"Yosys 0.52\" or \"Yosys 0.61\"",
 		))
 	} else {
 		Ok(())

@@ -554,6 +554,7 @@ impl CheckedDesign {
 	}
 
 	fn resolve_coarse_exprs(&mut self) {
+		let mut cache = hash_map();
 		for nodeid in 0..self.nodes.len() {
 			let connected_id = *match self.node_type(nodeid) {
 				NodeType::CellInput { connected_id, .. } | NodeType::PortInput { connected_id } => {
@@ -583,6 +584,19 @@ impl CheckedDesign {
 					continue;
 				}
 			}
+			if let Some(id) = cache.get(exprs) {
+				self.connect(*id, nodeid);
+				for expr in exprs {
+					let fiid = match expr {
+						CoarseExpr::DriverChunk { driver_ioid, .. } => {
+							self.connected_id_map[*driver_ioid]
+						},
+						_ => continue,
+					};
+					self.disconnect(fiid, nodeid);
+				}
+				continue;
+			}
 			if exprs.len() > 1 {
 				// Insert swizzle that takes in the fanin and outputs a single
 				let body = self.new_node(
@@ -600,6 +614,7 @@ impl CheckedDesign {
 				);
 				self.connect(body, output);
 				self.connect(output, nodeid);
+				cache.insert(exprs.clone(), output);
 
 				let mut counter = 0;
 				for expr in exprs {
@@ -729,6 +744,7 @@ impl CheckedDesign {
 				self.connect(input, body);
 				self.connect(body, output);
 				self.connect(output, nodeid);
+				cache.insert(exprs.clone(), output);
 			}
 		}
 	}
