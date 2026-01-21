@@ -22,7 +22,7 @@ module v2f_reduce_or(A, Y);
 	parameter Y_WIDTH = 0;
 	input [A_WIDTH-1:0] A;
 	output [Y_WIDTH-1:0] Y;
-	// Blackbox
+	assign Y = |A;
 endmodule
 
 module v2f_reduce_and(A, Y);
@@ -293,3 +293,29 @@ module v2f_mux (A, B, S, Y);
 	output [WIDTH-1:0] Y;
 	assign Y = S ? B : A;
 endmodule
+
+//(*whitebox*)
+//module v2f_sop_not (A, Y);
+//	parameter WIDTH = 0;
+//	parameter DEPTH = 0;
+//	parameter TABLE = 0;
+//
+//	input [WIDTH-1:0] A;
+//	output reg Y;
+//
+//	integer i, j;
+//	reg match;
+//
+//	always @* begin
+//		Y = 0;
+//		for (i = 0; i < DEPTH; i=i+1) begin
+//			match = 1;
+//			for (j = 0; j < WIDTH; j=j+1) begin
+//				if (TABLE[2*WIDTH*i + 2*j + 0] && A[j]) match = 0;
+//				if (TABLE[2*WIDTH*i + 2*j + 1] && !A[j]) match = 0;
+//			end
+//			if (match) Y = 1;
+//		end
+//		Y = !Y;
+//	end
+//endmodule

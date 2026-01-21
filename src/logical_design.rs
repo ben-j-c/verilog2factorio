@@ -3118,10 +3118,16 @@ impl LogicalDesign {
 		table: Vec<bool>,
 		depth: usize,
 		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+		negate_output: bool,
 	) -> (Vec<NodeId>, NodeId) {
 		let sop_comb = self.add_decider();
 		let width = sig_in.len();
-		self.add_decider_out_constant(sop_comb, sig_out, 1, NET_RED_GREEN);
+		self.add_decider_out_constant(
+			sop_comb,
+			sig_out,
+			if negate_output { -1 } else { 1 },
+			NET_RED_GREEN,
+		);
 		let retwire = self.add_wire_red(vec![], vec![sop_comb]);
 		let mut conj_disj = DeciderRowConjDisj::FirstRow;
 		let get_ith_expr = |i: usize, bit: bool| {

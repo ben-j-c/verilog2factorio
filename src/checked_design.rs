@@ -1430,7 +1430,6 @@ impl CheckedDesign {
 		use logical_design::Signal;
 		logical_design.set_description(mapped_design.get_top_source());
 		let mut logic_map: Vec<Option<LID>> = vec![None; self.nodes.len()];
-		let mut histogram: BTreeMap<&str, usize> = BTreeMap::<_, _>::new();
 		for (nodeid, node) in self.nodes.iter().enumerate() {
 			match &node.node_type {
 				NodeType::Pruned => {},
@@ -1485,15 +1484,6 @@ impl CheckedDesign {
 				},
 				NodeType::CellBody { cell_type } => match cell_type {
 					BodyType::ABY => {
-						histogram
-							.entry(
-								mapped_design
-									.get_cell(&node.mapped_id)
-									.cell_type
-									.simple_string(),
-							)
-							.or_default()
-							.add_assign(1);
 						let sig_left = self.signals[node.fanin[0]];
 						let sig_right = self.signals[node.fanin[1]];
 						let sig_out = self.signals[node.fanout[0]];
@@ -1508,28 +1498,17 @@ impl CheckedDesign {
 						logic_map[node.fanout[0]] = Some(output)
 					},
 					BodyType::Constant { value } => {
-						histogram.entry("Constant").or_default().add_assign(1);
 						logic_map[nodeid] = Some(
 							logical_design
 								.add_constant(vec![self.signals[node.fanout[0]]], vec![*value]),
 						);
 					},
 					BodyType::Nop => {
-						histogram.entry("Nop").or_default().add_assign(1);
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
 						logic_map[nodeid] = Some(logical_design.add_nop(sig_in, sig_out))
 					},
 					BodyType::AY => {
-						histogram
-							.entry(
-								mapped_design
-									.get_cell(&node.mapped_id)
-									.cell_type
-									.simple_string(),
-							)
-							.or_default()
-							.add_assign(1);
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
 						let (input, output) = self.apply_unary_op(
@@ -1546,10 +1525,7 @@ impl CheckedDesign {
 							.get_cell_option(&node.mapped_id)
 							.map(|cell| cell.cell_type)
 							.unwrap_or(ImplementableOp::Swizzle);
-						histogram
-							.entry(impl_op.simple_string())
-							.or_default()
-							.add_assign(1);
+
 						let sig_in = node
 							.fanin
 							.iter()
@@ -1591,10 +1567,60 @@ impl CheckedDesign {
 				},
 			}
 		}
+		let mut histogram: BTreeMap<&str, usize> = BTreeMap::<_, _>::new();
+		let mut histogram2: BTreeMap<(&str, &str), usize> = BTreeMap::<_, _>::new();
+		let find_impl_string = |node: &Node| {
+			let cell_type = match &node.node_type {
+				NodeType::CellBody { cell_type } => cell_type,
+				_ => unreachable!(),
+			};
+			match cell_type {
+				BodyType::ABY | BodyType::AY => mapped_design
+					.get_cell(&node.mapped_id)
+					.cell_type
+					.simple_string(),
+				BodyType::MultiPart => mapped_design
+					.get_cell_option(&node.mapped_id)
+					.map(|cell| cell.cell_type)
+					.unwrap_or(ImplementableOp::Swizzle)
+					.simple_string(),
+				BodyType::Constant { .. } => "Constant",
+				BodyType::Nop => "Nop",
+			}
+		};
+		for node in &self.nodes {
+			if !matches!(node.node_type, NodeType::CellBody { .. }) {
+				continue;
+			}
+			let impl_first = find_impl_string(node);
+			histogram.entry(impl_first).or_default().add_assign(1);
+			for pin_out in &node.fanout {
+				for pin_in in &self.nodes[*pin_out].fanout {
+					let body_id = self.nodes[*pin_in].fanout[0];
+					let node_second = &self.nodes[body_id];
+					if !matches!(node_second.node_type, NodeType::CellBody { .. }) {
+						continue;
+					}
+					let impl_second = find_impl_string(node_second);
+					histogram2
+						.entry((impl_first, impl_second))
+						.or_default()
+						.add_assign(1);
+				}
+			}
+		}
 		{
 			println!("Cell counts:");
 			for (name, count) in histogram.iter() {
 				println!("    {name}: {count}");
+			}
+			println!("Cell bigram:");
+			for (name, count) in histogram2
+				.iter()
+				.sorted_by(|(_, a), (_, b)| a.cmp(b))
+				.filter(|(_, v)| **v > 20)
+			{
+				println!("    {name:?}: {count}");
 			}
 		}
 
@@ -2059,6 +2085,7 @@ impl CheckedDesign {
 					table,
 					mapped_cell.unwrap().parameters["DEPTH"].unwrap_bin_str(),
 					&self.nodes[nodeid].folded_expressions,
+					false,
 				);
 				(wires, vec![sop_comb])
 			},
@@ -2227,10 +2254,7 @@ impl CheckedDesign {
 				(pre_filter, post_filter)
 			},
 			ImplementableOp::Neg => {
-				let neg = logical_design.add_arithmetic(
-					(Signal::Constant(0), ArithmeticOperator::Sub, sig_in),
-					sig_out,
-				);
+				let neg = logical_design.add_neg(sig_in, sig_out);
 				(neg, neg)
 			},
 			ImplementableOp::Not => {
@@ -2487,6 +2511,24 @@ impl CheckedDesign {
 				}
 				n_pruned += self.try_prune(body[idx]);
 			}
+		}
+		for id in 0..self.nodes.len() {
+			let node = &self.nodes[id];
+			if !node.folded_expressions.is_empty() {
+				continue;
+			}
+			if !matches!(&node.node_type, NodeType::CellBody { .. }) {
+				continue;
+			};
+			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
+				m
+			} else {
+				continue;
+			};
+			let optimization_applies = matches!(mapped.cell_type, ImplementableOp::Sop(_));
+			if !optimization_applies {
+				continue;
+			};
 		}
 		n_pruned
 	}
