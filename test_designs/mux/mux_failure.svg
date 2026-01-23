@@ -1,1 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="470" height="120"><rect x="0" y="0" width="470" height="120" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="400" height="100" fill="rgba(255,255,255,1)"></rect><rect x="400" y="69" width="50" height="25" fill="rgba(230,230,230,1)"></rect><text x="425" y="81" text-anchor="middle" alignment-baseline="middle" fill="black">0</text><line x1="400" y1="69" x2="400" y2="100" stroke="black" stroke-width="1"></line><rect x="0" y="0" width="200" height="25" fill="rgba(200,200,200,1)"></rect><text x="100" y="12" text-anchor="middle" alignment-baseline="middle" fill="black">Simulation</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="470" height="120">
+            <style>
+                .search-match {
+                    stroke: #ff00ff !important;
+                    stroke-width: 4px !important;
+                    stroke-dasharray: none !important;
+                    animation: pulse 0.75s infinite;
+                }
+                @keyframes pulse {
+                    0% { stroke-opacity: 1; }
+                    50% { stroke-opacity: 0.4; }
+                    100% { stroke-opacity: 1; }
+                }
+            </style>
+        <rect x="0" y="0" width="470" height="120" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="400" height="100" fill="rgba(255,255,255,1)"></rect><rect x="400" y="69" width="50" height="25" fill="rgba(230,230,230,1)"></rect><text x="425" y="81" text-anchor="middle" alignment-baseline="middle" fill="black">0</text><line x1="400" y1="69" x2="400" y2="100" stroke="black" stroke-width="1"></line><rect x="0" y="0" width="200" height="25" fill="rgba(200,200,200,1)"></rect><text x="100" y="12" text-anchor="middle" alignment-baseline="middle" fill="black">Simulation</text>
+            <foreignObject x="10" y="10" width="250" height="40">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                    <input type="text" 
+                           id="svg-search" 
+                           placeholder="Search hover text..." 
+                           style="position: fixed; width: 100%; padding: 5px; border: 2px solid #333; border-radius: 4px; font-family: sans-serif; opacity: 0.9;"
+                           oninput="performSearch(this.value)" 
+                    />
+                </div>
+            </foreignObject>
+        
+            <script><![CDATA[
+                function performSearch(query) {
+                    // Normalize query
+                    query = query.toLowerCase();
+                    
+                    // Get all shapes (rects and circles)
+                    // We look for any element that has a <title> child
+                    const shapes = document.querySelectorAll("rect, circle");
+                    
+                    shapes.forEach(shape => {
+                        const titleEl = shape.querySelector("title");
+                        
+                        // Clear previous highlight
+                        shape.classList.remove("search-match");
+                        
+                        if (query.length > 0 && titleEl) {
+                            const hoverText = titleEl.textContent.toLowerCase();
+                            if (hoverText.includes(query)) {
+                                shape.classList.add("search-match");
+                            }
+                        }
+                    });
+                }
+            ]]></script>
+        </svg>

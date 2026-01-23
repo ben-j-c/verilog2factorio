@@ -3,7 +3,8 @@ techmap -autoproc -map /home/ben/repo/verilog2factorio/techmap/v2f_simplify.v;;
 muxpack
 techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
 techmap -dont_map $adff -dont_map $adffe -dont_map $dff -dont_map $dffe -dont_map $sdff -dont_map $sdffe
-abc -sop
+abc -sop -I 40
+techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
 techmap -map /home/ben/repo/verilog2factorio/yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 10
 clean; opt_lut
 flowmap -maxlut 10

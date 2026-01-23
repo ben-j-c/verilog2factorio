@@ -12,6 +12,15 @@ module v2f_rule_neg (A, Y);
 		_TECHMAP_REPLACE_(.A(A), .Y(Y));
 endmodule
 
+(* techmap_celltype = "$_NOT_" *)
+module v2f_rule_neg_bit (A, Y);
+	input A;
+	output Y;
+
+	v2f_neg #(.A_WIDTH(32), .Y_WIDTH(32))
+		_TECHMAP_REPLACE_(.A(A), .Y(Y));
+endmodule
+
 (* techmap_celltype = "$not" *)
 module v2f_rule_not (A, Y);
 	parameter A_SIGNED = 0;

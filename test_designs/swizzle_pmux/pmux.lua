@@ -23,7 +23,7 @@ if not os.execute("../makevcd") then
 end
 sim = logd:new_simulation()
 if not sim:apply_vcd(vcd_file, inputs, outputs, delay, true) then
-	sim:inspect()
+	--sim:inspect()
 	error("apply vcd failed")
 end
 print(name .. " sim matches VCD")

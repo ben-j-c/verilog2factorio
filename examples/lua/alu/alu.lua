@@ -98,7 +98,7 @@ end
 select:set_outputs({ s_sig }, { 13 })
 sim:step(4)
 if (sim:probe(result_y.input)[y_sig] ~= 48) then
-	sim:inspect()
+	--sim:inspect()
 	error()
 end
 

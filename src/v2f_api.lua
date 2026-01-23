@@ -31,6 +31,7 @@
 ---@field inspect fun(self: SimStateAPI)
 ---@field apply_vcd fun(self: SimStateAPI, filename: string, inputs_lua: table, outputs_lua: table, propagation_delay: integer, reset: boolean): boolean
 ---@field apply_snapshot fun(self: SimStateAPI, filename: string, reset: boolean): boolean
+---@field inspect_tui fun(self: SimStateAPI)
 
 ---@class Signal
 ---@field __add fun(self: Signal, other: Signal|string|integer): ArithmeticExpr

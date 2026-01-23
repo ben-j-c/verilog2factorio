@@ -17,6 +17,7 @@ use rayon::{
 
 mod decider_model;
 pub mod snapshot;
+pub mod tui;
 pub mod vcd;
 
 use crate::{

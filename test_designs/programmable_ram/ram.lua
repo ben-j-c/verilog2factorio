@@ -38,7 +38,7 @@ wr_bsel = logd:find_in_port("BYTE_SELECT") or error()
 --sim:inspect()
 
 if not sim:apply_vcd(vcd_file, inputs, outputs, delay, true) then
-	sim:inspect()
+	--sim:inspect()
 	error("apply vcd failed")
 end
 print(name .. " sim matches VCD")

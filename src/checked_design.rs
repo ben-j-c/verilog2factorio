@@ -1,6 +1,6 @@
 use std::{
 	cell::RefCell,
-	collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList},
+	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList},
 	ops::AddAssign,
 };
 
@@ -14,7 +14,7 @@ use crate::{
 		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
 		Polarity, ResetSpec, Signal, NET_RED_GREEN,
 	},
-	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
+	mapped_design::{self, BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
 	util::{self, hash_map, hash_set, index_of, HashS},
 };
@@ -205,6 +205,8 @@ pub struct CheckedDesign {
 
 	clocks: HashS<NodeId>,
 
+	nop_cache: HashM<NodeId, NodeId>,
+
 	// Flags
 	pub promote_all_nets_to_ports: bool,
 }
@@ -306,6 +308,7 @@ impl CheckedDesign {
 			coarse_exprs: vec![],
 			associated_logic: RefCell::new(vec![]),
 			clocks: hash_set(),
+			nop_cache: hash_map(),
 			promote_all_nets_to_ports: false,
 		}
 	}
@@ -319,6 +322,7 @@ impl CheckedDesign {
 	}
 
 	fn new_node(&mut self, mapped_id: &str, node_type: NodeType) -> NodeId {
+		let new_id = self.nodes.len();
 		let connected_id = match node_type {
 			NodeType::CellInput { connected_id, .. } => Some(connected_id),
 			NodeType::CellOutput { connected_id, .. } => Some(connected_id),
@@ -329,7 +333,7 @@ impl CheckedDesign {
 			NodeType::Pruned => unreachable!(),
 		};
 		self.nodes.push(Node {
-			id: self.nodes.len(),
+			id: new_id,
 			node_type,
 			mapped_id: mapped_id.to_owned(),
 			fanin: vec![],
@@ -341,12 +345,12 @@ impl CheckedDesign {
 		});
 		if let Some(connected_id) = connected_id {
 			if connected_id != usize::MAX {
-				self.connected_id_map[connected_id] = self.nodes.len() - 1;
+				self.connected_id_map[connected_id] = new_id;
 			}
 		}
 		self.coarse_exprs.push(None);
 
-		self.nodes.len() - 1
+		new_id
 	}
 
 	fn set_node_coarse_expr(&mut self, id: NodeId, expr: CoarseExpr) {
@@ -367,6 +371,23 @@ impl CheckedDesign {
 			(NodeType::CellBody { .. }, NodeType::CellOutput { .. }) => {},
 			_ => assert!(false),
 		};
+		#[cfg(debug_assertions)]
+		{
+			match (t1, t2) {
+				(NodeType::CellOutput { .. }, NodeType::CellInput { .. }) => {
+					let xx = &self.nodes[send].fanin.get(0);
+					let yy = &self.nodes[recv].fanout.get(0);
+					if xx.is_some() && yy.is_some() {
+						if let NodeType::CellBody { cell_type } = self.node_type(*xx.unwrap()) {
+							if matches!(cell_type, BodyType::Nop) {
+								assert_ne!(xx, yy);
+							}
+						}
+					}
+				},
+				_ => {},
+			}
+		}
 		if !self.nodes[send].fanout.contains(&recv) {
 			self.nodes[send].fanout.push(recv);
 			self.nodes[recv].fanin.push(send);
@@ -374,6 +395,9 @@ impl CheckedDesign {
 	}
 
 	fn disconnect(&mut self, send: NodeId, recv: NodeId) {
+		if recv == 101 {
+			println!("aa");
+		}
 		if self.nodes[send].fanout.contains(&recv) {
 			let idx1 = self.nodes[send]
 				.fanout
@@ -774,67 +798,13 @@ impl CheckedDesign {
 				}
 				// This port cant use this signal internally, so we must rename it with a nop.
 				if matches!(self.node_type(*nodeid), NodeType::PortOutput { .. }) {
-					let mut nop = usize::MAX;
 					for foid in self.nodes[*nodeid].fanout.clone() {
-						self.disconnect(*nodeid, foid);
-						if nop == usize::MAX {
-							nop = self.new_node(
-								"$nop",
-								NodeType::CellBody {
-									cell_type: BodyType::Nop,
-								},
-							);
-						}
-						let a = self.new_node(
-							"$nop",
-							NodeType::CellInput {
-								port: "A".to_string(),
-								connected_id: usize::MAX,
-							},
-						);
-						let y = self.new_node(
-							"$nop",
-							NodeType::CellOutput {
-								port: "Y".to_owned(),
-								connected_id: usize::MAX,
-							},
-						);
-						self.connect(*nodeid, a);
-						self.connect(a, nop);
-						self.connect(nop, y);
-						self.connect(y, foid);
+						self.insert_nop_between(*nodeid, foid);
 					}
 				}
 				if matches!(self.node_type(*nodeid), NodeType::PortInput { .. }) {
-					let mut nop = usize::MAX;
 					for fiid in self.nodes[*nodeid].fanin.clone() {
-						self.disconnect(fiid, *nodeid);
-						if nop == usize::MAX {
-							nop = self.new_node(
-								"$nop",
-								NodeType::CellBody {
-									cell_type: BodyType::Nop,
-								},
-							);
-						}
-						let a = self.new_node(
-							"$nop",
-							NodeType::CellInput {
-								port: "A".to_string(),
-								connected_id: usize::MAX,
-							},
-						);
-						let y = self.new_node(
-							"$nop",
-							NodeType::CellOutput {
-								port: "Y".to_owned(),
-								connected_id: usize::MAX,
-							},
-						);
-						self.connect(fiid, a);
-						self.connect(a, nop);
-						self.connect(nop, y);
-						self.connect(y, *nodeid);
+						self.insert_nop_between(fiid, *nodeid);
 					}
 				}
 			}
@@ -928,8 +898,9 @@ impl CheckedDesign {
 	fn elaborate_signal_choices(
 		&self,
 		signal_choices: &mut Vec<Signal>,
+		mapped_design: &MappedDesign,
 	) -> Result<(), Vec<NodeId>> {
-		let topo_order = self.get_topo_order();
+		let topo_order = self.get_topo_order(mapped_design);
 		for nodeid in topo_order {
 			let choice = signal_choices[nodeid];
 			if choice.is_some() {
@@ -1024,7 +995,22 @@ impl CheckedDesign {
 						assert_eq!(signal_choices[node.id], signal_choices[*fiid]);
 					}
 				},
-				NodeType::CellBody { .. } => assert!(signal_choices[node.id].is_none()),
+				NodeType::CellBody { .. } => {
+					assert!(signal_choices[node.id].is_none());
+					let mut choices = hash_map();
+					for fiid in &node.fanin {
+						let choice = signal_choices[*fiid];
+						if self.nodes[*fiid].fanin.is_empty() {
+							continue;
+						}
+						let driver = self.nodes[*fiid].fanin[0];
+						if choices.contains_key(&choice) {
+							//assert!(choices[&choice] == driver);
+						} else {
+							choices.insert(choice, driver);
+						}
+					}
+				},
 				NodeType::Pruned => {},
 			}
 		}
@@ -1044,7 +1030,7 @@ impl CheckedDesign {
 		self.make_preliminary_connections();
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements();
-		//#[cfg(false)]
+		#[cfg(false)]
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {
@@ -1053,9 +1039,10 @@ impl CheckedDesign {
 				break;
 			}
 		}
-		let mut signal_choices = self.calculate_and_validate_signal_choices();
+		let mut signal_choices = vec![];
 		loop {
-			match self.elaborate_signal_choices(&mut signal_choices) {
+			signal_choices = self.calculate_and_validate_signal_choices();
+			match self.elaborate_signal_choices(&mut signal_choices, mapped_design) {
 				Ok(_) => break,
 				Err(local_io) => {
 					self.partition_io_network(local_io);
@@ -1067,6 +1054,65 @@ impl CheckedDesign {
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
 		self.identify_clocks(mapped_design);
+	}
+
+	fn get_inputs_through_body(&self, id: NodeId) -> &[NodeId] {
+		let node = &self.nodes[id];
+		assert!(matches!(
+			node.node_type,
+			NodeType::PortOutput { .. } | NodeType::CellOutput { .. }
+		));
+		let body = &self.nodes[node.fanin[0]];
+		&body.fanin
+	}
+
+	fn insert_nop_between(&mut self, first: NodeId, second: NodeId) {
+		assert!(matches!(
+			self.node_type(second),
+			NodeType::PortInput { .. } | NodeType::CellInput { .. }
+		));
+		assert!(matches!(
+			self.node_type(first),
+			NodeType::PortOutput { .. } | NodeType::CellOutput { .. }
+		));
+		assert!(first != second);
+		let y = if self.nop_cache.contains_key(&first) {
+			let y = self.nop_cache[&first];
+			let inputs = self.get_inputs_through_body(y);
+			if inputs.contains(&second) {
+				println!("{second} asking to add Nop to itself.");
+				return;
+			}
+			y
+		} else {
+			let nop = self.new_node(
+				"$nop",
+				NodeType::CellBody {
+					cell_type: BodyType::Nop,
+				},
+			);
+			let a = self.new_node(
+				"$nop",
+				NodeType::CellInput {
+					port: "A".to_string(),
+					connected_id: usize::MAX,
+				},
+			);
+			let y = self.new_node(
+				"$nop",
+				NodeType::CellOutput {
+					port: "Y".to_owned(),
+					connected_id: usize::MAX,
+				},
+			);
+			self.connect(a, nop);
+			self.connect(nop, y);
+			self.connect(first, a);
+			self.nop_cache.insert(first, y);
+			y
+		};
+		self.disconnect(first, second);
+		self.connect(y, second);
 	}
 
 	fn partition_io_network(&mut self, mut local_io: Vec<NodeId>) {
@@ -1166,31 +1212,7 @@ impl CheckedDesign {
 					};
 					let fiid = node.fanin[0];
 					if has_been_cut {
-						self.disconnect(fiid, *id);
-						let nop = self.new_node(
-							"$nop",
-							NodeType::CellBody {
-								cell_type: BodyType::Nop,
-							},
-						);
-						let a = self.new_node(
-							"$nop",
-							NodeType::CellInput {
-								port: "A".to_string(),
-								connected_id: usize::MAX,
-							},
-						);
-						let y = self.new_node(
-							"$nop",
-							NodeType::CellOutput {
-								port: "Y".to_owned(),
-								connected_id: usize::MAX,
-							},
-						);
-						self.connect(fiid, a);
-						self.connect(a, nop);
-						self.connect(nop, y);
-						self.connect(y, *id);
+						self.insert_nop_between(fiid, *id);
 					};
 				},
 				_ => {},
@@ -1377,12 +1399,19 @@ impl CheckedDesign {
 		)
 	}
 
-	fn get_topo_order(&self) -> Vec<NodeId> {
+	fn get_topo_order(&self, mapped_design: &MappedDesign) -> Vec<NodeId> {
 		let mut topo_seen = HashSet::new();
 		let mut topological_order = vec![];
 		let mut root_nodes = vec![];
 		for node in &self.nodes {
-			if node.fanin.is_empty() || matches!(node.timing_boundary, TimingBoundary::Pre) {
+			if node.fanin.is_empty()
+				|| matches!(node.timing_boundary, TimingBoundary::Pre)
+				|| matches!(
+					node.node_type,
+					NodeType::CellBody {
+						cell_type: BodyType::Constant { .. }
+					}
+				) {
 				root_nodes.push(node.id);
 			}
 		}
@@ -1421,7 +1450,18 @@ impl CheckedDesign {
 				}
 			}
 		}
-		assert_eq!(topological_order.len(), self.nodes.len());
+		if topological_order.len() != self.nodes.len() {
+			let mut unseen = hash_set();
+			for i in 0..self.nodes.len() {
+				if !topo_seen.contains(&i) {
+					unseen.insert(i);
+				}
+			}
+
+			self.save_dot(mapped_design, Some(&unseen), "failed_checked_design.dot");
+			assert_eq!(topological_order.len(), self.nodes.len());
+		}
+
 		topological_order
 	}
 
@@ -2533,8 +2573,13 @@ impl CheckedDesign {
 		n_pruned
 	}
 
-	pub fn save_dot(&self, mapped_design: &MappedDesign) {
-		graph_viz::save_dot(self, mapped_design, "checked_design.dot").unwrap()
+	pub fn save_dot<S: AsRef<str>>(
+		&self,
+		mapped_design: &MappedDesign,
+		filter: Option<&HashS<NodeId>>,
+		filename: S,
+	) {
+		graph_viz::save_dot(self, mapped_design, filter, filename.as_ref()).unwrap()
 	}
 
 	fn identify_clocks(&mut self, mapped_design: &MappedDesign) {
@@ -2559,6 +2604,31 @@ impl CheckedDesign {
 			}
 		}
 	}
+
+	pub fn nodes_n_hops_back(&self, id: NodeId, max_hops: usize) -> HashS<NodeId> {
+		let mut queue = LinkedList::new();
+		let mut visited = hash_set();
+
+		queue.push_back((id, 0));
+		loop {
+			let (id, hops) = if let Some((x, y)) = queue.pop_front() {
+				(x, y)
+			} else {
+				break;
+			};
+			if visited.contains(&id) {
+				continue;
+			}
+			if hops > max_hops {
+				continue;
+			}
+			visited.insert(id);
+			for fiid in &self.nodes[id].fanin {
+				queue.push_back((*fiid, hops + 1));
+			}
+		}
+		visited
+	}
 }
 
 mod graph_viz {
@@ -2566,6 +2636,7 @@ mod graph_viz {
 	use crate::checked_design::NodeType;
 	use crate::logical_design::Signal;
 	use crate::mapped_design::MappedDesign;
+	use crate::util::HashS;
 	use graphviz_rust::attributes::EdgeAttributes;
 	use graphviz_rust::attributes::NodeAttributes;
 	use graphviz_rust::dot_generator::*;
@@ -2576,16 +2647,27 @@ mod graph_viz {
 	pub fn save_dot(
 		design: &CheckedDesign,
 		mapped: &MappedDesign,
+		filter: Option<&HashS<usize>>,
 		filepath: &str,
 	) -> std::io::Result<()> {
 		let mut g = graph!(di id!("CheckedDesign"));
 		g.add_stmt(stmt!(attr!("rankdir", "LR")));
 
-		for node in design
-			.nodes
-			.iter()
-			.filter(|n| !matches!(design.node_type(n.id), NodeType::Pruned))
-		{
+		//let filter = {
+		//	let (id, _) = design
+		//		.nodes
+		//		.iter()
+		//		.enumerate()
+		//		.find(|(_, n)| n.mapped_id == port_of_interest)
+		//		.unwrap();
+		//	design.nodes_n_hops_back(id, 20)
+		//};
+		let tmp = (0..design.nodes.len()).collect();
+		let filter = filter.unwrap_or_else(|| &tmp);
+
+		for node in design.nodes.iter().filter(|n| {
+			!matches!(design.node_type(n.id), NodeType::Pruned) && filter.contains(&n.id)
+		}) {
 			let nid = format!("n{}", node.id);
 
 			let mut node_label = {
@@ -2595,7 +2677,7 @@ mod graph_viz {
 			if let Some(mapped_cell) = mapped.get_cell_option(&node.mapped_id) {
 				node_label += &format!("\n{}", mapped_cell.cell_type);
 			}
-			if let Some(lid) = design.associated_logic.borrow()[node.id] {
+			if let Some(Some(lid)) = design.associated_logic.borrow().get(node.id) {
 				node_label += &format!("\n{}", lid);
 			}
 			match &node.node_type {
@@ -2623,11 +2705,14 @@ mod graph_viz {
 		}
 
 		for src_node in &design.nodes {
-			if matches!(design.node_type(src_node.id), NodeType::Pruned) {
+			if matches!(design.node_type(src_node.id), NodeType::Pruned)
+				|| !filter.contains(&src_node.id)
+			{
 				continue;
 			}
 			for dst_id in &src_node.fanout {
-				if matches!(design.node_type(*dst_id), NodeType::Pruned) {
+				if matches!(design.node_type(*dst_id), NodeType::Pruned) || !filter.contains(dst_id)
+				{
 					continue;
 				}
 				let dst_node = &design.nodes[*dst_id];
@@ -2646,9 +2731,9 @@ mod graph_viz {
 
 				let mut attrs = Vec::new();
 
-				let signal = design.signals[src_node.id];
-				if !matches!(signal, Signal::None) {
-					attrs.push(EdgeAttributes::label(format!("\"{}\"", signal)));
+				let signal = design.signals.get(src_node.id);
+				if !matches!(signal, None | Some(Signal::None)) {
+					attrs.push(EdgeAttributes::label(format!("\"{}\"", signal.unwrap())));
 				}
 
 				let edge = if design.is_driver(*dst_id, src_node.id) {

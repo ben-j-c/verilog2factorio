@@ -24,8 +24,8 @@ end
 sim = logd:new_simulation()
 if not sim:apply_vcd(vcd_file, inputs, outputs, delay, true) then
 	sim:save_svg(name .. "_failure.svg")
-	sim:inspect()
-	--error("apply vcd failed")
+	--sim:inspect()
+	error("apply vcd failed")
 end
 print(name .. " sim matches VCD")
 

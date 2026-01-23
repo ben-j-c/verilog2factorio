@@ -498,7 +498,7 @@ fn method_map_rtl(rtl: &RTL) -> Result<LogicalDesignAPI, mlua::Error> {
 	checked_design.build_from(&mapped_design);
 	let mut logd = LogicalDesign::new();
 	logd.build_from(&checked_design, &mapped_design);
-	checked_design.save_dot(&mapped_design);
+	checked_design.save_dot(&mapped_design, None, "checked_design.dot");
 	Ok(LogicalDesignAPI {
 		id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
 		logd: Arc::new(RwLock::new(logd)),
@@ -1082,6 +1082,10 @@ impl UserData for SimStateAPI {
 		methods.add_method("inspect", |_, this, _: ()| {
 			this.sim.write().unwrap().inspect();
 			Ok(())
+		});
+		methods.add_method("inspect_tui", |_, this, _: ()| {
+			sim::tui::run_tui(this.logd.clone(), this.sim.clone())
+				.map_err(|s| Error::RuntimeError(s))
 		});
 
 		methods.add_method_mut(
