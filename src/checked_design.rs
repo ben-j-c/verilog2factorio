@@ -1030,7 +1030,7 @@ impl CheckedDesign {
 		self.make_preliminary_connections();
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements();
-		#[cfg(false)]
+
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {
