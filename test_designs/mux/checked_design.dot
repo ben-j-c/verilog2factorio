@@ -18,9 +18,6 @@ digraph CheckedDesign {
 11"]
   n8[shape=box,label="$15
 $adff"]
-  n9[shape=box,label="$224
-v2f_neg
-30"]
   n10[shape=box,label="$2
 v2f_reduce_or"]
   n11[shape=box,label="$27
@@ -44,7 +41,7 @@ $adff"]
   n20[shape=rarrow,label="S
 2"]
   n21[shape=larrow,label="Y
-111"]
+112"]
   n22[shape=rarrow,label="clk
 6"]
   n23[shape=rarrow,label="arst
@@ -52,7 +49,7 @@ $adff"]
   n24[shape=rarrow,label="B
 10"]
   n25[shape=larrow,label="B_pr
-112"]
+113"]
   n26[shape=larrow,label="$15
 $adff
 20
@@ -69,281 +66,273 @@ ARST"]
 $adff
 28
 Q"]
-  n30[shape=larrow,label="$224
-v2f_neg
-113
-A"]
-  n31[shape=rarrow,label="$224
-v2f_neg
-30
-Y"]
   n32[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A0"]
   n33[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A1"]
   n34[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A2"]
   n35[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A3"]
   n36[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A4"]
   n37[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A5"]
   n38[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A6"]
   n39[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A7"]
   n40[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A8"]
   n41[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A9"]
   n42[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A10"]
   n43[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A11"]
   n44[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A12"]
   n45[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A13"]
   n46[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A14"]
   n47[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A15"]
   n48[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A16"]
   n49[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A17"]
   n50[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A18"]
   n51[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A19"]
   n52[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A20"]
   n53[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A21"]
   n54[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A22"]
   n55[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A23"]
   n56[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A24"]
   n57[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A25"]
   n58[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A26"]
   n59[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A27"]
   n60[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A28"]
   n61[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A29"]
   n62[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A30"]
   n63[shape=larrow,label="$2
 v2f_reduce_or
-32
+31
 A31"]
   n64[shape=rarrow,label="$2
 v2f_reduce_or
-31
+30
 Y"]
   n65[shape=larrow,label="$27
 $adff
-41
+40
 D"]
   n66[shape=larrow,label="$27
 $adff
-47
+46
 CLK"]
   n67[shape=larrow,label="$27
 $adff
-48
+47
 ARST"]
   n68[shape=rarrow,label="$27
 $adff
-49
+48
 Q"]
   n69[shape=larrow,label="$222
 $sop
-52
+51
 A0"]
   n70[shape=larrow,label="$222
 $sop
-52
+51
 A1"]
   n71[shape=larrow,label="$222
 $sop
-52
+51
 A2"]
   n72[shape=larrow,label="$222
 $sop
-52
+51
 A3"]
   n73[shape=larrow,label="$222
 $sop
-52
+51
 A4"]
   n74[shape=rarrow,label="$222
 $sop
-51
+50
 Y"]
   n75[shape=larrow,label="$21
 $adff
-61
+62
 D"]
   n76[shape=larrow,label="$21
 $adff
-67
+68
 CLK"]
   n77[shape=larrow,label="$21
 $adff
-68
+69
 ARST"]
   n78[shape=rarrow,label="$21
 $adff
-69
+70
 Q"]
   n79[shape=larrow,label="$4
 v2f_reduce_and
-72
+73
 A0"]
   n80[shape=larrow,label="$4
 v2f_reduce_and
-72
+73
 A1"]
   n81[shape=larrow,label="$4
 v2f_reduce_and
-72
+73
 A2"]
   n82[shape=larrow,label="$4
 v2f_reduce_and
-72
+73
 A3"]
   n83[shape=rarrow,label="$4
 v2f_reduce_and
-71
+72
 Y"]
   n84[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A0"]
   n85[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A1"]
   n86[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A2"]
   n87[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A3"]
   n88[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A4"]
   n89[shape=larrow,label="$3
 v2f_reduce_or
-74
+75
 A5"]
   n90[shape=rarrow,label="$3
 v2f_reduce_or
-73
+74
 Y"]
   n91[shape=larrow,label="$24
 $adff
-83
+84
 D"]
   n92[shape=larrow,label="$24
 $adff
-89
+90
 CLK"]
   n93[shape=larrow,label="$24
 $adff
-90
+91
 ARST"]
   n94[shape=rarrow,label="$24
 $adff
-91
+92
 Q"]
   n95[shape=larrow,label="$18
 $adff
-101
+102
 D"]
   n96[shape=larrow,label="$18
 $adff
-107
+108
 CLK"]
   n97[shape=larrow,label="$18
 $adff
-108
+109
 ARST"]
   n98[shape=rarrow,label="$18
 $adff
-109
+110
 Q"]
   n99[shape=box,label="$swizzle"]
   n100[shape=rarrow,label="$swizzle
@@ -618,6 +607,9 @@ Y"]
   n215[shape=larrow,label="$swizzle
 261
 A"]
+  n216[shape=rarrow,label="Y_BAR
+50
+Y_BAR"]
   n0 -> n18
   n1 -> n19
   n2 -> n20
@@ -625,10 +617,10 @@ A"]
   n5 -> n23
   n6 -> n24
   n8 -> n29
-  n9 -> n31
   n10 -> n64
   n11 -> n68
   n12 -> n74
+  n12 -> n216
   n13 -> n78
   n14 -> n83
   n15 -> n90
@@ -644,8 +636,6 @@ A"]
   n27 -> n8
   n28 -> n8
   n29 -> n21 [label="storage-tank(3)",syle=bold,color=blue]
-  n30 -> n9
-  n31 -> n26 [label="storage-tank(3)",syle=bold,color=blue]
   n32 -> n10
   n33 -> n10
   n34 -> n10
@@ -689,7 +679,6 @@ A"]
   n71 -> n12
   n72 -> n12
   n73 -> n12
-  n74 -> n30 [label="wooden-chest(0)",syle=bold,color=blue]
   n75 -> n13
   n76 -> n13
   n77 -> n13
@@ -871,4 +860,5 @@ A"]
   n213 -> n214
   n214 -> n91 [label="wooden-chest(0)",syle=bold,color=blue]
   n215 -> n213
+  n216 -> n26 [label="storage-tank(3)",syle=bold,color=blue]
 }
