@@ -3118,16 +3118,10 @@ impl LogicalDesign {
 		table: Vec<bool>,
 		depth: usize,
 		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
-		negate_output: bool,
 	) -> (Vec<NodeId>, NodeId) {
 		let sop_comb = self.add_decider();
 		let width = sig_in.len();
-		self.add_decider_out_constant(
-			sop_comb,
-			sig_out,
-			if negate_output { -1 } else { 1 },
-			NET_RED_GREEN,
-		);
+		self.add_decider_out_constant(sop_comb, sig_out, 1, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![sop_comb]);
 		let mut conj_disj = DeciderRowConjDisj::FirstRow;
 		let get_ith_expr = |i: usize, bit: bool| {
@@ -3169,6 +3163,22 @@ impl LogicalDesign {
 			conj_disj = DeciderRowConjDisj::Or;
 		}
 		(vec![retwire; width], sop_comb)
+	}
+
+	pub fn add_sop_not(
+		&mut self,
+		sig_in: Vec<Signal>,
+		sig_out: Signal,
+		sig_out_bar: Signal,
+		table: Vec<bool>,
+		depth: usize,
+		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+	) -> (Vec<NodeId>, NodeId) {
+		let (inputs, output) = self.add_sop(sig_in, sig_out, table, depth, folded_expr);
+		self.add_decider_out_constant(output, sig_out_bar, -1, NET_RED_GREEN);
+		let bias = self.add_constant_simple(sig_out_bar, 1);
+		self.add_wire_red(vec![output, bias], vec![]);
+		(inputs, output)
 	}
 
 	pub fn add_reduce_and(&mut self, a: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {

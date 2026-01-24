@@ -365,6 +365,10 @@ impl Cell {
 					.map(|i| format!("A{}", i))
 					.chain(vec!["Y".to_owned()])
 					.collect_vec(),
+				ImplementableOp::SopNot(n) => (0..*n)
+					.map(|i| format!("A{}", i))
+					.chain(vec!["Y".to_owned(), "Y_BAR".to_owned()])
+					.collect_vec(),
 				ImplementableOp::Not => ay(),
 			},
 		}
@@ -678,6 +682,7 @@ impl Display for ImplementableOp {
 			ImplementableOp::ADFF => "$adff",
 			ImplementableOp::DFFE => "$dffe",
 			ImplementableOp::Sop(_) => "$sop",
+			ImplementableOp::SopNot(_) => "v2f_sop_not",
 		};
 		f.write_str(data)
 	}

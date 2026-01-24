@@ -2,6 +2,7 @@ use std::{
 	cell::RefCell,
 	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList},
 	ops::AddAssign,
+	usize,
 };
 
 type NodeId = usize;
@@ -57,6 +58,7 @@ pub enum ImplementableOp {
 	Mux,
 	Memory,
 	Sop(usize),
+	SopNot(usize),
 
 	Swizzle, // Imaginary cell
 }
@@ -99,18 +101,20 @@ impl ImplementableOp {
 			ImplementableOp::Mux => "Mux",
 			ImplementableOp::Memory => "Memory",
 			ImplementableOp::Sop(_) => "Sop",
+			ImplementableOp::SopNot(_) => "SopNot",
 			ImplementableOp::Swizzle => "Swizzle",
 		}
 	}
 
 	pub(crate) fn get_body_type(&self) -> BodyType {
+		let multipart = |op: ImplementableOp| BodyType::MultiPart { op };
 		match self {
 			ImplementableOp::AndBitwise => BodyType::ABY,
 			ImplementableOp::OrBitwise => BodyType::ABY,
 			ImplementableOp::XorBitwise => BodyType::ABY,
-			ImplementableOp::Shl => BodyType::MultiPart,
+			ImplementableOp::Shl => multipart(*self),
 			ImplementableOp::Sshr => BodyType::ABY,
-			ImplementableOp::Srl => BodyType::MultiPart,
+			ImplementableOp::Srl => multipart(*self),
 			ImplementableOp::Mul => BodyType::ABY,
 			ImplementableOp::Div => BodyType::ABY,
 			ImplementableOp::Mod => BodyType::ABY,
@@ -124,23 +128,24 @@ impl ImplementableOp {
 			ImplementableOp::GreaterThanEqual => BodyType::ABY,
 			ImplementableOp::LessThanEqual => BodyType::ABY,
 			ImplementableOp::V2FRollingAccumulate => BodyType::AY,
-			ImplementableOp::DFF => BodyType::MultiPart,
-			ImplementableOp::Swizzle => BodyType::MultiPart,
-			ImplementableOp::LUT(_) => BodyType::MultiPart,
-			ImplementableOp::Memory => BodyType::MultiPart,
-			ImplementableOp::PMux(_, _) => BodyType::MultiPart,
-			ImplementableOp::Mux => BodyType::MultiPart,
-			ImplementableOp::ReduceAnd => BodyType::MultiPart,
-			ImplementableOp::ReduceOr => BodyType::MultiPart,
+			ImplementableOp::DFF => multipart(*self),
+			ImplementableOp::Swizzle => multipart(*self),
+			ImplementableOp::LUT(_) => multipart(*self),
+			ImplementableOp::Memory => multipart(*self),
+			ImplementableOp::PMux(_, _) => multipart(*self),
+			ImplementableOp::Mux => multipart(*self),
+			ImplementableOp::ReduceAnd => multipart(*self),
+			ImplementableOp::ReduceOr => multipart(*self),
 			ImplementableOp::Neg => BodyType::AY,
 			ImplementableOp::Not => BodyType::AY,
-			ImplementableOp::SDFF => BodyType::MultiPart,
-			ImplementableOp::SDFFE => BodyType::MultiPart,
-			ImplementableOp::ADFFE => BodyType::MultiPart,
-			ImplementableOp::ADFF => BodyType::MultiPart,
-			ImplementableOp::DFFE => BodyType::MultiPart,
-			ImplementableOp::Sop(_) => BodyType::MultiPart,
-			ImplementableOp::V2FProgRam => BodyType::MultiPart,
+			ImplementableOp::SDFF => multipart(*self),
+			ImplementableOp::SDFFE => multipart(*self),
+			ImplementableOp::ADFFE => multipart(*self),
+			ImplementableOp::ADFF => multipart(*self),
+			ImplementableOp::DFFE => multipart(*self),
+			ImplementableOp::Sop(_) => multipart(*self),
+			ImplementableOp::SopNot(_) => multipart(*self),
+			ImplementableOp::V2FProgRam => multipart(*self),
 		}
 	}
 
@@ -267,7 +272,7 @@ impl NodeType {
 pub(crate) enum BodyType {
 	ABY,
 	AY,
-	MultiPart, // This should be a superset of ABY and AY and Constant
+	MultiPart { op: ImplementableOp }, // This should be a superset of ABY and AY and Constant
 	Constant { value: i32 },
 	Nop,
 }
@@ -626,7 +631,9 @@ impl CheckedDesign {
 				let body = self.new_node(
 					"$swizzle",
 					NodeType::CellBody {
-						cell_type: BodyType::MultiPart,
+						cell_type: BodyType::MultiPart {
+							op: ImplementableOp::Swizzle,
+						},
 					},
 				);
 				let output = self.new_node(
@@ -746,7 +753,9 @@ impl CheckedDesign {
 				let body = self.new_node(
 					"$swizzle",
 					NodeType::CellBody {
-						cell_type: BodyType::MultiPart,
+						cell_type: BodyType::MultiPart {
+							op: ImplementableOp::Swizzle,
+						},
 					},
 				);
 				let output = self.new_node(
@@ -1560,11 +1569,8 @@ impl CheckedDesign {
 						logic_map[nodeid] = Some(input);
 						logic_map[node.fanout[0]] = Some(output)
 					},
-					BodyType::MultiPart => {
-						let impl_op = mapped_design
-							.get_cell_option(&node.mapped_id)
-							.map(|cell| cell.cell_type)
-							.unwrap_or(ImplementableOp::Swizzle);
+					BodyType::MultiPart { op } => {
+						let impl_op = *op;
 
 						let sig_in = node
 							.fanin
@@ -1619,11 +1625,7 @@ impl CheckedDesign {
 					.get_cell(&node.mapped_id)
 					.cell_type
 					.simple_string(),
-				BodyType::MultiPart => mapped_design
-					.get_cell_option(&node.mapped_id)
-					.map(|cell| cell.cell_type)
-					.unwrap_or(ImplementableOp::Swizzle)
-					.simple_string(),
+				BodyType::MultiPart { op } => op.simple_string(),
 				BodyType::Constant { .. } => "Constant",
 				BodyType::Nop => "Nop",
 			}
@@ -2125,9 +2127,26 @@ impl CheckedDesign {
 					table,
 					mapped_cell.unwrap().parameters["DEPTH"].unwrap_bin_str(),
 					&self.nodes[nodeid].folded_expressions,
-					false,
 				);
 				(wires, vec![sop_comb])
+			},
+			ImplementableOp::SopNot(width) => {
+				assert_eq!(width, sig_in.len());
+				let table = mapped_cell.unwrap().parameters["TABLE"]
+					.into_bool_vec()
+					.unwrap()
+					.into_iter()
+					.rev() // blow my brains out
+					.collect_vec();
+				let (wires, sop_comb) = logical_design.add_sop_not(
+					sig_in,
+					sig_out[0],
+					sig_out[1],
+					table,
+					mapped_cell.unwrap().parameters["DEPTH"].unwrap_bin_str(),
+					&self.nodes[nodeid].folded_expressions,
+				);
+				(wires, vec![sop_comb, sop_comb])
 			},
 			ImplementableOp::V2FProgRam => {
 				let cell = mapped_cell.unwrap();
@@ -2370,9 +2389,6 @@ impl CheckedDesign {
 			NodeType::CellBody { .. } => {},
 			_ => return 0,
 		}
-		if self.nodes[id].keep {
-			return 0;
-		}
 		for foid in &self.nodes[id].fanout {
 			if !self.nodes[*foid].fanout.is_empty() {
 				return 0;
@@ -2397,6 +2413,40 @@ impl CheckedDesign {
 		self.nodes[id].node_type = NodeType::Pruned;
 		n_pruned += 1;
 		n_pruned
+	}
+
+	fn disconnect_and_try_prune(&mut self, id: NodeId) -> usize {
+		match self.nodes[id].node_type {
+			NodeType::CellInput { .. } => {
+				return self.disconnect_and_try_prune(self.nodes[id].fanout[0]);
+			},
+			NodeType::CellOutput { .. } => {
+				return self.disconnect_and_try_prune(self.nodes[id].fanin[0]);
+			},
+			NodeType::CellBody { .. } => {},
+			_ => return 0,
+		}
+		for idx in 0..self.nodes[id].fanout.len() {
+			let foid = self.nodes[id].fanout[idx];
+			loop {
+				if let Some(x_input) = self.nodes[foid].fanout.last() {
+					self.disconnect(foid, *x_input);
+				} else {
+					break;
+				}
+			}
+		}
+		for idx in 0..self.nodes[id].fanin.len() {
+			let fiid = self.nodes[id].fanin[idx];
+			loop {
+				if let Some(x_output) = self.nodes[fiid].fanin.last() {
+					self.disconnect(*x_output, fiid);
+				} else {
+					break;
+				}
+			}
+		}
+		self.try_prune(id)
 	}
 
 	/// Return the number of CellOutput nodes attached to the CellInput nodes on this CellBody
@@ -2552,23 +2602,65 @@ impl CheckedDesign {
 				n_pruned += self.try_prune(body[idx]);
 			}
 		}
+		// Produce SopNot cells.
 		for id in 0..self.nodes.len() {
-			let node = &self.nodes[id];
-			if !node.folded_expressions.is_empty() {
-				continue;
+			{
+				let node = &mut self.nodes[id];
+				if !node.folded_expressions.is_empty() {
+					continue;
+				}
+				if !matches!(&node.node_type, NodeType::CellBody { .. }) {
+					continue;
+				};
+				let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
+					m
+				} else {
+					continue;
+				};
+				let optimization_applies = matches!(mapped.cell_type, ImplementableOp::Neg);
+				if !optimization_applies {
+					continue;
+				};
 			}
-			if !matches!(&node.node_type, NodeType::CellBody { .. }) {
-				continue;
-			};
-			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-				m
+
+			let (body, output, input) = self.get_fanin_body_subgraphs(id);
+			assert!(body.len() == 1);
+			let (body, _output, _input) = (body[0], output[0], input[0]);
+			assert!(body != NodeId::MAX);
+
+			// Convert body to SopNot
+			let body_node = &mut self.nodes[body];
+			if let NodeType::CellBody {
+				cell_type: BodyType::MultiPart {
+					op: ImplementableOp::Sop(width),
+				},
+			} = &body_node.node_type
+			{
+				body_node.node_type = NodeType::CellBody {
+					cell_type: BodyType::MultiPart {
+						op: ImplementableOp::SopNot(*width),
+					},
+				};
 			} else {
 				continue;
 			};
-			let optimization_applies = matches!(mapped.cell_type, ImplementableOp::Sop(_));
-			if !optimization_applies {
-				continue;
-			};
+
+			let not_branch = self.new_node(
+				"Y_BAR",
+				NodeType::CellOutput {
+					port: "Y_BAR".to_owned(),
+					connected_id: usize::MAX,
+				},
+			);
+			self.connect(body, not_branch);
+
+			let new_to_connect = self.nodes[self.nodes[id].fanout[0]].fanout.clone();
+
+			n_pruned += self.disconnect_and_try_prune(id);
+
+			for to_connect in new_to_connect {
+				self.connect(not_branch, to_connect);
+			}
 		}
 		n_pruned
 	}
