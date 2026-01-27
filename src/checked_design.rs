@@ -328,6 +328,9 @@ impl CheckedDesign {
 
 	fn new_node(&mut self, mapped_id: &str, node_type: NodeType) -> NodeId {
 		let new_id = self.nodes.len();
+		if new_id == 8741 {
+			print!("aa");
+		}
 		let connected_id = match node_type {
 			NodeType::CellInput { connected_id, .. } => Some(connected_id),
 			NodeType::CellOutput { connected_id, .. } => Some(connected_id),
@@ -1712,6 +1715,7 @@ impl CheckedDesign {
 				NodeType::CellBody { .. } => {},
 			}
 		}
+		#[cfg(false)]
 		for (nodeid, node) in logical_design.nodes.iter_mut().enumerate() {
 			if node.is_arithmetic() || node.is_decider() {
 				node.description = Some(format!("NodeId({})", nodeid));
@@ -2750,10 +2754,11 @@ mod graph_viz {
 		//		.nodes
 		//		.iter()
 		//		.enumerate()
-		//		.find(|(_, n)| n.mapped_id == port_of_interest)
+		//		.find(|(_, n)| n.mapped_id == "fab.instr_valid_internal")
 		//		.unwrap();
 		//	design.nodes_n_hops_back(id, 20)
 		//};
+		//let filter = Some(&filter);
 		let tmp = (0..design.nodes.len()).collect();
 		let filter = filter.unwrap_or_else(|| &tmp);
 

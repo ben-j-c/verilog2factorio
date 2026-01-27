@@ -106,7 +106,7 @@ module v2f_rule_mul (A, B, Y);
 	output [31:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32 || Y_WIDTH > 32;
-	v2f_mul #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(32))
+	v2f_mul #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(32))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -152,12 +152,12 @@ module v2f_rule_and (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [31:0] A;
-	input [31:0] B;
-	output [31:0] Y;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32 || Y_WIDTH > 32 || A_WIDTH == 1 || B_WIDTH == 1;
-	v2f_and #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(32))
+	v2f_and #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -169,12 +169,12 @@ module v2f_rule_or (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [31:0] A;
-	input [31:0] B;
-	output [31:0] Y;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32 || Y_WIDTH > 32 || A_WIDTH == 1 || B_WIDTH == 1;
-	v2f_or #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(32))
+	v2f_or #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -186,12 +186,12 @@ module v2f_rule_xor (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [31:0] A;
-	input [31:0] B;
-	output [31:0] Y;
+	input [A_WIDTH:0] A;
+	input [B_WIDTH:0] B;
+	output [Y_WIDTH:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32 || Y_WIDTH > 32 || A_WIDTH == 1 || B_WIDTH == 1;
-	v2f_xor #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_xor #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -208,7 +208,7 @@ module v2f_rule_sshr (A, B, Y);
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 5 || Y_WIDTH > 32;
-	v2f_sshr #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_sshr #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -271,8 +271,8 @@ module v2f_rule_gt (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [31:0] A;
-	input [31:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
@@ -281,7 +281,7 @@ module v2f_rule_gt (A, B, Y);
 		|| B_SIGNED == 0 && B_WIDTH > 31
 		|| A_SIGNED == 1 && A_WIDTH != 32
 		|| B_SIGNED == 1 && B_WIDTH != 32;
-	v2f_gt #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_gt #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -293,8 +293,8 @@ module v2f_rule_lt (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [32-1:0] A;
-	input [32-1:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
@@ -303,7 +303,7 @@ module v2f_rule_lt (A, B, Y);
 		|| B_SIGNED == 0 && B_WIDTH > 31
 		|| A_SIGNED == 1 && A_WIDTH != 32
 		|| B_SIGNED == 1 && B_WIDTH != 32;
-	v2f_lt #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_lt #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -315,8 +315,8 @@ module v2f_rule_ge (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [32-1:0] A;
-	input [32-1:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
@@ -325,7 +325,7 @@ module v2f_rule_ge (A, B, Y);
 		|| B_SIGNED == 0 && B_WIDTH > 31
 		|| A_SIGNED == 1 && A_WIDTH != 32
 		|| B_SIGNED == 1 && B_WIDTH != 32;
-	v2f_ge #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_ge #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -337,8 +337,8 @@ module v2f_rule_le (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [32-1:0] A;
-	input [32-1:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 
@@ -347,7 +347,7 @@ module v2f_rule_le (A, B, Y);
 		|| B_SIGNED == 0 && B_WIDTH > 31
 		|| A_SIGNED == 1 && A_WIDTH != 32
 		|| B_SIGNED == 1 && B_WIDTH != 32;
-	v2f_le #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_le #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -359,12 +359,12 @@ module v2f_rule_ne (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [32-1:0] A;
-	input [32-1:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32;
-	v2f_ne #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_ne #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -376,12 +376,12 @@ module v2f_rule_eq (A, B, Y);
 	parameter B_WIDTH = 1;
 	parameter Y_WIDTH = 1;
 
-	input [32-1:0] A;
-	input [32-1:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output [Y_WIDTH-1:0] Y;
 
 	wire _TECHMAP_FAIL_ = A_WIDTH > 32 || B_WIDTH > 32;
-	v2f_eq #(.A_SIGNED(A_SIGNED), .A_WIDTH(32), .B_SIGNED(B_SIGNED), .B_WIDTH(32), .Y_WIDTH(Y_WIDTH))
+	v2f_eq #(.A_SIGNED(A_SIGNED), .A_WIDTH(A_WIDTH), .B_SIGNED(B_SIGNED), .B_WIDTH(B_WIDTH), .Y_WIDTH(Y_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .Y(Y));
 endmodule
 
@@ -397,7 +397,6 @@ module v2f_rule_pmux (A, B, S, Y);
 	wire _TECHMAP_FAIL_ = WIDTH > 32;
 	v2f_pmux #(.WIDTH(WIDTH), .S_WIDTH(S_WIDTH))
 		_TECHMAP_REPLACE_(.A(A), .B(B), .S(S), .Y(Y));
-	// Blackbox
 endmodule
 
 (* techmap_celltype = "$mux"*)
@@ -408,10 +407,9 @@ module v2f_rule_mux (A, B, S, Y);
 	input [WIDTH-1:0] B;
 	input S;
 	output [WIDTH-1:0] Y;
-	wire _TECHMAP_FAIL_ = WIDTH > 32 || WIDTH <= 2;
-	v2f_mux #(.WIDTH(32),)
+	wire _TECHMAP_FAIL_ = WIDTH > 32 || WIDTH < 4;
+	v2f_mux #(.WIDTH(WIDTH),)
 		_TECHMAP_REPLACE_(.A(A), .B(B), .S(S), .Y(Y));
-	// Blackbox
 endmodule
 
 

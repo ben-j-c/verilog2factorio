@@ -2510,6 +2510,9 @@ impl LogicalDesign {
 		fi_exprs: Vec<Option<CoarseExpr>>,
 		output: Signal,
 	) -> (Vec<NodeId>, NodeId) {
+		if self.nodes.len() == 25698 {
+			print!("");
+		}
 		let mut retval = Vec::with_capacity(fi_exprs.len());
 		let mut last_comb = None;
 		for (idx, expr_opt) in fi_exprs.iter().enumerate() {

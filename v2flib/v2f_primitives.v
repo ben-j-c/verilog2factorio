@@ -213,9 +213,9 @@ module v2f_lt (A, B, Y);
 	parameter B_WIDTH = 0;
 	parameter Y_WIDTH = 0;
 
-	input [31:0] A;
-	input [31:0] B;
-	output Y;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
+	output [Y_WIDTH-1:0]Y;
 	// Blackbox
 endmodule
 
@@ -226,8 +226,8 @@ module v2f_ge (A, B, Y);
 	parameter B_WIDTH = 0;
 	parameter Y_WIDTH = 0;
 
-	input [31:0] A;
-	input [31:0] B;
+	input [A_WIDTH-1:0] A;
+	input [B_WIDTH-1:0] B;
 	output Y;
 	// Blackbox
 endmodule

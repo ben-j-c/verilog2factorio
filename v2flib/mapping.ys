@@ -1,4 +1,5 @@
 read_json {filename}
+memory_libmap -lib {exe_dir}/techmap/memory_primitives.txt;;
 techmap -autoproc -map {exe_dir}/techmap/v2f_simplify.v;;
 muxpack
 techmap -map {exe_dir}/techmap/v2f_techmap.v;;
