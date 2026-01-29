@@ -2503,6 +2503,297 @@ impl LogicalDesign {
 		ret
 	}
 
+	pub(crate) fn add_v2f_rom(
+		&mut self,
+		addr: Signal,
+		data: Signal,
+		rom_values: Vec<i32>,
+	) -> (NodeId, NodeId) {
+		assert!(
+			rom_values.len() <= u32::MAX as usize,
+			"Can't support more than {} distinct addresses (32-bit restriction)",
+			u32::MAX
+		);
+
+		let mut last_comb = self.add_decider();
+		let first = last_comb;
+		self.add_decider_input(
+			first,
+			(addr, DeciderOperator::Equal, Signal::Constant(0)),
+			DeciderRowConjDisj::FirstRow,
+			NET_RED_GREEN,
+			NET_RED_GREEN,
+		);
+		self.add_decider_out_constant(first, data, rom_values[0], NET_RED_GREEN);
+
+		for i in 1..rom_values.len() {
+			if rom_values[i] == 0 {
+				continue;
+			}
+			let row = self.add_decider();
+			self.add_decider_input(
+				row,
+				(addr, DeciderOperator::Equal, Signal::Constant(i as i32)),
+				DeciderRowConjDisj::And,
+				NET_RED_GREEN,
+				NET_RED_GREEN,
+			);
+			self.add_decider_out_constant(row, data, rom_values[i], NET_GREEN);
+			self.add_wire_red(vec![last_comb, row], vec![]);
+			self.add_wire_red(vec![], vec![last_comb, row]);
+			last_comb = row;
+		}
+
+		(self.add_wire_red(vec![], vec![first]), first)
+	}
+
+	pub(crate) fn add_v2f_ram(
+		&mut self,
+		read_addr: &[Signal],
+		read_data: &[Signal],
+		clk: Signal,
+		write_ports: Vec<MemoryWritePort>,
+		size: u32,
+	) -> (Vec<NodeId>, Vec<NodeId>, NodeId, Vec<MemoryPortWriteFilled>) {
+		let mut wr_addr_ret = NodeId::NONE;
+		let mut wr_data_ret = NodeId::NONE;
+		let mut wr_en_ret = NodeId::NONE;
+
+		assert!(!read_addr.is_empty());
+		assert!(!read_data.is_empty());
+		assert!(!write_ports.is_empty());
+
+		let preferred_output = read_addr[0];
+
+		// Make physical memory cells.
+		let mut memory_cells = Vec::with_capacity(size as usize);
+		for _ in 0..size {
+			memory_cells.push(self.add_dffe(
+				write_ports[0].data,
+				write_ports[0].clk,
+				Signal::Id(0),
+				preferred_output,
+			));
+		}
+
+		// Address decoding write data and priority selecting.
+		let mut wr_data_select_decode = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		for (i, wport) in write_ports.iter().enumerate() {
+			for physical_address in 0..size {
+				let one_hot = self.add_decider();
+				self.add_decider_input(
+					one_hot,
+					(
+						wport.addr,
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					DeciderRowConjDisj::FirstRow,
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				for (j, wport2) in write_ports.iter().enumerate() {
+					if j <= i {
+						continue;
+					}
+					self.add_decider_input(
+						one_hot,
+						(wport.addr, DeciderOperator::NotEqual, wport2.addr),
+						DeciderRowConjDisj::And,
+						NET_RED_GREEN,
+						NET_RED_GREEN,
+					);
+				}
+				self.add_decider_out_input_count(one_hot, wport.data, NET_RED_GREEN);
+				wr_data_select_decode[i].push(one_hot);
+			}
+		}
+
+		// Address decoding write enable.
+		let mut wr_enable_decode = Vec::with_capacity(size as usize);
+		for physical_address in 0..size {
+			let one_hot = self.add_decider();
+			for (i, wport) in write_ports.iter().enumerate() {
+				self.add_decider_input(
+					one_hot,
+					(
+						wport.addr,
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					if i == 0 {
+						DeciderRowConjDisj::FirstRow
+					} else {
+						DeciderRowConjDisj::Or
+					},
+					NET_RED_GREEN,
+					NET_RED_GREEN,
+				);
+				if let Some(en_signal) = wport.en {
+					self.add_decider_input(
+						one_hot,
+						(en_signal, DeciderOperator::Equal, Signal::Constant(1)),
+						DeciderRowConjDisj::And,
+						NET_RED_GREEN,
+						NET_RED_GREEN,
+					);
+				}
+			}
+			self.add_decider_out_constant(one_hot, Signal::Id(1), 1, NET_RED_GREEN);
+			wr_enable_decode.push(one_hot);
+		}
+
+		// Used to transform the input data signals into a common format.
+		// OPTIMIZATION: Can remove this if theres only 1 write port.
+		let mut wr_data_mapper = vec![Vec::with_capacity(size as usize); write_ports.len()];
+		for _ in 0..size {
+			for (i, wport) in write_ports.iter().enumerate() {
+				wr_data_mapper[i].push(self.add_nop(wport.data, Signal::Id(0)));
+			}
+		}
+
+		// Wire up write side
+		let (_, clk_wire, _, _) = memory_cells[0];
+		for phy_addr in 0..size as usize {
+			let (data_wire, clk_wire, en_wire, _q) = memory_cells[phy_addr];
+			// Connect enable and data in
+			self.connect_red(wr_enable_decode[phy_addr], en_wire);
+			self.connect_red(wr_data_mapper[0][phy_addr], data_wire);
+
+			// Clock daisy chain
+			if phy_addr != 0 {
+				let (_data, clk_wire_m1, _en, _q) = memory_cells[phy_addr - 1];
+				// Peer into the soul of the current DFF and make direct connection with the wire of the previous.
+				let clk_combs = self.get_fanout_red(clk_wire).iter().cloned().collect_vec();
+				for comb in clk_combs {
+					self.connect_red(clk_wire_m1, comb);
+				}
+			}
+
+			// data/en decoder daisy chaining.
+			{
+				self.add_wire_red(
+					vec![],
+					vec![
+						wr_enable_decode[phy_addr],
+						wr_data_select_decode[0][phy_addr],
+					],
+				);
+				if phy_addr == 0 {
+					let common_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_en_ret = common_ret;
+					wr_addr_ret = common_ret;
+					wr_data_ret = common_ret;
+				} else {
+					self.add_wire_red(
+						vec![],
+						vec![wr_enable_decode[phy_addr], wr_enable_decode[phy_addr - 1]],
+					);
+				}
+			}
+
+			// Data decode to mapper
+			for i in 0..write_ports.len() {
+				self.add_wire_red_simple(
+					wr_data_select_decode[i][phy_addr],
+					wr_data_mapper[i][phy_addr],
+				);
+			}
+
+			// Mapper and address decode daisy chain
+			for i in 1..write_ports.len() {
+				// Input side daisy chain
+				self.add_wire_red(
+					vec![],
+					vec![wr_data_mapper[i][phy_addr], wr_data_mapper[i - 1][phy_addr]],
+				);
+				// Output side daisy chain
+				self.add_wire_red(
+					vec![
+						wr_data_select_decode[i][phy_addr],
+						wr_data_select_decode[i - 1][phy_addr],
+					],
+					vec![],
+				);
+			}
+		}
+
+		// Now for reading side
+
+		let n_rd_ports = read_addr.len();
+		let mut rd_addr_ret = Vec::with_capacity(n_rd_ports);
+		let mut rd_data_ret = Vec::with_capacity(n_rd_ports);
+
+		let mut mux1s = vec![Vec::with_capacity(size as usize); n_rd_ports];
+		for physical_address in 0..size {
+			for i in 0..n_rd_ports {
+				let mux = self.add_decider();
+				mux1s[i].push(mux);
+				self.add_decider_input(
+					mux,
+					(
+						read_addr[i],
+						DeciderOperator::Equal,
+						Signal::Constant(physical_address as i32),
+					),
+					DeciderRowConjDisj::FirstRow,
+					NET_RED,
+					NET_RED_GREEN,
+				);
+				self.add_decider_out_input_count(mux, Signal::Everything, NET_GREEN);
+			}
+		}
+
+		for i in 0..n_rd_ports {
+			// Read buffering, all take a single extra tick because its simpler for timing.
+			let buf = self.add_nop(preferred_output, read_data[i]);
+			self.add_wire_red_simple(mux1s[i][0], buf);
+			rd_data_ret.push(buf);
+		}
+
+		// Wiring up read side.
+		// Wire memory_cells to read address decoders
+		for physical_addr in 0..size as usize {
+			let (_, _, _, q) = memory_cells[physical_addr];
+			let mux1 = mux1s[0][physical_addr];
+			self.add_wire_green_simple(q, mux1);
+			// Daisy chain down read port muxes
+			for i in 1..n_rd_ports {
+				let mux1_i = mux1s[physical_addr][i];
+				let mux1_i_m1 = mux1s[physical_addr][i - 1];
+				self.add_wire_green(vec![], vec![mux1_i_m1, mux1_i]);
+			}
+		}
+		// Wire the address decode up and down on both sides
+		for i in 0..n_rd_ports {
+			let address_wire = self.add_wire_red(vec![], vec![mux1s[0][i]]);
+			rd_addr_ret.push(address_wire);
+			// Daisy chain up port address muxes
+			for physical_addr in 1..size as usize {
+				self.add_wire_red(
+					vec![],
+					vec![mux1s[i][physical_addr - 1], mux1s[i][physical_addr]],
+				);
+				self.add_wire_red(
+					vec![mux1s[i][physical_addr - 1], mux1s[i][physical_addr]],
+					vec![],
+				);
+			}
+		}
+
+		let mut wr_ret = Vec::with_capacity(write_ports.capacity());
+		for i in 0..write_ports.len() {
+			wr_ret.push(MemoryPortWriteFilled {
+				addr_wire: wr_addr_ret,
+				data_wire: wr_data_ret,
+				clk_wire: None,
+				en_wire: write_ports[i].en.map(|_| wr_en_ret),
+			});
+		}
+
+		(rd_addr_ret, rd_data_ret, clk_wire, wr_ret)
+	}
+
 	/// A pattern for bit manipulations. ehhhhh too lazy to spec it now. Raise an issue if you want me to.
 	pub(crate) fn add_swizzle(
 		&mut self,

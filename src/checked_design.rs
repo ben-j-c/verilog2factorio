@@ -7,6 +7,7 @@ use std::{
 
 type NodeId = usize;
 
+use chumsky::prelude::todo;
 use itertools::{chain, izip, Itertools};
 
 use crate::{
@@ -57,6 +58,8 @@ pub enum ImplementableOp {
 	PMux(bool, usize),
 	Mux,
 	Memory,
+	MemoryPrim,
+	Rom,
 	Sop(usize),
 	SopNot(usize),
 
@@ -100,9 +103,11 @@ impl ImplementableOp {
 			ImplementableOp::PMux(_, _) => "PMux",
 			ImplementableOp::Mux => "Mux",
 			ImplementableOp::Memory => "Memory",
+			ImplementableOp::MemoryPrim => "MemoryPrim",
 			ImplementableOp::Sop(_) => "Sop",
 			ImplementableOp::SopNot(_) => "SopNot",
 			ImplementableOp::Swizzle => "Swizzle",
+			ImplementableOp::Rom => "Rom",
 		}
 	}
 
@@ -146,6 +151,8 @@ impl ImplementableOp {
 			ImplementableOp::Sop(_) => multipart(*self),
 			ImplementableOp::SopNot(_) => multipart(*self),
 			ImplementableOp::V2FProgRam => multipart(*self),
+			ImplementableOp::MemoryPrim => multipart(*self),
+			ImplementableOp::Rom => multipart(*self),
 		}
 	}
 
@@ -328,9 +335,6 @@ impl CheckedDesign {
 
 	fn new_node(&mut self, mapped_id: &str, node_type: NodeType) -> NodeId {
 		let new_id = self.nodes.len();
-		if new_id == 8741 {
-			print!("aa");
-		}
 		let connected_id = match node_type {
 			NodeType::CellInput { connected_id, .. } => Some(connected_id),
 			NodeType::CellOutput { connected_id, .. } => Some(connected_id),
@@ -785,7 +789,7 @@ impl CheckedDesign {
 		}
 	}
 
-	pub fn enforce_network_requirements(&mut self) {
+	pub fn enforce_network_requirements(&mut self, mapped_design: &MappedDesign) {
 		let (_, _, _, localio_group_nodes) = self.get_groupings();
 		let mut signal_choices = vec![Signal::None; self.nodes.len()];
 		for local_group in &localio_group_nodes {
@@ -797,7 +801,19 @@ impl CheckedDesign {
 				) {
 					continue;
 				}
-				let choice = signal_lookup_table::lookup_id(&self.nodes[*nodeid].mapped_id);
+				let choice = signal_lookup_table::lookup_id(&self.nodes[*nodeid].mapped_id)
+					.or_else(|| {
+						let signal_name = mapped_design
+							.get_net_attribute(&self.nodes[*nodeid].mapped_id, "v2f_signal")?;
+						Some(
+							signal_lookup_table::lookup_id_ignore_case(signal_name).expect(
+								&format!(
+								"{} has property v2f_signal=\"{}\", but it matches no game signal",
+								self.nodes[*nodeid].mapped_id, signal_name
+							),
+							),
+						)
+					});
 				let choice = if let Some(c) = choice {
 					c
 				} else {
@@ -823,7 +839,7 @@ impl CheckedDesign {
 		}
 	}
 
-	fn calculate_and_validate_signal_choices(&self) -> Vec<Signal> {
+	fn calculate_and_validate_signal_choices(&self, mapped_design: &MappedDesign) -> Vec<Signal> {
 		let mut signal_choices = vec![Signal::None; self.nodes.len()];
 		let mut fallback_id = 0;
 		for node in &self.nodes {
@@ -857,6 +873,18 @@ impl CheckedDesign {
 				}
 				if choice.is_none() {
 					choice = signal_lookup_table::lookup_id(&node.mapped_id)
+						.or_else(|| {
+							let signal_name =
+								mapped_design.get_net_attribute(&node.mapped_id, "v2f_signal")?;
+							Some(
+								signal_lookup_table::lookup_id_ignore_case(signal_name).expect(
+									&format!(
+								"{} has property v2f_signal=\"{}\", but it matches no game signal",
+								node.mapped_id, signal_name
+							),
+								),
+							)
+						})
 						.unwrap_or_else(|| {
 							let ret = fallback_id;
 							fallback_id += 1;
@@ -1041,7 +1069,7 @@ impl CheckedDesign {
 		self.initialize_nodes(mapped_design);
 		self.make_preliminary_connections();
 		self.resolve_coarse_exprs();
-		self.enforce_network_requirements();
+		self.enforce_network_requirements(mapped_design);
 
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
@@ -1053,7 +1081,7 @@ impl CheckedDesign {
 		}
 		let mut signal_choices = vec![];
 		loop {
-			signal_choices = self.calculate_and_validate_signal_choices();
+			signal_choices = self.calculate_and_validate_signal_choices(mapped_design);
 			match self.elaborate_signal_choices(&mut signal_choices, mapped_design) {
 				Ok(_) => break,
 				Err(local_io) => {
@@ -2269,6 +2297,74 @@ impl CheckedDesign {
 					(ret_in, ret_out)
 				}
 			},
+			ImplementableOp::MemoryPrim => {
+				let cell = mapped_cell.unwrap();
+				let size = cell.attributes["SIZE"].unwrap_bin_str() as u32;
+				let mut n_rd_ports = 0;
+				for i in 0..32 {
+					let is_used_param = format!("PORT_R{i}_USED");
+					if cell.parameters.contains_key(&is_used_param)
+						&& cell.parameters[&is_used_param].unwrap_bin_str() == 1
+					{
+						n_rd_ports += 1;
+					}
+				}
+				let mut write_ports = vec![];
+				let mut sig_idx = n_rd_ports;
+				let clk = sig_in[sig_idx];
+				sig_idx += 1;
+				for i in 0..32 {
+					let is_used_param = format!("PORT_W{i}_USED");
+					if cell.parameters.contains_key(&is_used_param)
+						&& cell.parameters[&is_used_param].unwrap_bin_str() == 1
+					{
+						let addr = sig_in[sig_idx];
+						sig_idx += 1;
+						let data = sig_in[sig_idx];
+						sig_idx += 1;
+						let en = sig_in[sig_idx];
+						sig_idx += 1;
+						write_ports.push(MemoryWritePort {
+							addr,
+							data,
+							en: Some(en),
+							clk: Signal::None,
+							clk_polarity: Polarity::Positive,
+						});
+					}
+				}
+				let (read_addr_wires, read_data_combs, clk_wire, write_ports) = logical_design
+					.add_v2f_ram(&sig_in[0..n_rd_ports], &sig_out, clk, write_ports, size);
+				let mut ret_in = read_addr_wires;
+				ret_in.push(clk_wire);
+				for p in write_ports {
+					ret_in.push(p.addr_wire);
+					ret_in.push(p.data_wire);
+					ret_in.push(p.en_wire.unwrap());
+				}
+
+				let ret_out = read_data_combs;
+				(ret_in, ret_out)
+			},
+			ImplementableOp::Rom => {
+				let width = mapped_cell.unwrap().parameters["WIDTH"].unwrap_bin_str();
+				let rom_values = mapped_cell.unwrap().parameters["INIT"]
+					.chars()
+					.rev()
+					.chunks(width)
+					.into_iter()
+					.map(|rom_value| {
+						rom_value
+							.collect_vec()
+							.iter()
+							.rev()
+							.collect::<String>()
+							.unwrap_bin_str() as i32
+					})
+					.collect_vec();
+				let (wire, comb) = logical_design.add_v2f_rom(sig_in[0], sig_out[0], rom_values);
+				(vec![wire], vec![comb])
+			},
 			ImplementableOp::AndBitwise
 			| ImplementableOp::OrBitwise
 			| ImplementableOp::XorBitwise
@@ -2833,15 +2929,15 @@ mod graph_viz {
 					attrs.push(EdgeAttributes::label(format!("\"{}\"", signal.unwrap())));
 				}
 
-				let edge = if design.is_driver(*dst_id, src_node.id) {
+				if design.is_driver(*dst_id, src_node.id) {
 					attrs.push(attr!("syle", "bold"));
 					attrs.push(attr!("color", "blue"));
-					edge!(node_id!(src_id_str) => node_id!(dst_id_str), attrs)
+					g.add_stmt(stmt!(
+						edge!(node_id!(src_id_str) => node_id!(dst_id_str), attrs)
+					));
 				} else {
-					edge!(node_id!(src_id_str) => node_id!(dst_id_str))
+					g.add_stmt(stmt!(edge!(node_id!(src_id_str) => node_id!(dst_id_str))));
 				};
-
-				g.add_stmt(stmt!(edge));
 			}
 		}
 

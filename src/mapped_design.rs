@@ -370,6 +370,42 @@ impl Cell {
 					.chain(vec!["Y".to_owned(), "Y_BAR".to_owned()])
 					.collect_vec(),
 				ImplementableOp::Not => ay(),
+				ImplementableOp::MemoryPrim => {
+					let mut ret = vec![];
+					for i in 0..32 {
+						let is_used_param = format!("PORT_R{i}_USED");
+						if self.parameters.contains_key(&is_used_param)
+							&& self.parameters[&is_used_param].unwrap_bin_str() == 1
+						{
+							ret.push(format!("PORT_R{i}_ADDR"));
+							ret.push(format!("PORT_R{i}_RD_DATA"));
+						}
+					}
+					ret.push(format!("CLK_ALL"));
+					for i in 0..32 {
+						let is_used_param = format!("PORT_W{i}_USED");
+						if self.parameters.contains_key(&is_used_param)
+							&& self.parameters[&is_used_param].unwrap_bin_str() == 1
+						{
+							ret.push(format!("PORT_W{i}_ADDR"));
+							ret.push(format!("PORT_W{i}_WR_DATA"));
+							ret.push(format!("PORT_W{i}_WR_EN"));
+						}
+					}
+					ret
+				},
+				ImplementableOp::Rom => {
+					let mut ret = vec![];
+					let is_used_param = format!("PORT_R0_USED");
+					if self.parameters.contains_key(&is_used_param)
+						&& self.parameters[&is_used_param].unwrap_bin_str() == 1
+					{
+						ret.push(format!("PORT_R0_ADDR"));
+						ret.push(format!("PORT_R0_RD_DATA"));
+					}
+
+					ret
+				},
 			},
 		}
 	}
@@ -595,6 +631,25 @@ impl MappedDesign {
 		}
 		panic!("No module was identified as the top level design");
 	}
+
+	pub(crate) fn get_net_attribute<S1: AsRef<str>, S2: AsRef<str>>(
+		&self,
+		net_name: S1,
+		attribute: S2,
+	) -> Option<&Attribute> {
+		for module in self.modules.values() {
+			if let Some(is_top) = module.attributes.get("top") {
+				if is_top.from_bin_str() != Some(1) {
+					continue;
+				}
+				return module
+					.netnames
+					.get(net_name.as_ref())
+					.and_then(|x| x.attributes.get(attribute.as_ref()));
+			}
+		}
+		panic!("No module was identified as the top level design");
+	}
 }
 
 impl<'de> Deserialize<'de> for Bit {
@@ -683,6 +738,8 @@ impl Display for ImplementableOp {
 			ImplementableOp::DFFE => "$dffe",
 			ImplementableOp::Sop(_) => "$sop",
 			ImplementableOp::SopNot(_) => "v2f_sop_not",
+			ImplementableOp::MemoryPrim => "$__v2f_ram",
+			ImplementableOp::Rom => "$__v2f_rom",
 		};
 		f.write_str(data)
 	}
@@ -731,6 +788,12 @@ impl<'de> Deserialize<'de> for Cell {
 			"$adffe" => ImplementableOp::ADFFE,
 			"$lut" => ImplementableOp::LUT(0),
 			"$mem_v2" => ImplementableOp::Memory,
+			"$__v2f_ram_8" => ImplementableOp::MemoryPrim,
+			"$__v2f_ram_16" => ImplementableOp::MemoryPrim,
+			"$__v2f_ram_24" => ImplementableOp::MemoryPrim,
+			"$__v2f_rom_8" => ImplementableOp::Rom,
+			"$__v2f_rom_16" => ImplementableOp::Rom,
+			"$__v2f_rom_24" => ImplementableOp::Rom,
 			"$sop" => ImplementableOp::Sop(0),
 			"$swizzle" => panic!("This is a fake op, we don't accept it in a design."),
 			_ => panic!("Can't implement this operation: {}", helper.cell_type),
@@ -748,6 +811,10 @@ impl<'de> Deserialize<'de> for Cell {
 			Ok(convert_reduce_x_ports(helper))
 		} else if helper.cell_type.starts_with("v2f_programmable_ram") {
 			Ok(convert_v2f_programmable_ram(helper))
+		} else if helper.cell_type.starts_with("$__v2f_rom") {
+			Ok(convert_v2f_rom(helper))
+		} else if helper.cell_type.starts_with("$__v2f_ram") {
+			Ok(convert_v2f_ram(helper))
 		} else {
 			Ok(Cell {
 				hide_name: helper.hide_name,
@@ -760,6 +827,48 @@ impl<'de> Deserialize<'de> for Cell {
 				timing_boundaries: hash_map(),
 			})
 		}
+	}
+}
+
+fn convert_v2f_rom(cell: MappedCell) -> Cell {
+	Cell {
+		hide_name: cell.hide_name,
+		cell_type: ImplementableOp::Rom,
+		model: cell.model,
+		parameters: cell.parameters,
+		attributes: cell.attributes,
+		port_directions: [
+			("PORT_R0_ADDR".to_owned(), Direction::Input),
+			("PORT_R0_RD_DATA".to_owned(), Direction::Output),
+		]
+		.into_iter()
+		.collect(),
+		connections: cell.connections,
+		timing_boundaries: hash_map(),
+	}
+}
+
+fn convert_v2f_ram(cell: MappedCell) -> Cell {
+	let mut ret = hash_map();
+	for i in 0..32 {
+		ret.insert(format!("PORT_R{i}_ADDR"), Direction::Input);
+		ret.insert(format!("PORT_R{i}_RD_DATA"), Direction::Output);
+	}
+	ret.insert(format!("CLK_ALL"), Direction::Input);
+	for i in 0..32 {
+		ret.insert(format!("PORT_W{i}_ADDR"), Direction::Input);
+		ret.insert(format!("PORT_W{i}_WR_DATA"), Direction::Input);
+		ret.insert(format!("PORT_W{i}_WR_EN"), Direction::Input);
+	}
+	Cell {
+		hide_name: cell.hide_name,
+		cell_type: ImplementableOp::MemoryPrim,
+		model: cell.model,
+		parameters: cell.parameters,
+		attributes: cell.attributes,
+		port_directions: ret,
+		connections: cell.connections,
+		timing_boundaries: hash_map(),
 	}
 }
 

@@ -371,6 +371,7 @@ pub fn lookup_str(id: i32) -> (&'static str, Option<&'static str>) {
 	*SIGNAL_MAP.0.get(&id).unwrap()
 }
 
+#[deprecated]
 pub fn lookup_id(mapped_name: &str) -> Option<i32> {
 	let id_name = mapped_name.replace("_", "-").to_lowercase();
 	for (key, value) in &SIGNAL_MAP.1 {

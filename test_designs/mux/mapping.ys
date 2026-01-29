@@ -1,4 +1,5 @@
 read_json mux_rtl.json
+memory_libmap -lib /home/ben/repo/verilog2factorio/techmap/memory_primitives.txt;;
 techmap -autoproc -map /home/ben/repo/verilog2factorio/techmap/v2f_simplify.v;;
 muxpack
 techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
