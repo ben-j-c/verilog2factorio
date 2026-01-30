@@ -551,3 +551,22 @@ module v2f_rule_adffe_widen(CLK, ARST, D, Q);
 			Q <= {{WIDTH_EXT{1'b0}}, D};
 	end
 endmodule
+
+(* techmap_celltype = "$mux" *)
+module v2f_rule_mux_narrow(A, B, S, Y);
+	parameter WIDTH = 0;
+
+	input [WIDTH-1:0] A;
+	input [WIDTH-1:0] B;
+	input S;
+	output [WIDTH-1:0] Y;
+	wire _TECHMAP_FAIL_ = WIDTH <= 32;
+
+	genvar i;
+	generate
+		for (i = 0; i < WIDTH; i = i + 32) begin
+			localparam limit = WIDTH < i + 32 ? WIDTH : i + 32;
+			assign Y[limit-1:i] = S ? B[limit-1:i] : A[limit-1:i];
+		end
+	endgenerate
+endmodule

@@ -2850,7 +2850,7 @@ mod graph_viz {
 		//		.nodes
 		//		.iter()
 		//		.enumerate()
-		//		.find(|(_, n)| n.mapped_id == "fab.instr_valid_internal")
+		//		.find(|(_, n)| n.mapped_id == "fab.char_d0.d0.row0")
 		//		.unwrap();
 		//	design.nodes_n_hops_back(id, 20)
 		//};

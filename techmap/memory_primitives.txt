@@ -1,7 +1,7 @@
 ram block $__v2f_rom_8 {
 	abits 8;
 	widths 8 16 32 global;
-	cost 1;
+	cost 0;
 	init any;
 	widthscale 0;
 	port ar "R0" {
@@ -12,7 +12,7 @@ ram block $__v2f_rom_8 {
 ram block $__v2f_rom_16 {
 	abits 8;
 	widths 8 16 32 global;
-	cost 1;
+	cost 0;
 	init any;
 	widthscale 0;
 	port ar "R0" {
@@ -23,7 +23,7 @@ ram block $__v2f_rom_16 {
 ram block $__v2f_rom_24 {
 	abits 8;
 	widths 8 16 32 global;
-	cost 1;
+	cost 0;
 	byte 32;
 	init any;
 	widthscale 0;
