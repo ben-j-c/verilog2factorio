@@ -23,6 +23,7 @@ mod mapped_design;
 mod phy;
 mod serializable_design;
 pub mod signal_lookup_table;
+mod timing_engine;
 
 pub mod lua;
 pub mod sim;

@@ -18,16 +18,16 @@ digraph CheckedDesign {
 11"]
   n8[shape=box,label="$15
 $adff"]
-  n10[shape=box,label="$2
+  n9[shape=box,label="$2
 v2f_reduce_or"]
-  n11[shape=box,label="$27
-$adff"]
-  n12[shape=box,label="$222
+  n10[shape=box,label="$223
 $sop"]
-  n13[shape=box,label="$21
+  n12[shape=box,label="$27
 $adff"]
-  n14[shape=box,label="$4
+  n13[shape=box,label="$4
 v2f_reduce_and"]
+  n14[shape=box,label="$21
+$adff"]
   n15[shape=box,label="$3
 v2f_reduce_or"]
   n16[shape=box,label="$24
@@ -66,214 +66,214 @@ ARST"]
 $adff
 28
 Q"]
+  n30[shape=larrow,label="$2
+v2f_reduce_or
+31
+A0"]
+  n31[shape=larrow,label="$2
+v2f_reduce_or
+31
+A1"]
   n32[shape=larrow,label="$2
 v2f_reduce_or
 31
-A0"]
+A2"]
   n33[shape=larrow,label="$2
 v2f_reduce_or
 31
-A1"]
+A3"]
   n34[shape=larrow,label="$2
 v2f_reduce_or
 31
-A2"]
+A4"]
   n35[shape=larrow,label="$2
 v2f_reduce_or
 31
-A3"]
+A5"]
   n36[shape=larrow,label="$2
 v2f_reduce_or
 31
-A4"]
+A6"]
   n37[shape=larrow,label="$2
 v2f_reduce_or
 31
-A5"]
+A7"]
   n38[shape=larrow,label="$2
 v2f_reduce_or
 31
-A6"]
+A8"]
   n39[shape=larrow,label="$2
 v2f_reduce_or
 31
-A7"]
+A9"]
   n40[shape=larrow,label="$2
 v2f_reduce_or
 31
-A8"]
+A10"]
   n41[shape=larrow,label="$2
 v2f_reduce_or
 31
-A9"]
+A11"]
   n42[shape=larrow,label="$2
 v2f_reduce_or
 31
-A10"]
+A12"]
   n43[shape=larrow,label="$2
 v2f_reduce_or
 31
-A11"]
+A13"]
   n44[shape=larrow,label="$2
 v2f_reduce_or
 31
-A12"]
+A14"]
   n45[shape=larrow,label="$2
 v2f_reduce_or
 31
-A13"]
+A15"]
   n46[shape=larrow,label="$2
 v2f_reduce_or
 31
-A14"]
+A16"]
   n47[shape=larrow,label="$2
 v2f_reduce_or
 31
-A15"]
+A17"]
   n48[shape=larrow,label="$2
 v2f_reduce_or
 31
-A16"]
+A18"]
   n49[shape=larrow,label="$2
 v2f_reduce_or
 31
-A17"]
+A19"]
   n50[shape=larrow,label="$2
 v2f_reduce_or
 31
-A18"]
+A20"]
   n51[shape=larrow,label="$2
 v2f_reduce_or
 31
-A19"]
+A21"]
   n52[shape=larrow,label="$2
 v2f_reduce_or
 31
-A20"]
+A22"]
   n53[shape=larrow,label="$2
 v2f_reduce_or
 31
-A21"]
+A23"]
   n54[shape=larrow,label="$2
 v2f_reduce_or
 31
-A22"]
+A24"]
   n55[shape=larrow,label="$2
 v2f_reduce_or
 31
-A23"]
+A25"]
   n56[shape=larrow,label="$2
 v2f_reduce_or
 31
-A24"]
+A26"]
   n57[shape=larrow,label="$2
 v2f_reduce_or
 31
-A25"]
+A27"]
   n58[shape=larrow,label="$2
 v2f_reduce_or
 31
-A26"]
+A28"]
   n59[shape=larrow,label="$2
 v2f_reduce_or
 31
-A27"]
+A29"]
   n60[shape=larrow,label="$2
 v2f_reduce_or
 31
-A28"]
+A30"]
   n61[shape=larrow,label="$2
 v2f_reduce_or
 31
-A29"]
-  n62[shape=larrow,label="$2
-v2f_reduce_or
-31
-A30"]
-  n63[shape=larrow,label="$2
-v2f_reduce_or
-31
 A31"]
-  n64[shape=rarrow,label="$2
+  n62[shape=rarrow,label="$2
 v2f_reduce_or
 30
 Y"]
-  n65[shape=larrow,label="$27
-$adff
-40
-D"]
-  n66[shape=larrow,label="$27
-$adff
-46
-CLK"]
-  n67[shape=larrow,label="$27
-$adff
-47
-ARST"]
-  n68[shape=rarrow,label="$27
-$adff
-48
-Q"]
-  n69[shape=larrow,label="$222
+  n63[shape=larrow,label="$223
 $sop
-51
+33
 A0"]
-  n70[shape=larrow,label="$222
+  n64[shape=larrow,label="$223
 $sop
-51
+33
 A1"]
-  n71[shape=larrow,label="$222
+  n65[shape=larrow,label="$223
 $sop
-51
+33
 A2"]
-  n72[shape=larrow,label="$222
+  n66[shape=larrow,label="$223
 $sop
-51
+33
 A3"]
-  n73[shape=larrow,label="$222
+  n67[shape=larrow,label="$223
 $sop
-51
+33
 A4"]
-  n74[shape=rarrow,label="$222
+  n68[shape=rarrow,label="$223
 $sop
-50
+32
 Y"]
-  n75[shape=larrow,label="$21
+  n71[shape=larrow,label="$27
 $adff
-62
+44
 D"]
-  n76[shape=larrow,label="$21
+  n72[shape=larrow,label="$27
 $adff
-68
+50
 CLK"]
-  n77[shape=larrow,label="$21
+  n73[shape=larrow,label="$27
 $adff
-69
+51
 ARST"]
-  n78[shape=rarrow,label="$21
+  n74[shape=rarrow,label="$27
+$adff
+52
+Q"]
+  n75[shape=larrow,label="$4
+v2f_reduce_and
+55
+A0"]
+  n76[shape=larrow,label="$4
+v2f_reduce_and
+55
+A1"]
+  n77[shape=larrow,label="$4
+v2f_reduce_and
+55
+A2"]
+  n78[shape=larrow,label="$4
+v2f_reduce_and
+55
+A3"]
+  n79[shape=rarrow,label="$4
+v2f_reduce_and
+54
+Y"]
+  n80[shape=larrow,label="$21
+$adff
+64
+D"]
+  n81[shape=larrow,label="$21
 $adff
 70
-Q"]
-  n79[shape=larrow,label="$4
-v2f_reduce_and
-73
-A0"]
-  n80[shape=larrow,label="$4
-v2f_reduce_and
-73
-A1"]
-  n81[shape=larrow,label="$4
-v2f_reduce_and
-73
-A2"]
-  n82[shape=larrow,label="$4
-v2f_reduce_and
-73
-A3"]
-  n83[shape=rarrow,label="$4
-v2f_reduce_and
+CLK"]
+  n82[shape=larrow,label="$21
+$adff
+71
+ARST"]
+  n83[shape=rarrow,label="$21
+$adff
 72
-Y"]
+Q"]
   n84[shape=larrow,label="$3
 v2f_reduce_or
 75
@@ -608,7 +608,7 @@ Y"]
 261
 A"]
   n216[shape=rarrow,label="Y_BAR
-50
+32
 Y_BAR"]
   n0 -> n18
   n1 -> n19
@@ -617,90 +617,90 @@ Y_BAR"]
   n5 -> n23
   n6 -> n24
   n8 -> n29
-  n10 -> n64
-  n11 -> n68
+  n9 -> n62
+  n10 -> n68
+  n10 -> n216
   n12 -> n74
-  n12 -> n216
-  n13 -> n78
+  n13 -> n79
   n14 -> n83
   n15 -> n90
   n16 -> n94
   n17 -> n98
   n18 -> n215 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n95 [label="iron-chest(1)",syle=bold,color=blue]
-  n20 -> n65 [label="steel-chest(2)",syle=bold,color=blue]
+  n20 -> n71 [label="steel-chest(2)",syle=bold,color=blue]
   n21 -> n3
-  n24 -> n75 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n24 -> n80 [label="express-transport-belt(6)",syle=bold,color=blue]
   n25 -> n7
   n26 -> n8
   n27 -> n8
   n28 -> n8
   n29 -> n21 [label="storage-tank(3)",syle=bold,color=blue]
-  n32 -> n10
-  n33 -> n10
-  n34 -> n10
-  n35 -> n10
-  n36 -> n10
-  n37 -> n10
-  n38 -> n10
-  n39 -> n10
-  n40 -> n10
-  n41 -> n10
-  n42 -> n10
-  n43 -> n10
-  n44 -> n10
-  n45 -> n10
-  n46 -> n10
-  n47 -> n10
-  n48 -> n10
-  n49 -> n10
-  n50 -> n10
-  n51 -> n10
-  n52 -> n10
-  n53 -> n10
-  n54 -> n10
-  n55 -> n10
-  n56 -> n10
-  n57 -> n10
-  n58 -> n10
-  n59 -> n10
-  n60 -> n10
-  n61 -> n10
-  n62 -> n10
+  n30 -> n9
+  n31 -> n9
+  n32 -> n9
+  n33 -> n9
+  n34 -> n9
+  n35 -> n9
+  n36 -> n9
+  n37 -> n9
+  n38 -> n9
+  n39 -> n9
+  n40 -> n9
+  n41 -> n9
+  n42 -> n9
+  n43 -> n9
+  n44 -> n9
+  n45 -> n9
+  n46 -> n9
+  n47 -> n9
+  n48 -> n9
+  n49 -> n9
+  n50 -> n9
+  n51 -> n9
+  n52 -> n9
+  n53 -> n9
+  n54 -> n9
+  n55 -> n9
+  n56 -> n9
+  n57 -> n9
+  n58 -> n9
+  n59 -> n9
+  n60 -> n9
+  n61 -> n9
+  n62 -> n66 [label="storage-tank(3)",syle=bold,color=blue]
   n63 -> n10
-  n64 -> n72 [label="storage-tank(3)",syle=bold,color=blue]
-  n65 -> n11
-  n66 -> n11
-  n67 -> n11
-  n68 -> n197 [label="wooden-chest(0)",syle=bold,color=blue]
-  n68 -> n200 [label="wooden-chest(0)",syle=bold,color=blue]
-  n69 -> n12
-  n70 -> n12
+  n64 -> n10
+  n65 -> n10
+  n66 -> n10
+  n67 -> n10
   n71 -> n12
   n72 -> n12
   n73 -> n12
+  n74 -> n197 [label="wooden-chest(0)",syle=bold,color=blue]
+  n74 -> n200 [label="wooden-chest(0)",syle=bold,color=blue]
   n75 -> n13
   n76 -> n13
   n77 -> n13
-  n78 -> n25 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n179 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n182 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n185 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n188 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n191 [label="underground-belt(7)",syle=bold,color=blue]
-  n78 -> n194 [label="underground-belt(7)",syle=bold,color=blue]
-  n79 -> n14
+  n78 -> n13
+  n79 -> n63 [label="iron-chest(1)",syle=bold,color=blue]
   n80 -> n14
   n81 -> n14
   n82 -> n14
-  n83 -> n69 [label="iron-chest(1)",syle=bold,color=blue]
+  n83 -> n25 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n179 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n182 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n185 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n188 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n191 [label="underground-belt(7)",syle=bold,color=blue]
+  n83 -> n194 [label="underground-belt(7)",syle=bold,color=blue]
   n84 -> n15
   n85 -> n15
   n86 -> n15
   n87 -> n15
   n88 -> n15
   n89 -> n15
-  n90 -> n70 [label="steel-chest(2)",syle=bold,color=blue]
+  n90 -> n64 [label="steel-chest(2)",syle=bold,color=blue]
   n91 -> n16
   n92 -> n16
   n93 -> n16
@@ -738,124 +738,124 @@ Y_BAR"]
   n98 -> n173 [label="wooden-chest(0)",syle=bold,color=blue]
   n98 -> n176 [label="wooden-chest(0)",syle=bold,color=blue]
   n99 -> n100
-  n100 -> n32 [label="iron-chest(1)",syle=bold,color=blue]
+  n100 -> n30 [label="iron-chest(1)",syle=bold,color=blue]
   n101 -> n99
   n102 -> n103
-  n103 -> n33 [label="steel-chest(2)",syle=bold,color=blue]
+  n103 -> n31 [label="steel-chest(2)",syle=bold,color=blue]
   n104 -> n102
   n105 -> n106
-  n106 -> n34 [label="storage-tank(3)",syle=bold,color=blue]
+  n106 -> n32 [label="storage-tank(3)",syle=bold,color=blue]
   n107 -> n105
   n108 -> n109
-  n109 -> n35 [label="transport-belt(4)",syle=bold,color=blue]
+  n109 -> n33 [label="transport-belt(4)",syle=bold,color=blue]
   n110 -> n108
   n111 -> n112
-  n112 -> n36 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n112 -> n34 [label="fast-transport-belt(5)",syle=bold,color=blue]
   n113 -> n111
   n114 -> n115
-  n115 -> n37 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n115 -> n35 [label="express-transport-belt(6)",syle=bold,color=blue]
   n116 -> n114
   n117 -> n118
-  n118 -> n38 [label="underground-belt(7)",syle=bold,color=blue]
+  n118 -> n36 [label="underground-belt(7)",syle=bold,color=blue]
   n119 -> n117
   n120 -> n121
-  n121 -> n39 [label="fast-underground-belt(8)",syle=bold,color=blue]
+  n121 -> n37 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n122 -> n120
   n123 -> n124
-  n124 -> n40 [label="express-underground-belt(9)",syle=bold,color=blue]
+  n124 -> n38 [label="express-underground-belt(9)",syle=bold,color=blue]
   n125 -> n123
   n126 -> n127
-  n127 -> n41 [label="splitter(10)",syle=bold,color=blue]
+  n127 -> n39 [label="splitter(10)",syle=bold,color=blue]
   n128 -> n126
   n129 -> n130
-  n130 -> n42 [label="fast-splitter(11)",syle=bold,color=blue]
+  n130 -> n40 [label="fast-splitter(11)",syle=bold,color=blue]
   n131 -> n129
   n132 -> n133
-  n133 -> n43 [label="express-splitter(12)",syle=bold,color=blue]
+  n133 -> n41 [label="express-splitter(12)",syle=bold,color=blue]
   n134 -> n132
   n135 -> n136
-  n136 -> n44 [label="burner-inserter(13)",syle=bold,color=blue]
+  n136 -> n42 [label="burner-inserter(13)",syle=bold,color=blue]
   n137 -> n135
   n138 -> n139
-  n139 -> n45 [label="inserter(14)",syle=bold,color=blue]
+  n139 -> n43 [label="inserter(14)",syle=bold,color=blue]
   n140 -> n138
   n141 -> n142
-  n142 -> n46 [label="long-handed-inserter(15)",syle=bold,color=blue]
+  n142 -> n44 [label="long-handed-inserter(15)",syle=bold,color=blue]
   n143 -> n141
   n144 -> n145
-  n145 -> n47 [label="fast-inserter(16)",syle=bold,color=blue]
+  n145 -> n45 [label="fast-inserter(16)",syle=bold,color=blue]
   n146 -> n144
   n147 -> n148
-  n148 -> n48 [label="bulk-inserter(17)",syle=bold,color=blue]
+  n148 -> n46 [label="bulk-inserter(17)",syle=bold,color=blue]
   n149 -> n147
   n150 -> n151
-  n151 -> n49 [label="small-electric-pole(18)",syle=bold,color=blue]
+  n151 -> n47 [label="small-electric-pole(18)",syle=bold,color=blue]
   n152 -> n150
   n153 -> n154
-  n154 -> n50 [label="medium-electric-pole(19)",syle=bold,color=blue]
+  n154 -> n48 [label="medium-electric-pole(19)",syle=bold,color=blue]
   n155 -> n153
   n156 -> n157
-  n157 -> n51 [label="big-electric-pole(20)",syle=bold,color=blue]
+  n157 -> n49 [label="big-electric-pole(20)",syle=bold,color=blue]
   n158 -> n156
   n159 -> n160
-  n160 -> n52 [label="substation(21)",syle=bold,color=blue]
+  n160 -> n50 [label="substation(21)",syle=bold,color=blue]
   n161 -> n159
   n162 -> n163
-  n163 -> n53 [label="pipe(22)",syle=bold,color=blue]
+  n163 -> n51 [label="pipe(22)",syle=bold,color=blue]
   n164 -> n162
   n165 -> n166
-  n166 -> n54 [label="pipe-to-ground(23)",syle=bold,color=blue]
+  n166 -> n52 [label="pipe-to-ground(23)",syle=bold,color=blue]
   n167 -> n165
   n168 -> n169
-  n169 -> n55 [label="pump(24)",syle=bold,color=blue]
+  n169 -> n53 [label="pump(24)",syle=bold,color=blue]
   n170 -> n168
   n171 -> n172
-  n172 -> n56 [label="rail(25)",syle=bold,color=blue]
+  n172 -> n54 [label="rail(25)",syle=bold,color=blue]
   n173 -> n171
   n174 -> n175
-  n175 -> n57 [label="train-stop(26)",syle=bold,color=blue]
+  n175 -> n55 [label="train-stop(26)",syle=bold,color=blue]
   n176 -> n174
   n177 -> n178
-  n178 -> n58 [label="wooden-chest(0)",syle=bold,color=blue]
+  n178 -> n56 [label="wooden-chest(0)",syle=bold,color=blue]
   n178 -> n84 [label="wooden-chest(0)",syle=bold,color=blue]
   n179 -> n177
   n180 -> n181
-  n181 -> n59 [label="rail-signal(27)",syle=bold,color=blue]
+  n181 -> n57 [label="rail-signal(27)",syle=bold,color=blue]
   n181 -> n85 [label="rail-signal(27)",syle=bold,color=blue]
   n182 -> n180
   n183 -> n184
-  n184 -> n60 [label="rail-chain-signal(28)",syle=bold,color=blue]
+  n184 -> n58 [label="rail-chain-signal(28)",syle=bold,color=blue]
   n184 -> n86 [label="rail-chain-signal(28)",syle=bold,color=blue]
   n185 -> n183
   n186 -> n187
-  n187 -> n61 [label="locomotive(29)",syle=bold,color=blue]
+  n187 -> n59 [label="locomotive(29)",syle=bold,color=blue]
   n187 -> n87 [label="locomotive(29)",syle=bold,color=blue]
   n188 -> n186
   n189 -> n190
-  n190 -> n62 [label="cargo-wagon(30)",syle=bold,color=blue]
+  n190 -> n60 [label="cargo-wagon(30)",syle=bold,color=blue]
   n190 -> n88 [label="cargo-wagon(30)",syle=bold,color=blue]
   n191 -> n189
   n192 -> n193
-  n193 -> n63 [label="fluid-wagon(31)",syle=bold,color=blue]
+  n193 -> n61 [label="fluid-wagon(31)",syle=bold,color=blue]
   n193 -> n89 [label="fluid-wagon(31)",syle=bold,color=blue]
   n194 -> n192
   n195 -> n196
-  n196 -> n71 [label="wooden-chest(0)",syle=bold,color=blue]
+  n196 -> n65 [label="wooden-chest(0)",syle=bold,color=blue]
   n197 -> n195
   n198 -> n199
-  n199 -> n73 [label="transport-belt(4)",syle=bold,color=blue]
+  n199 -> n67 [label="transport-belt(4)",syle=bold,color=blue]
   n200 -> n198
   n201 -> n202
-  n202 -> n79 [label="wooden-chest(0)",syle=bold,color=blue]
+  n202 -> n75 [label="wooden-chest(0)",syle=bold,color=blue]
   n203 -> n201
   n204 -> n205
-  n205 -> n80 [label="iron-chest(1)",syle=bold,color=blue]
+  n205 -> n76 [label="iron-chest(1)",syle=bold,color=blue]
   n206 -> n204
   n207 -> n208
-  n208 -> n81 [label="steel-chest(2)",syle=bold,color=blue]
+  n208 -> n77 [label="steel-chest(2)",syle=bold,color=blue]
   n209 -> n207
   n210 -> n211
-  n211 -> n82 [label="storage-tank(3)",syle=bold,color=blue]
+  n211 -> n78 [label="storage-tank(3)",syle=bold,color=blue]
   n212 -> n210
   n213 -> n214
   n214 -> n91 [label="wooden-chest(0)",syle=bold,color=blue]

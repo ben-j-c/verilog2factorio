@@ -7,7 +7,6 @@ use std::{
 
 type NodeId = usize;
 
-use chumsky::prelude::todo;
 use itertools::{chain, izip, Itertools};
 
 use crate::{
@@ -16,8 +15,9 @@ use crate::{
 		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
 		Polarity, ResetSpec, Signal, NET_RED_GREEN,
 	},
-	mapped_design::{self, BitSliceOps, Direction, FromBinStr, IntoBoolVec},
+	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
+	timing_engine::Delay,
 	util::{self, hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
@@ -1071,6 +1071,8 @@ impl CheckedDesign {
 		self.resolve_coarse_exprs();
 		self.enforce_network_requirements(mapped_design);
 
+		self.check_connections();
+
 		loop {
 			let n_pruned = self.optimize_graph(mapped_design);
 			if n_pruned > 0 {
@@ -1079,6 +1081,7 @@ impl CheckedDesign {
 				break;
 			}
 		}
+		self.check_connections();
 		let mut signal_choices = vec![];
 		loop {
 			signal_choices = self.calculate_and_validate_signal_choices(mapped_design);
@@ -1567,15 +1570,16 @@ impl CheckedDesign {
 						let sig_left = self.signals[node.fanin[0]];
 						let sig_right = self.signals[node.fanin[1]];
 						let sig_out = self.signals[node.fanout[0]];
-						let (input, output) = self.apply_binary_op(
-							logical_design,
+						let (input_w, output) = logical_design.add_binary_op(
 							mapped_design.get_cell(&node.mapped_id).cell_type,
 							sig_left,
 							sig_right,
 							sig_out,
 						);
-						logic_map[nodeid] = Some(input);
-						logic_map[node.fanout[0]] = Some(output)
+						logic_map[nodeid] = Some(output);
+						logic_map[node.fanout[0]] = Some(output);
+						logic_map[node.fanin[0]] = Some(input_w);
+						logic_map[node.fanin[1]] = Some(input_w);
 					},
 					BodyType::Constant { value } => {
 						logic_map[nodeid] = Some(
@@ -1586,19 +1590,22 @@ impl CheckedDesign {
 					BodyType::Nop => {
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
-						logic_map[nodeid] = Some(logical_design.add_nop(sig_in, sig_out))
+						let (wire, nop) = logical_design.add_nop_with_wire(sig_in, sig_out);
+						logic_map[nodeid] = Some(nop);
+						logic_map[node.fanout[0]] = Some(nop);
+						logic_map[node.fanin[0]] = Some(wire);
 					},
 					BodyType::AY => {
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
-						let (input, output) = self.apply_unary_op(
-							logical_design,
+						let (wire, output) = logical_design.add_unary_op(
 							mapped_design.get_cell(&node.mapped_id).cell_type,
 							sig_in,
 							sig_out,
 						);
-						logic_map[nodeid] = Some(input);
-						logic_map[node.fanout[0]] = Some(output)
+						logic_map[nodeid] = Some(output);
+						logic_map[node.fanout[0]] = Some(output);
+						logic_map[node.fanin[0]] = Some(wire);
 					},
 					BodyType::MultiPart { op } => {
 						let impl_op = *op;
@@ -1793,6 +1800,7 @@ impl CheckedDesign {
 		if bad_design {
 			panic!("Shoudln't proceed due to bad logical design construction.");
 		}
+		self.report_timing_save_worst_path(logical_design, mapped_design);
 	}
 
 	fn apply_multipart_op(
@@ -2388,74 +2396,6 @@ impl CheckedDesign {
 		(input_wires, outputs)
 	}
 
-	fn apply_unary_op(
-		&self,
-		logical_design: &mut LogicalDesign,
-		op: ImplementableOp,
-		sig_in: Signal,
-		sig_out: Signal,
-	) -> (logical_design::NodeId, logical_design::NodeId) {
-		match op {
-			ImplementableOp::V2FRollingAccumulate => {
-				let acc = logical_design.add_arithmetic(
-					(sig_in, ArithmeticOperator::Add, Signal::Constant(0)),
-					sig_in,
-				);
-				let pre_filter = logical_design.add_arithmetic(
-					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
-					sig_in,
-				);
-				let post_filter = logical_design.add_arithmetic(
-					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
-					sig_out,
-				);
-				logical_design.add_wire_red(vec![acc, pre_filter], vec![acc, post_filter]);
-				(pre_filter, post_filter)
-			},
-			ImplementableOp::Neg => {
-				let neg = logical_design.add_neg(sig_in, sig_out);
-				(neg, neg)
-			},
-			ImplementableOp::Not => {
-				let not = logical_design.add_arithmetic(
-					(Signal::Constant(-1), ArithmeticOperator::Xor, sig_in),
-					sig_out,
-				);
-				(not, not)
-			},
-			_ => {
-				unreachable!()
-			},
-		}
-	}
-
-	fn apply_binary_op(
-		&self,
-		logical_design: &mut LogicalDesign,
-		op: ImplementableOp,
-		sig_left: Signal,
-		sig_right: Signal,
-		sig_out: Signal,
-	) -> (logical_design::NodeId, logical_design::NodeId) {
-		if let Some(op) = op.get_arithmetic_op() {
-			let ld_node = logical_design.add_arithmetic((sig_left, op, sig_right), sig_out);
-			return (ld_node, ld_node);
-		}
-		if let Some(op) = op.get_decider_op() {
-			let id = logical_design.add_decider();
-			logical_design.add_decider_input(
-				id,
-				(sig_left, op, sig_right),
-				logical_design::DeciderRowConjDisj::FirstRow,
-				(true, true),
-				(true, true),
-			);
-			logical_design.add_decider_out_constant(id, sig_out, 1, NET_RED_GREEN);
-			return (id, id);
-		}
-		unreachable!()
-	}
-
 	fn get_fanin_body_subgraphs(&self, nodeid: NodeId) -> (Vec<NodeId>, Vec<NodeId>, Vec<NodeId>) {
 		let node = &self.nodes[nodeid];
 		let mut body = Vec::with_capacity(node.fanin.len());
@@ -2820,6 +2760,215 @@ impl CheckedDesign {
 			}
 		}
 		visited
+	}
+
+	fn report_timing_save_worst_path(&self, logd: &LogicalDesign, mapped_design: &MappedDesign) {
+		self.check_connections();
+		let topo = self.get_topo_order(mapped_design);
+		let mut arrivals = vec![0; topo.len()];
+		let time = &logd.timing_engine;
+		let mut logic_map_inverse = vec![vec![]; logd.nodes.len()];
+		let logic_map = &self.associated_logic.borrow();
+		for id in &topo {
+			if let Some(lid) = logic_map[*id] {
+				logic_map_inverse[lid.0].push(*id);
+			}
+		}
+		for id in &topo {
+			let id = *id;
+			let node = &self.nodes[id];
+			match &node.node_type {
+				NodeType::CellInput { .. } => {
+					for fid in &self.nodes[id].fanin {
+						arrivals[id] = arrivals[*fid].max(arrivals[id]);
+					}
+					if let Some(sink) = time.get_sink_delay(logic_map[id].unwrap()) {
+						let body = self.nodes[id].fanout[0];
+						arrivals[body] = arrivals[body].max(arrivals[id] + sink.0);
+					} else {
+						if let Some(arcs) = time.get_arcs(logic_map[id].unwrap()) {
+							for edge in arcs {
+								let (fo_lid, delay) = (edge.0, edge.1);
+								for fid in &logic_map_inverse[fo_lid.0] {
+									assert!(*fid != id);
+									arrivals[*fid] = arrivals[*fid].max(arrivals[id] + delay.0);
+								}
+							}
+						}
+					}
+				},
+				NodeType::CellOutput { .. } => {
+					if let Some(source) = time.get_source_delay(logic_map[id].unwrap()) {
+						arrivals[id] = source.0;
+					}
+				},
+				NodeType::PortInput { .. } => {
+					for fid in &self.nodes[id].fanin {
+						arrivals[id] = arrivals[id].max(arrivals[*fid]);
+					}
+				},
+				NodeType::PortOutput { .. } => {
+					arrivals[id] = 0;
+				},
+				NodeType::PortBody { .. } => {
+					arrivals[id] = 0;
+					for fid in &self.nodes[id].fanin {
+						arrivals[id] = arrivals[*fid].max(arrivals[id]);
+					}
+				},
+				NodeType::CellBody { .. } => {},
+				NodeType::Pruned => {},
+			}
+		}
+		let max_arrival = *arrivals.iter().max().unwrap();
+		let mut requireds = vec![max_arrival; topo.len()];
+		for id in topo.iter().rev() {
+			let id = *id;
+			let node = &self.nodes[id];
+			match &node.node_type {
+				NodeType::CellInput { .. } => {
+					if let Some(sink) = time.get_sink_delay(logic_map[id].unwrap()) {
+						let body = self.nodes[id].fanout[0];
+						let body_req = requireds[body];
+						requireds[id] = body_req - sink.0;
+					} else {
+						if let Some(arcs) = time.get_arcs(logic_map[id].unwrap()) {
+							for edge in arcs {
+								let (fo_lid, delay) = (edge.0, edge.1);
+								for fid in &logic_map_inverse[fo_lid.0] {
+									requireds[id] = requireds[id].min(requireds[*fid] - delay.0);
+								}
+							}
+						}
+					}
+				},
+				NodeType::CellOutput { .. } => {
+					for fid in &self.nodes[id].fanout {
+						requireds[id] = requireds[id].min(requireds[*fid]);
+					}
+				},
+				NodeType::PortInput { .. } => {
+					requireds[id] = max_arrival - arrivals[id];
+					requireds[node.fanout[0]] = requireds[id];
+				},
+				NodeType::PortOutput { .. } => {
+					for fid in &self.nodes[id].fanout {
+						requireds[id] = requireds[id].min(requireds[*fid]);
+					}
+					println!("{}, req {}", node.mapped_id, requireds[id]);
+					requireds[node.fanin[0]] = requireds[id];
+				},
+				NodeType::PortBody { .. } => {},
+				NodeType::CellBody { .. } => {},
+				NodeType::Pruned => {},
+			}
+		}
+		#[cfg(false)]
+		{
+			println!("Timings per node");
+			for i in 0..self.nodes.len() {
+				print!("    {i} : {} {}", arrivals[i], requireds[i]);
+				if arrivals[i] > requireds[i] {
+					print!(" BAD!");
+				}
+				println!();
+			}
+		}
+		let slacks = izip!(&arrivals, &requireds)
+			.map(|(arr, req)| req - arr)
+			.collect_vec();
+
+		let mut slacks_histogram = vec![0; max_arrival as usize + 1];
+		for s in &slacks {
+			if *s < 0 {
+				continue;
+			}
+			slacks_histogram[*s as usize] += 1;
+		}
+		let mut arrivals_hisogram = vec![0; max_arrival as usize + 1];
+		for a in &arrivals {
+			arrivals_hisogram[*a as usize] += 1;
+		}
+
+		println!("Max arrival: {}", max_arrival);
+		println!("Input port slack:");
+		for i in 0..self.nodes.len() {
+			let node = &self.nodes[i];
+			if let NodeType::PortOutput { .. } = node.node_type {
+				println!("    {}: {}", node.mapped_id, slacks[i]);
+			}
+		}
+		println!("Output port arrival:");
+		for i in 0..self.nodes.len() {
+			let node = &self.nodes[i];
+			if let NodeType::PortInput { .. } = node.node_type {
+				println!("    {}: {}", node.mapped_id, arrivals[i]);
+			}
+		}
+		println!("Slack histogram");
+		for i in 0..slacks_histogram.len() {
+			println!("    {}: {}", i, slacks_histogram[i]);
+		}
+		println!("Arrival histogram");
+		for i in 0..arrivals_hisogram.len() {
+			println!("    {}: {}", i, arrivals_hisogram[i]);
+		}
+		println!("Worst paths:");
+		for id in &topo {
+			let id = *id;
+			let node = &self.nodes[id];
+			if slacks[id] == 0 {
+				if let Some(lid) = logic_map[id] {
+					print!("    {}: ", lid.0);
+				} else {
+					print!("    N/A: ");
+				}
+
+				print!("arr {}, ", arrivals[id],);
+
+				match &node.node_type {
+					NodeType::CellInput { port, .. } | NodeType::CellOutput { port, .. } => {
+						print!("Cell {}, port {}", node.mapped_id, port);
+					},
+					NodeType::PortInput { .. } | NodeType::PortOutput { .. } => {
+						print!("Port {}", node.mapped_id);
+					},
+					NodeType::PortBody { .. } => {},
+					NodeType::CellBody { cell_type } => {
+						let display_op = match cell_type {
+							BodyType::ABY => mapped_design
+								.get_cell(&node.mapped_id)
+								.cell_type
+								.simple_string(),
+							BodyType::AY => mapped_design
+								.get_cell(&node.mapped_id)
+								.cell_type
+								.simple_string(),
+							BodyType::MultiPart { op } => op.simple_string(),
+							BodyType::Constant { .. } => "$constant",
+							BodyType::Nop => "$nop",
+						};
+						print!("CellBody {:?}, {:?}", node.mapped_id, display_op);
+					},
+					NodeType::Pruned => {},
+				}
+				println!()
+			}
+		}
+	}
+
+	fn check_connections(&self) {
+		for id in 0..self.nodes.len() {
+			let node = &self.nodes[id];
+			for fid in &node.fanin {
+				let node2 = &self.nodes[*fid];
+				assert!(node2.fanout.contains(&id));
+			}
+			for fid in &node.fanout {
+				let node2 = &self.nodes[*fid];
+				assert!(node2.fanin.contains(&id));
+			}
+		}
 	}
 }
 

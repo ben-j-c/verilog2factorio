@@ -1364,6 +1364,16 @@ pub fn get_lua() -> Result<Lua, Error> {
 			},
 		)?,
 	)?;
+	lua.globals().set(
+		"SignalId",
+		lua.create_function(|_, id: u32| {
+			if id >= signal_lookup_table::n_ids() as u32 {
+				Err(Error::RuntimeError("Not a real signal.".to_owned()))
+			} else {
+				Ok(Signal::Id(id as i32))
+			}
+		})?,
+	)?;
 	lua.globals().set("Each", Signal::Each)?;
 	lua.globals().set("Anything", Signal::Anything)?;
 	lua.globals().set("Everything", Signal::Everything)?;

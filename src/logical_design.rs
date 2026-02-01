@@ -39,10 +39,11 @@ use itertools::{izip, Itertools};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	checked_design::CheckedDesign,
+	checked_design::{CheckedDesign, ImplementableOp},
 	connected_design::CoarseExpr,
 	mapped_design::{BitSliceOps, Direction, MappedDesign},
 	signal_lookup_table,
+	timing_engine::{Delay, TimingEngine},
 	util::{hash_set, HashS},
 };
 use chumsky::Parser;
@@ -524,6 +525,7 @@ pub struct LogicalDesign {
 	pub(crate) nodes: Vec<Node>,
 	pub(crate) ports: Vec<LogicalPort>,
 	pub(crate) description: String,
+	pub(crate) timing_engine: TimingEngine,
 }
 
 impl UnwindSafe for LogicalDesign {}
@@ -550,6 +552,7 @@ impl LogicalDesign {
 			nodes: vec![],
 			ports: vec![],
 			description: "".to_string(),
+			timing_engine: TimingEngine::default(),
 		}
 	}
 
@@ -655,6 +658,81 @@ impl LogicalDesign {
 		)
 	}
 
+	pub(crate) fn add_binary_op(
+		&mut self,
+		op: ImplementableOp,
+		sig_left: Signal,
+		sig_right: Signal,
+		sig_out: Signal,
+	) -> (NodeId, NodeId) {
+		if let Some(op) = op.get_arithmetic_op() {
+			let ld_node = self.add_arithmetic((sig_left, op, sig_right), sig_out);
+			let wire = self.add_wire_red(vec![], vec![ld_node]);
+			self.timing_engine.add_arc(wire, ld_node, Delay::ticks(1));
+			return (wire, ld_node);
+		}
+		if let Some(op) = op.get_decider_op() {
+			let id = self.add_decider();
+			self.add_decider_input(
+				id,
+				(sig_left, op, sig_right),
+				DeciderRowConjDisj::FirstRow,
+				(true, true),
+				(true, true),
+			);
+			self.add_decider_out_constant(id, sig_out, 1, NET_RED_GREEN);
+			let wire = self.add_wire_red(vec![], vec![id]);
+			self.timing_engine.add_arc(wire, id, Delay::ticks(1));
+			return (wire, id);
+		}
+		unreachable!()
+	}
+
+	pub(crate) fn add_unary_op(
+		&mut self,
+		op: ImplementableOp,
+		sig_in: Signal,
+		sig_out: Signal,
+	) -> (NodeId, NodeId) {
+		match op {
+			ImplementableOp::V2FRollingAccumulate => {
+				let acc = self.add_arithmetic(
+					(sig_in, ArithmeticOperator::Add, Signal::Constant(0)),
+					sig_in,
+				);
+				let pre_filter = self.add_arithmetic(
+					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
+					sig_in,
+				);
+				let post_filter = self.add_arithmetic(
+					(sig_in, ArithmeticOperator::Mult, Signal::Constant(1)),
+					sig_out,
+				);
+				self.add_wire_red(vec![acc, pre_filter], vec![acc, post_filter]);
+				let ret_wire = self.add_wire_red(vec![], vec![pre_filter]);
+				(ret_wire, post_filter)
+			},
+			ImplementableOp::Neg => {
+				let neg = self.add_neg(sig_in, sig_out);
+				let wire = self.add_wire_red(vec![], vec![neg]);
+				self.timing_engine.add_arc(wire, neg, Delay::ticks(1));
+				(wire, neg)
+			},
+			ImplementableOp::Not => {
+				let not = self.add_arithmetic(
+					(Signal::Constant(-1), ArithmeticOperator::Xor, sig_in),
+					sig_out,
+				);
+				let wire = self.add_wire_red(vec![], vec![not]);
+				self.timing_engine.add_arc(wire, not, Delay::ticks(1));
+				(wire, not)
+			},
+			_ => {
+				unreachable!()
+			},
+		}
+	}
+
 	/// Add a combinator fitting the pattern that I call "no-operation". Converts the input signal to an output signal using an arithmetic combinator.
 	///
 	/// Returns the id for that new combinator.
@@ -669,6 +747,16 @@ impl LogicalDesign {
 			},
 			vec![output],
 		)
+	}
+
+	/// Add a combinator fitting the pattern that I call "no-operation". Converts the input signal to an output signal using an arithmetic combinator.
+	///
+	/// Returns the id for that new combinator.
+	pub fn add_nop_with_wire(&mut self, input: Signal, output: Signal) -> (NodeId, NodeId) {
+		let nop = self.add_nop(input, output);
+		let wire = self.add_wire_red(vec![], vec![nop]);
+		self.timing_engine.add_arc(wire, nop, Delay::ticks(1));
+		(wire, nop)
 	}
 
 	/// Add a combinator fitting the pattern that I call "no-operation". Converts the input signal to an output signal using an arithmetic combinator.
@@ -736,6 +824,9 @@ impl LogicalDesign {
 		self.add_wire_red(vec![in_control, mem_cell], vec![mem_cell]);
 		let data_in_wire = self.add_wire_red(vec![], vec![in_control]);
 
+		self.timing_engine
+			.add_arc(data_in_wire, mem_cell, Delay::ticks(1));
+
 		(data_in_wire, clk_wire, mem_cell)
 	}
 
@@ -793,6 +884,9 @@ impl LogicalDesign {
 		self.add_wire_red(vec![in_control, mem_cell], vec![mem_cell]);
 		let data_in_wire = self.add_wire_red(vec![], vec![in_control]);
 
+		self.timing_engine
+			.add_arc(data_in_wire, mem_cell, Delay::ticks(1));
+
 		(data_in_wire, clk_wire, clk_wire, mem_cell)
 	}
 
@@ -843,11 +937,18 @@ impl LogicalDesign {
 		self.connect_green(clk_buf_2, clk_wire_2);
 		let clk_wire = self.add_wire_red(vec![], vec![clk_buf_1, clk_buf_2]);
 
+		self.timing_engine
+			.set_sink_delay(latch_in_wire_1, Delay::ticks(1));
+
 		if input == output {
+			self.timing_engine
+				.set_source_delay(latch_out_2, Delay::ticks(1));
 			(latch_in_wire_1, clk_wire, latch_out_2)
 		} else {
 			let final_out = self.add_nop(input, output);
 			self.add_wire_red(vec![latch_out_2], vec![final_out]);
+			self.timing_engine
+				.set_source_delay(final_out, Delay::ticks(2));
 			(latch_in_wire_1, clk_wire, final_out)
 		}
 	}
@@ -870,6 +971,11 @@ impl LogicalDesign {
 
 		let final_out = self.add_nop(input, output);
 		self.add_wire_red(vec![latch_out_2], vec![final_out]);
+
+		self.timing_engine
+			.set_sink_delay(latch_in_wire_1, Delay::ticks(1));
+		self.timing_engine
+			.set_source_delay(final_out, Delay::ticks(2));
 		(latch_in_wire_1, clk_wire, final_out, latch_out_2)
 	}
 
@@ -972,6 +1078,10 @@ impl LogicalDesign {
 			self.set_description_node(arst_wire, "arst_wire".to_owned());
 			self.set_description_node(final_out, "adff_q".to_owned());
 		}
+		self.timing_engine
+			.set_sink_delay(latch_in_wire_1, Delay::ticks(1));
+		self.timing_engine
+			.set_source_delay(final_out, Delay::ticks(2));
 		(latch_in_wire_1, clk_wire, arst_wire, final_out, latch_out_2)
 	}
 
@@ -1116,6 +1226,9 @@ impl LogicalDesign {
 			self.set_description_node(muxab[0], "mux_a".to_owned());
 			self.set_description_node(muxab[1], "mux_b".to_owned());
 		}
+		self.timing_engine.set_sink_delay(d_wire, Delay::ticks(2));
+		self.timing_engine.set_sink_delay(en_wire, Delay::ticks(3));
+		self.timing_engine.set_source_delay(q, Delay::ticks(2));
 		(d_wire, clk_wire, en_wire, arst_wire, q)
 	}
 
@@ -1137,6 +1250,10 @@ impl LogicalDesign {
 		let d_wire = self.add_wire_red(vec![], vec![muxab[1]]);
 		self.connect_red(muxab[0], d_wire_internal);
 		self.add_wire_red_simple(loopback, muxab[0]);
+
+		self.timing_engine.set_sink_delay(d_wire, Delay::ticks(2));
+		self.timing_engine.set_sink_delay(en_wire, Delay::ticks(3));
+		self.timing_engine.set_source_delay(q, Delay::ticks(2));
 
 		(d_wire, clk_wire, en_wire, q)
 	}
@@ -1184,6 +1301,9 @@ impl LogicalDesign {
 			self.set_description_node(muxab[0], "mux_a".to_owned());
 			self.set_description_node(muxab[1], "mux_b".to_owned());
 		}
+		self.timing_engine.set_sink_delay(d_wire, Delay::ticks(2));
+		self.timing_engine.set_sink_delay(en_wire, Delay::ticks(3));
+		self.timing_engine.set_source_delay(q, Delay::ticks(2));
 		(d_wire, clk_wire, rst_wire, en_wire, q)
 	}
 
@@ -1232,6 +1352,8 @@ impl LogicalDesign {
 				(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
 			}
 		};
+
+		let y = self.add_nop(Signal::Each, y);
 
 		// Build the one-hot encoded mux switch.
 		let mut mux_wires = Vec::with_capacity(n);
@@ -1338,17 +1460,23 @@ impl LogicalDesign {
 			{
 				self.set_description_node(a_case, format!("{n}-pmux fallback"));
 			}
-			Some(self.add_wire_red(vec![], vec![b_muxes[0], a_case]))
+			let wire = self.add_wire_red(vec![], vec![b_muxes[0], a_case]);
+			self.timing_engine.add_arc(wire, y, Delay::ticks(2));
+			Some(wire)
 		} else {
 			None
 		};
 
-		let y = self.add_nop(Signal::Each, y);
 		#[cfg(debug_assertions)]
 		{
 			self.set_description_node(y, format!("{n}-pmux output y"))
 		}
 		self.add_wire_red(vec![b_muxes[0]], vec![y]);
+
+		for wire in &mux_wires {
+			self.timing_engine.add_arc(*wire, y, Delay::ticks(2));
+		}
+
 		(a_mux, mux_wires.clone(), mux_wires, y)
 	}
 
@@ -1397,7 +1525,7 @@ impl LogicalDesign {
 		inputs[0]
 	}
 
-	pub(crate) fn add_demux_memory_with_byte_select(
+	pub(super) fn add_demux_memory_with_byte_select(
 		&mut self,
 		addr: Signal,
 		byte_select: Signal,
@@ -1494,10 +1622,11 @@ impl LogicalDesign {
 		self.add_wire_red(vec![inp_a, inp_b], vec![]);
 		let outp = self.add_nop(Signal::Each, y);
 		self.add_wire_red_simple(inp_a, outp);
+		self.timing_engine.add_arc(lhs, outp, Delay::ticks(2));
 		(lhs, lhs, lhs, outp)
 	}
 
-	pub(crate) fn add_byte_select_write(
+	pub(super) fn add_byte_select_write(
 		&mut self,
 		select_packed: Signal,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
@@ -1952,6 +2081,18 @@ impl LogicalDesign {
 
 		let mut rd_ret = Vec::with_capacity(read_ports.capacity());
 		for i in 0..read_ports.len() {
+			if rd_clk_ret[i].is_some() {
+				self.timing_engine
+					.set_sink_delay(rd_addr_ret[i], Delay::ticks(5)); // Unsure about 4
+				self.timing_engine
+					.set_source_delay(rd_data_ret[i], Delay::ticks(3));
+				if let Some(wire) = rd_en_ret[i] {
+					self.timing_engine.set_sink_delay(wire, Delay::ticks(2));
+				}
+			} else {
+				self.timing_engine
+					.add_arc(rd_addr_ret[i], rd_data_ret[i], Delay::ticks(3));
+			}
 			rd_ret.push(MemoryPortReadFilled {
 				addr_wire: rd_addr_ret[i],
 				data: rd_data_ret[i],
@@ -1959,6 +2100,16 @@ impl LogicalDesign {
 				en_wire: rd_en_ret[i],
 				rst_wire: rd_rst_ret[i],
 			});
+		}
+
+		{
+			//unsure about timing
+			self.timing_engine
+				.set_sink_delay(wr_addr_wire, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(demux.data_in_wire, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(wr_en_wire, Delay::ticks(4));
 		}
 		let wr_ret = MemoryPortWriteFilled {
 			addr_wire: wr_addr_wire,
@@ -2115,10 +2266,9 @@ impl LogicalDesign {
 					],
 				);
 				if phy_addr == 0 {
-					let common_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
-					wr_en_ret = common_ret;
-					wr_addr_ret = common_ret;
-					wr_data_ret = common_ret;
+					wr_en_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_addr_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_data_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
 				} else {
 					self.add_wire_red(
 						vec![],
@@ -2267,6 +2417,18 @@ impl LogicalDesign {
 
 		let mut rd_ret = Vec::with_capacity(read_ports.capacity());
 		for i in 0..read_ports.len() {
+			if rd_clk_ret[i].is_some() {
+				self.timing_engine
+					.set_sink_delay(rd_addr_ret[i], Delay::ticks(4)); // Unsure about 4
+				self.timing_engine
+					.set_source_delay(rd_data_ret[i], Delay::ticks(2));
+				if let Some(wire) = rd_en_ret[i] {
+					self.timing_engine.set_sink_delay(wire, Delay::ticks(2));
+				}
+			} else {
+				self.timing_engine
+					.add_arc(rd_addr_ret[i], rd_data_ret[i], Delay::ticks(2));
+			}
 			rd_ret.push(MemoryPortReadFilled {
 				addr_wire: rd_addr_ret[i],
 				data: rd_data_ret[i],
@@ -2276,6 +2438,15 @@ impl LogicalDesign {
 			});
 		}
 		let mut wr_ret = Vec::with_capacity(write_ports.capacity());
+		{
+			//unsure about timing
+			self.timing_engine
+				.set_sink_delay(wr_addr_ret, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(wr_data_ret, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(wr_en_ret, Delay::ticks(4));
+		}
 		for i in 0..write_ports.len() {
 			wr_ret.push(MemoryPortWriteFilled {
 				addr_wire: wr_addr_ret,
@@ -2492,6 +2663,15 @@ impl LogicalDesign {
 		}
 		let mut ret = vec![];
 		for (data, addr, clk, rst, en) in izip!(data_ret, addresses_ret, clk_ret, rst_ret, en_ret) {
+			if clk.is_some() {
+				self.timing_engine.set_sink_delay(addr, Delay::ticks(5)); // Unsure about 4
+				self.timing_engine.set_source_delay(data, Delay::ticks(3));
+				if let Some(wire) = en {
+					self.timing_engine.set_sink_delay(wire, Delay::ticks(3));
+				}
+			} else {
+				self.timing_engine.add_arc(addr, data, Delay::ticks(3));
+			}
 			ret.push(MemoryPortReadFilled {
 				addr_wire: addr,
 				data,
@@ -2544,7 +2724,10 @@ impl LogicalDesign {
 			last_comb = row;
 		}
 
-		(self.add_wire_red(vec![], vec![first]), first)
+		let addr_wire = self.add_wire_red(vec![], vec![first]);
+		self.timing_engine
+			.add_arc(addr_wire, first, Delay::ticks(1));
+		(addr_wire, first)
 	}
 
 	pub(crate) fn add_v2f_ram(
@@ -2570,7 +2753,7 @@ impl LogicalDesign {
 		for _ in 0..size {
 			memory_cells.push(self.add_dffe(
 				write_ports[0].data,
-				write_ports[0].clk,
+				clk,
 				Signal::Id(0),
 				preferred_output,
 			));
@@ -2680,10 +2863,9 @@ impl LogicalDesign {
 					],
 				);
 				if phy_addr == 0 {
-					let common_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
-					wr_en_ret = common_ret;
-					wr_addr_ret = common_ret;
-					wr_data_ret = common_ret;
+					wr_en_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_addr_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
+					wr_data_ret = self.add_wire_red(vec![], vec![wr_enable_decode[phy_addr]]);
 				} else {
 					self.add_wire_red(
 						vec![],
@@ -2783,12 +2965,27 @@ impl LogicalDesign {
 
 		let mut wr_ret = Vec::with_capacity(write_ports.capacity());
 		for i in 0..write_ports.len() {
+			self.timing_engine
+				.set_sink_delay(wr_addr_ret, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(wr_data_ret, Delay::ticks(4));
+			self.timing_engine
+				.set_sink_delay(wr_addr_ret, Delay::ticks(4));
+			if wr_en_ret != NodeId::NONE {
+				self.timing_engine
+					.set_sink_delay(wr_en_ret, Delay::ticks(4));
+			}
 			wr_ret.push(MemoryPortWriteFilled {
 				addr_wire: wr_addr_ret,
 				data_wire: wr_data_ret,
 				clk_wire: None,
 				en_wire: write_ports[i].en.map(|_| wr_en_ret),
 			});
+		}
+
+		for i in 0..n_rd_ports {
+			self.timing_engine
+				.add_arc(rd_addr_ret[i], rd_data_ret[i], Delay::ticks(2));
 		}
 
 		(rd_addr_ret, rd_data_ret, clk_wire, wr_ret)
@@ -2801,9 +2998,6 @@ impl LogicalDesign {
 		fi_exprs: Vec<Option<CoarseExpr>>,
 		output: Signal,
 	) -> (Vec<NodeId>, NodeId) {
-		if self.nodes.len() == 25698 {
-			print!("");
-		}
 		let mut retval = Vec::with_capacity(fi_exprs.len());
 		let mut last_comb = None;
 		for (idx, expr_opt) in fi_exprs.iter().enumerate() {
@@ -2844,7 +3038,23 @@ impl LogicalDesign {
 			}
 			last_comb = Some(mask_comb);
 		}
-		(retval, last_comb.unwrap())
+		let outp = last_comb.unwrap();
+		for (idx, expr_opt) in fi_exprs.iter().enumerate() {
+			if expr_opt.is_none() {
+				self.timing_engine
+					.add_arc(retval[idx], outp, Delay::ticks(1));
+				continue;
+			}
+			let (_, shift) = expr_opt.as_ref().unwrap().unwrap_mask_shift();
+			if shift != 0 {
+				self.timing_engine
+					.add_arc(retval[idx], outp, Delay::ticks(2));
+			} else {
+				self.timing_engine
+					.add_arc(retval[idx], outp, Delay::ticks(1));
+			}
+		}
+		(retval, outp)
 	}
 
 	/// Add an empty Decider Combinator to this design. You can then configure its input rows and outputs using [`add_decider_comb_input`] and [`add_decider_comb_output].
@@ -3402,6 +3612,8 @@ impl LogicalDesign {
 				*x = x_new;
 			}
 		}
+		self.timing_engine
+			.add_arc(retwire, lut_comb, Delay::ticks(1));
 		(vec![retwire; width], lut_comb)
 	}
 
@@ -3456,6 +3668,8 @@ impl LogicalDesign {
 			}
 			conj_disj = DeciderRowConjDisj::Or;
 		}
+		self.timing_engine
+			.add_arc(retwire, sop_comb, Delay::ticks(1));
 		(vec![retwire; width], sop_comb)
 	}
 
@@ -3495,10 +3709,10 @@ impl LogicalDesign {
 				NET_RED_GREEN,
 			);
 		}
-		(
-			vec![self.add_wire_red(vec![], vec![reducer]); a.len()],
-			reducer,
-		)
+		let inp_wire = self.add_wire_red(vec![], vec![reducer]);
+		self.timing_engine
+			.add_arc(inp_wire, reducer, Delay::ticks(1));
+		(vec![inp_wire; a.len()], reducer)
 	}
 
 	pub fn add_reduce_or(&mut self, a: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {
@@ -3521,10 +3735,10 @@ impl LogicalDesign {
 				NET_RED_GREEN,
 			);
 		}
-		(
-			vec![self.add_wire_red(vec![], vec![reducer]); a.len()],
-			reducer,
-		)
+		let inp_wire = self.add_wire_red(vec![], vec![reducer]);
+		self.timing_engine
+			.add_arc(inp_wire, reducer, Delay::ticks(1));
+		(vec![inp_wire; a.len()], reducer)
 	}
 
 	pub(crate) fn add_srl(&mut self, ab: &[Signal], y: Signal) -> (Vec<NodeId>, NodeId) {
@@ -3563,6 +3777,10 @@ impl LogicalDesign {
 		self.add_wire_red(vec![shr_magnitude, shl_sign], vec![]);
 		self.add_wire_red(vec![sign_check, inverse_b], vec![shl_sign]);
 		self.add_wire_red(vec![mask, b_nop], vec![shr_magnitude]);
+		self.timing_engine
+			.add_arc(a_wire, shr_magnitude, Delay::ticks(2));
+		self.timing_engine
+			.add_arc(b_wire, shr_magnitude, Delay::ticks(2));
 		(vec![a_wire, b_wire], shr_magnitude)
 	}
 

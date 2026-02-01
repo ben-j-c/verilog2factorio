@@ -111,6 +111,10 @@ Everything = Signal("Everything") ---@type Signal
 ---@param name string
 function Signal(name) end
 
+---@return Signal
+---@param id integer
+function SignalId(id) end
+
 ---@class Network
 
 NET_NONE = {} ---@type Network
