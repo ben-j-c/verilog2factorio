@@ -18,6 +18,7 @@ use crate::{
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
 	signal_lookup_table,
 	timing_engine::Delay,
+	unwrap_or_continue,
 	util::{self, hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
@@ -2701,6 +2702,44 @@ impl CheckedDesign {
 			for to_connect in new_to_connect {
 				self.connect(not_branch, to_connect);
 			}
+		}
+		let get_body_driving_pin = |id: NodeId, pin: usize| {
+			let input = self.nodes[id].fanin[0];
+			let output = self.nodes[input].fanin.get(0)?;
+			let body = self.nodes[*output].fanin[0];
+			Some(body)
+		};
+		// Pack chained pmux cells into a single pmux iff pmux is on A port.
+		for id in 0..self.nodes.len() {
+			let (n_ports_sink, n_ports_source, source_id) = {
+				let node = &self.nodes[id];
+				let n_ports_sink = if let NodeType::CellBody {
+					cell_type:
+						BodyType::MultiPart {
+							op: ImplementableOp::PMux(false, n_ports), // false -> A present
+						},
+				} = &node.node_type
+				{
+					*n_ports
+				} else {
+					continue;
+				};
+				let source_id = unwrap_or_continue!(get_body_driving_pin(id, 0));
+				let source_node = &self.nodes[source_id];
+				let n_ports_source = if let NodeType::CellBody {
+					cell_type:
+						BodyType::MultiPart {
+							op: ImplementableOp::PMux(_, n_ports),
+						},
+				} = &source_node.node_type
+				{
+					*n_ports
+				} else {
+					continue;
+				};
+				(n_ports_sink, n_ports_source, source_id)
+			};
+			// Now we know pmux -> Y -> A -> pmux
 		}
 		n_pruned
 	}
