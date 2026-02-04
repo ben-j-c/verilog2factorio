@@ -7,18 +7,19 @@ use std::{
 
 type NodeId = usize;
 
+mod checked_design_optimizations;
+
 use itertools::{chain, izip, Itertools};
 
 use crate::{
+	checked_design::checked_design_optimizations::Optimization,
 	connected_design::{CoarseExpr, ConnectedDesign},
 	logical_design::{
-		self, ArithmeticOperator, DeciderOperator, LogicalDesign, MemoryReadPort, MemoryWritePort,
-		Polarity, ResetSpec, Signal, NET_RED_GREEN,
+		self, decider_parser::DeciderSop, ArithmeticOperator, DeciderOperator, LogicalDesign,
+		MemoryReadPort, MemoryWritePort, Polarity, ResetSpec, Signal,
 	},
 	mapped_design::{BitSliceOps, Direction, FromBinStr, IntoBoolVec},
-	signal_lookup_table,
-	timing_engine::Delay,
-	unwrap_or_continue,
+	match_or_continue, signal_lookup_table, unwrap_or_continue,
 	util::{self, hash_map, hash_set, index_of, HashS},
 };
 use crate::{mapped_design::MappedDesign, util::HashM};
@@ -292,6 +293,25 @@ pub(crate) enum TimingBoundary {
 	Post,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FoldedData {
+	Vec(Vec<Option<DeciderSop>>),
+	Single(DeciderSop),
+	None,
+}
+impl FoldedData {
+	fn unwrap_vec(&self) -> &[Option<DeciderSop>] {
+		match self {
+			FoldedData::Vec(pmux) => pmux.as_slice(),
+			_ => panic!(),
+		}
+	}
+
+	fn is_empty(&self) -> bool {
+		matches!(self, FoldedData::None)
+	}
+}
+
 #[derive(Debug, Clone)]
 struct Node {
 	id: NodeId,
@@ -301,7 +321,7 @@ struct Node {
 	fanout: Vec<NodeId>,
 	keep: bool,
 	constants: Vec<Option<i32>>,
-	folded_expressions: Vec<Option<(Signal, DeciderOperator, Signal)>>,
+	folded_expressions: FoldedData,
 	timing_boundary: TimingBoundary,
 }
 
@@ -352,7 +372,7 @@ impl CheckedDesign {
 			fanin: vec![],
 			fanout: vec![],
 			constants: vec![],
-			folded_expressions: vec![],
+			folded_expressions: FoldedData::None,
 			keep: false,
 			timing_boundary: TimingBoundary::None,
 		});
@@ -1863,6 +1883,12 @@ impl CheckedDesign {
 				(input_wires, vec![output_comb])
 			},
 			ImplementableOp::LUT(_) => {
+				let folded_expressions =
+					if let FoldedData::Vec(x) = &self.nodes[nodeid].folded_expressions {
+						x.as_slice()
+					} else {
+						&[]
+					};
 				let (input_wires, output_comb) = logical_design.add_lut(
 					sig_in,
 					sig_out[0],
@@ -1873,7 +1899,7 @@ impl CheckedDesign {
 						.rev()
 						.collect_vec(),
 					mapped_cell.unwrap().parameters["WIDTH"].unwrap_bin_str(),
-					&self.nodes[nodeid].folded_expressions,
+					folded_expressions,
 				);
 				(input_wires, vec![output_comb])
 			},
@@ -2036,22 +2062,17 @@ impl CheckedDesign {
 			ImplementableOp::PMux(full_case, s_width) => {
 				let b_start = !full_case as usize;
 				let s_start = b_start + s_width;
-				let abs_folded_expr = if self.nodes[nodeid].folded_expressions.is_empty() {
+				let s_folded_expr = if self.nodes[nodeid].folded_expressions == FoldedData::None {
 					None
 				} else {
-					let exprs = &self.nodes[nodeid].folded_expressions;
-					Some((
-						&exprs[0..b_start],
-						&exprs[b_start..s_start],
-						&exprs[s_start..],
-					))
+					Some(self.nodes[nodeid].folded_expressions.unwrap_vec())
 				};
 				let (a, b, s, y) = logical_design.add_pmux(
 					if full_case { None } else { Some(sig_in[0]) },
 					&sig_in[b_start..s_start],
 					&sig_in[s_start..],
 					sig_out[0],
-					abs_folded_expr,
+					s_folded_expr,
 				);
 				(chain!(a, b, s).collect_vec(), vec![y])
 			},
@@ -2068,15 +2089,15 @@ impl CheckedDesign {
 				(input_wires, vec![output_comb])
 			},
 			ImplementableOp::Mux => {
-				let abs_folded_expr = if self.nodes[nodeid].folded_expressions.is_empty() {
-					None
-				} else {
-					let exprs = &self.nodes[nodeid].folded_expressions;
-					Some((&exprs[0], &exprs[1], &exprs[2]))
-				};
+				let s_folded_expr =
+					if let FoldedData::Single(s) = &self.nodes[nodeid].folded_expressions {
+						Some(s)
+					} else {
+						None
+					};
 				if let [a, b, s] = sig_in[0..3] {
 					let y = sig_out[0];
-					let (a, b, s, y) = logical_design.add_mux(a, b, s, y, abs_folded_expr);
+					let (a, b, s, y) = logical_design.add_mux(a, b, s, y, s_folded_expr);
 					(vec![a, b, s], vec![y])
 				} else {
 					panic!("Got wrong number of args for mux.")
@@ -2521,226 +2542,11 @@ impl CheckedDesign {
 	*/
 	fn optimize_graph(&mut self, mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
-		// Merge constants into cells that can support it.
-		for id in 0..self.nodes.len() {
-			let node = &self.nodes[id];
-			if !node.constants.is_empty() {
-				continue;
-			}
-			if let NodeType::CellBody { .. } = &node.node_type {
-			} else {
-				continue;
-			};
-			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-				m
-			} else {
-				continue;
-			};
-			let optimization_applies = mapped.cell_type.get_decider_op().is_some()
-				|| mapped.cell_type.get_arithmetic_op().is_some()
-				|| matches!(mapped.cell_type, ImplementableOp::PMux(_, _));
-			if !optimization_applies {
-				continue;
-			}
-			let (body, output, input) = self.get_fanin_body_subgraphs(id);
-			// The actual constant merging.
-			self.nodes[id].constants = vec![None; body.len()];
-			for (idx, body_id) in body.iter().enumerate() {
-				let fanin_body = &self.nodes[*body_id];
-				if !matches!(fanin_body.node_type, NodeType::CellBody { .. }) {
-					continue;
-				}
-				if let BodyType::Constant { value } = fanin_body.node_type.get_cell_type() {
-					self.nodes[id].constants[idx] = Some(value);
-					self.disconnect(output[idx], input[idx]);
-				}
-			}
-			// If the input constant has no other fanout, then prune it.
-			for idx in 0..body.len() {
-				n_pruned += self.try_prune(body[idx]);
-			}
-		}
-		// Merge decider operations into cells that support expression folding.
-		for id in 0..self.nodes.len() {
-			let node = &self.nodes[id];
-			if !node.folded_expressions.is_empty() {
-				continue;
-			}
-			if let NodeType::CellBody { .. } = &node.node_type {
-			} else {
-				continue;
-			};
-			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-				m
-			} else {
-				continue;
-			};
-			let optimization_applies = matches!(
-				mapped.cell_type,
-				ImplementableOp::PMux(_, _) | ImplementableOp::LUT(_) | ImplementableOp::Sop(_)
-			);
-			if !optimization_applies {
-				continue;
-			}
-			let (body, output, input) = self.get_fanin_body_subgraphs(id);
-			self.nodes[id].folded_expressions = vec![None; body.len()];
-			for (idx, body_id) in body.iter().enumerate() {
-				if *body_id == NodeId::MAX {
-					continue;
-				}
-				let fanin_body = &self.nodes[*body_id];
-				if !matches!(fanin_body.node_type, NodeType::CellBody { .. }) {
-					continue;
-				}
-				let fanin_body_mapped =
-					if let Some(m) = mapped_design.get_cell_option(&fanin_body.mapped_id) {
-						m
-					} else {
-						continue;
-					};
-				// Finally, retain the body node for future reference when building the next
-				if fanin_body_mapped.cell_type.get_decider_op().is_some()
-					&& self.count_connected_terminals(*body_id) == 1
-				{
-					assert!(
-						!fanin_body.constants.is_empty(),
-						"Decider needs at least 1 constant to be folded in."
-					);
-					// Here I precompute what the expression for the folded expression should be. In the PMux/LUT
-					// implementation I'll check this first and use it instead of s[i] == 1.
-					let expr = (
-						fanin_body.constants[0] // Recall, terminals are order sensitive, so 0 is left.
-							.map(Signal::Constant)
-							.unwrap_or(Signal::None),
-						fanin_body_mapped.cell_type.get_decider_op().unwrap(),
-						fanin_body.constants[1]
-							.map(Signal::Constant)
-							.unwrap_or(Signal::None),
-					);
-					assert_ne!(expr.0, expr.2);
-					self.nodes[id].folded_expressions[idx] = Some(expr);
-					// We need to wire around the expression being folded in.
-					//                        1                 2              3                 4                 5
-					// third_party_output (O) -> body_input (I) -> body_id (B) -> output[idx] (O) -> input[idx] (I) -> id
-					//        |                   ^ the cell being pruned                               ^
-					//        +-------------------------------------------------------------------------+
-					//        6 This wire is being added by the connect call.
-					let (third_party_output, body_input) =
-						self.get_sigular_output_input_pair(*body_id);
-					self.disconnect(output[idx], input[idx]); // 4
-					self.connect(third_party_output, input[idx]); // 6
-					if self.nodes[output[idx]].fanout.is_empty() {
-						// Can only remove this iff the decider being wired around is no longer needed by anything.
-						self.disconnect(third_party_output, body_input); // 1
-					}
-				}
-			}
-			// If the input constant has no other fanout, then prune it.
-			for idx in 0..body.len() {
-				if body[idx] == NodeId::MAX {
-					continue;
-				}
-				n_pruned += self.try_prune(body[idx]);
-			}
-		}
-		// Produce SopNot cells.
-		for id in 0..self.nodes.len() {
-			{
-				let node = &mut self.nodes[id];
-				if !node.folded_expressions.is_empty() {
-					continue;
-				}
-				if !matches!(&node.node_type, NodeType::CellBody { .. }) {
-					continue;
-				};
-				let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-					m
-				} else {
-					continue;
-				};
-				let optimization_applies = matches!(mapped.cell_type, ImplementableOp::Neg);
-				if !optimization_applies {
-					continue;
-				};
-			}
-
-			let (body, output, input) = self.get_fanin_body_subgraphs(id);
-			assert!(body.len() == 1);
-			let (body, _output, _input) = (body[0], output[0], input[0]);
-			assert!(body != NodeId::MAX);
-
-			// Convert body to SopNot
-			let body_node = &mut self.nodes[body];
-			if let NodeType::CellBody {
-				cell_type: BodyType::MultiPart {
-					op: ImplementableOp::Sop(width),
-				},
-			} = &body_node.node_type
-			{
-				body_node.node_type = NodeType::CellBody {
-					cell_type: BodyType::MultiPart {
-						op: ImplementableOp::SopNot(*width),
-					},
-				};
-			} else {
-				continue;
-			};
-
-			let not_branch = self.new_node(
-				"Y_BAR",
-				NodeType::CellOutput {
-					port: "Y_BAR".to_owned(),
-					connected_id: usize::MAX,
-				},
-			);
-			self.connect(body, not_branch);
-
-			let new_to_connect = self.nodes[self.nodes[id].fanout[0]].fanout.clone();
-
-			n_pruned += self.disconnect_and_try_prune(id);
-
-			for to_connect in new_to_connect {
-				self.connect(not_branch, to_connect);
-			}
-		}
-		let get_body_driving_pin = |id: NodeId, pin: usize| {
-			let input = self.nodes[id].fanin[0];
-			let output = self.nodes[input].fanin.get(0)?;
-			let body = self.nodes[*output].fanin[0];
-			Some(body)
-		};
-		// Pack chained pmux cells into a single pmux iff pmux is on A port.
-		for id in 0..self.nodes.len() {
-			let (n_ports_sink, n_ports_source, source_id) = {
-				let node = &self.nodes[id];
-				let n_ports_sink = if let NodeType::CellBody {
-					cell_type:
-						BodyType::MultiPart {
-							op: ImplementableOp::PMux(false, n_ports), // false -> A present
-						},
-				} = &node.node_type
-				{
-					*n_ports
-				} else {
-					continue;
-				};
-				let source_id = unwrap_or_continue!(get_body_driving_pin(id, 0));
-				let source_node = &self.nodes[source_id];
-				let n_ports_source = if let NodeType::CellBody {
-					cell_type:
-						BodyType::MultiPart {
-							op: ImplementableOp::PMux(_, n_ports),
-						},
-				} = &source_node.node_type
-				{
-					*n_ports
-				} else {
-					continue;
-				};
-				(n_ports_sink, n_ports_source, source_id)
-			};
-			// Now we know pmux -> Y -> A -> pmux
-		}
+		use checked_design_optimizations as cdo;
+		n_pruned += cdo::ConstantFold::apply(self, mapped_design);
+		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
+		n_pruned += cdo::SopNot::apply(self, mapped_design);
+		n_pruned += cdo::PmuxFold::apply(self, mapped_design);
 		n_pruned
 	}
 
@@ -3038,7 +2844,7 @@ mod graph_viz {
 		//		.nodes
 		//		.iter()
 		//		.enumerate()
-		//		.find(|(_, n)| n.mapped_id == "fab.char_d0.d0.row0")
+		//		.find(|(_, n)| n.mapped_id == "instr_addr")
 		//		.unwrap();
 		//	design.nodes_n_hops_back(id, 20)
 		//};

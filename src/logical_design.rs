@@ -39,8 +39,9 @@ use itertools::{izip, Itertools};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	checked_design::{CheckedDesign, ImplementableOp},
+	checked_design::{CheckedDesign, FoldedData, ImplementableOp},
 	connected_design::CoarseExpr,
+	logical_design::decider_parser::{DeciderConj, DeciderExpr, DeciderSop},
 	mapped_design::{BitSliceOps, Direction, MappedDesign},
 	signal_lookup_table,
 	timing_engine::{Delay, TimingEngine},
@@ -71,7 +72,7 @@ pub enum ArithmeticOperator {
 
 // Supported Decider Combinator operations as in the game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,
@@ -897,14 +898,14 @@ impl LogicalDesign {
 	) -> MemoryCellArstLatch {
 		let in_control = {
 			let ic = self.add_decider();
-			self.set_decider_inputs(ic, format!("{clk:?}[G] != 0 && {arst:?}[G] == 0"));
+			self.set_decider_expr(ic, format!("{clk:?}[G] != 0 && {arst:?}[G] == 0"));
 			self.add_decider_out_input_count(ic, Signal::Everything, NET_RED);
 			ic
 		};
 
 		let mem_cell = {
 			let mc = self.add_decider();
-			self.set_decider_inputs(mc, format!("{clk:?}[G] == 0 && {arst:?}[G] == 0"));
+			self.set_decider_expr(mc, format!("{clk:?}[G] == 0 && {arst:?}[G] == 0"));
 			self.add_decider_out_input_count(mc, Signal::Everything, NET_RED);
 			mc
 		};
@@ -1099,7 +1100,7 @@ impl LogicalDesign {
 		let needs_reset_emitter = reset_value.iter().any(|x| *x != 0);
 		if needs_reset_emitter {
 			let reset_emitter_2 = self.add_decider();
-			self.set_decider_inputs(reset_emitter_2, format!("{arst:?}[G] == 1"));
+			self.set_decider_expr(reset_emitter_2, format!("{arst:?}[G] == 1"));
 			for i in 0..density {
 				let reset_value = reset_value[i];
 				self.add_decider_out_constant(
@@ -1112,7 +1113,7 @@ impl LogicalDesign {
 			self.add_wire_red(vec![reset_emitter_2, latch_2.out_comb], vec![]);
 			self.add_wire_green(vec![], vec![reset_emitter_2, latch_2.in_comb]);
 			let reset_emitter_1 = self.add_decider();
-			self.set_decider_inputs(reset_emitter_1, format!("{arst:?}[G] == 1"));
+			self.set_decider_expr(reset_emitter_1, format!("{arst:?}[G] == 1"));
 			for i in 0..density {
 				let reset_value = reset_value[i];
 				self.add_decider_out_constant(
@@ -1313,11 +1314,7 @@ impl LogicalDesign {
 		b: &[Signal],
 		s: &[Signal],
 		y: Signal,
-		abs_folded_expr: Option<(
-			&[Option<(Signal, DeciderOperator, Signal)>],
-			&[Option<(Signal, DeciderOperator, Signal)>],
-			&[Option<(Signal, DeciderOperator, Signal)>],
-		)>,
+		s_folded_expr: Option<&[Option<DeciderSop>]>,
 	) -> (Option<NodeId>, Vec<NodeId>, Vec<NodeId>, NodeId) {
 		let n = b.len();
 		assert!(n > 1);
@@ -1341,16 +1338,12 @@ impl LogicalDesign {
 		}
 
 		let get_ith_s_expr = |i: usize| {
-			if let Some((_a_expr_opt, _b_expr_opt, s_expr_opt)) = abs_folded_expr {
-				match s_expr_opt[i] {
-					Some((Signal::None, op, rhs)) => (s[i], op, rhs),
-					Some((lhs, op, Signal::None)) => (s[i], op.swap_operands(), lhs),
-					Some(_) => unreachable!(),
-					None => (s[i], DeciderOperator::NotEqual, Signal::Constant(0)),
+			if let Some(s_expr) = s_folded_expr {
+				if let Some(disj) = &s_expr[i] {
+					return disj.replace_none(s[i]);
 				}
-			} else {
-				(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
 			}
+			DeciderSop::simple(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
 		};
 
 		let y = self.add_nop(Signal::Each, y);
@@ -1362,13 +1355,7 @@ impl LogicalDesign {
 		for i in 0..n {
 			let inp = self.add_decider();
 			b_muxes.push(inp);
-			self.add_decider_input(
-				inp,
-				get_ith_s_expr(i),
-				DeciderRowConjDisj::FirstRow,
-				NET_RED,
-				NET_NONE,
-			);
+			self.set_decider_inputs(inp, &get_ith_s_expr(i));
 			match b[i] {
 				Signal::Constant(c) => {
 					loop {
@@ -1418,22 +1405,15 @@ impl LogicalDesign {
 		// Build the fallback case.
 		let a_mux = if let Some(a_signal) = a {
 			let a_case = self.add_decider();
-			for i in 0..n {
-				let expr = get_ith_s_expr(i);
-				let expr = (expr.0, expr.1.complement(), expr.2);
-				self.add_decider_input(
-					a_case,
-					expr,
-					if i == 0 {
-						DeciderRowConjDisj::FirstRow
-					} else {
-						DeciderRowConjDisj::And
-					},
-					NET_RED,
-					NET_NONE,
-				);
+			let mut expr = get_ith_s_expr(0).replace_none(s[0]);
+			for i in 1..n {
+				let expr2 = get_ith_s_expr(i).replace_none(s[0]);
+				expr = expr2.or(&expr);
 			}
+			let expr = expr.complement(); // Not (s_0 + s_1 + ... + s_n-1)
+			self.set_decider_inputs(a_case, &expr);
 			match a_signal {
+				// Signal for A must be different than all other signals
 				Signal::Constant(c) => {
 					for b_sig in b {
 						if let Signal::Id(sig) = *b_sig {
@@ -1543,12 +1523,12 @@ impl LogicalDesign {
 			let dmux_current = self.add_decider();
 			#[cfg(debug_assertions)]
 			self.set_description_node(dmux_current, format!("dmux_current {i}"));
-			self.set_decider_inputs(dmux_current, format!("{addr:?}[G] != {i}"));
+			self.set_decider_expr(dmux_current, format!("{addr:?}[G] != {i}"));
 			self.add_decider_out_input_count(dmux_current, Signal::Id(i), NET_RED);
 			let dmux_new = self.add_decider();
 			#[cfg(debug_assertions)]
 			self.set_description_node(dmux_new, format!("dmux_new {i}"));
-			self.set_decider_inputs(dmux_new, format!("{addr:?}[G] == {i}"));
+			self.set_decider_expr(dmux_new, format!("{addr:?}[G] == {i}"));
 			self.add_decider_out_input_count(dmux_new, Signal::Id(i), NET_RED);
 			if i != 0 {
 				self.add_wire_red(vec![dmux_current, *dmux_currents.last().unwrap()], vec![]);
@@ -1594,36 +1574,50 @@ impl LogicalDesign {
 		b: Signal,
 		s: Signal,
 		y: Signal,
-		_abs_folded_expr: Option<(
-			&Option<(Signal, DeciderOperator, Signal)>,
-			&Option<(Signal, DeciderOperator, Signal)>,
-			&Option<(Signal, DeciderOperator, Signal)>,
-		)>,
+		s_folded_expr: Option<&DeciderSop>,
 	) -> (NodeId, NodeId, NodeId, NodeId) {
 		let inp_a = self.add_decider();
-		self.add_decider_input(
-			inp_a,
-			(s, DeciderOperator::Equal, Signal::Constant(0)),
-			DeciderRowConjDisj::FirstRow,
-			NET_RED_GREEN,
-			NET_RED_GREEN,
-		);
-		self.add_decider_out_input_count(inp_a, a, NET_RED_GREEN);
+
+		let expr = if let Some(s_expr) = s_folded_expr {
+			s_expr.replace_none(s)
+		} else {
+			DeciderSop::simple(s, DeciderOperator::Equal, Signal::Constant(1))
+		};
+
+		self.set_decider_inputs(inp_a, &expr.complement());
+		if let Signal::Constant(constant) = a {
+			let sig = if let Signal::Id(i) = a {
+				Signal::Id((i + 1) & signal_lookup_table::n_ids())
+			} else {
+				Signal::Id(0)
+			};
+			self.add_decider_out_constant(inp_a, sig, constant, NET_RED_GREEN);
+		} else {
+			self.add_decider_out_input_count(inp_a, a, NET_RED_GREEN);
+		}
 		let inp_b = self.add_decider();
-		self.add_decider_input(
-			inp_b,
-			(s, DeciderOperator::Equal, Signal::Constant(1)),
-			DeciderRowConjDisj::FirstRow,
-			NET_RED_GREEN,
-			NET_RED_GREEN,
-		);
-		self.add_decider_out_input_count(inp_b, b, NET_RED_GREEN);
-		let lhs = self.add_wire_red(vec![], vec![inp_a, inp_b]);
+		self.set_decider_inputs(inp_b, &expr);
+		if let Signal::Constant(constant) = b {
+			let sig = if let Signal::Id(i) = a {
+				Signal::Id((i + 1) & signal_lookup_table::n_ids())
+			} else {
+				Signal::Id(1)
+			};
+			self.add_decider_out_constant(inp_b, sig, constant, NET_RED_GREEN);
+		} else {
+			self.add_decider_out_input_count(inp_b, b, NET_RED_GREEN);
+		}
+		self.add_wire_red(vec![], vec![inp_a, inp_b]);
+		let wire_a = self.add_wire_red(vec![], vec![inp_a]);
+		let wire_b = self.add_wire_red(vec![], vec![inp_b]);
+		let wire_s = self.add_wire_red(vec![], vec![inp_a]);
 		self.add_wire_red(vec![inp_a, inp_b], vec![]);
 		let outp = self.add_nop(Signal::Each, y);
 		self.add_wire_red_simple(inp_a, outp);
-		self.timing_engine.add_arc(lhs, outp, Delay::ticks(2));
-		(lhs, lhs, lhs, outp)
+		self.timing_engine.add_arc(wire_a, outp, Delay::ticks(2));
+		self.timing_engine.add_arc(wire_b, outp, Delay::ticks(2));
+		self.timing_engine.add_arc(wire_s, outp, Delay::ticks(2));
+		(wire_a, wire_b, wire_s, outp)
 	}
 
 	pub(super) fn add_byte_select_write(
@@ -1849,7 +1843,7 @@ impl LogicalDesign {
 			let one_hot = self.add_decider();
 			let addr = write_port.addr;
 			let en = write_port.en.unwrap();
-			self.set_decider_inputs(
+			self.set_decider_expr(
 				one_hot,
 				format!("{addr:?} >= {phy_addr_start} && {addr:?} < {phy_addr_end} && {en:?} == 1"),
 			);
@@ -1906,7 +1900,7 @@ impl LogicalDesign {
 			let mux = self.add_decider();
 			mux1s_write.push(mux);
 			let addr = write_port.addr;
-			self.set_decider_inputs(
+			self.set_decider_expr(
 				mux,
 				format!("{addr:?}[G] >= {phy_addr_start} && {addr:?}[G] < {phy_addr_end}",),
 			);
@@ -1967,7 +1961,7 @@ impl LogicalDesign {
 				let mux = self.add_decider();
 				mux1s[i].push(mux);
 				let addr = rdport.addr;
-				self.set_decider_inputs(
+				self.set_decider_expr(
 					mux,
 					format!("{addr:?}[G] >= {phy_addr_start} && {addr:?}[G] < {phy_addr_end}",),
 				);
@@ -3106,8 +3100,21 @@ impl LogicalDesign {
 		}
 	}
 
-	pub fn set_decider_inputs<S: AsRef<str>>(&mut self, id: NodeId, expr: S) {
+	pub fn set_decider_expr<S: AsRef<str>>(&mut self, id: NodeId, expr: S) {
 		let expr = expr.as_ref();
+		match &mut self.nodes[id.0].function {
+			NodeFunction::Decider { .. } => {
+				let expr = decider_parser::parser().parse(expr).unwrap();
+				self.set_decider_inputs(id, &expr);
+			},
+			_ => assert!(
+				false,
+				"Tried to add DeciderCombinator output to non DeciderCombinator node"
+			),
+		}
+	}
+
+	pub fn set_decider_inputs(&mut self, id: NodeId, expr: &DeciderSop) {
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
 				expressions,
@@ -3116,7 +3123,6 @@ impl LogicalDesign {
 				input_right_networks,
 				..
 			} => {
-				let expr = decider_parser::parser().parse(expr).unwrap();
 				expressions.clear();
 				expression_conj_disj.clear();
 				input_left_networks.clear();
@@ -3152,6 +3158,8 @@ impl LogicalDesign {
 		constant: i32,
 		network: (bool, bool),
 	) {
+		assert!(!output.is_constant());
+		assert!(!output.is_none());
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
 				use_input_count,
@@ -3178,6 +3186,8 @@ impl LogicalDesign {
 		output: Signal,
 		network: (bool, bool),
 	) {
+		assert!(!output.is_constant());
+		assert!(!output.is_none());
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
 				use_input_count,
@@ -3549,28 +3559,27 @@ impl LogicalDesign {
 		sig_out: Signal,
 		lut: Vec<bool>,
 		width: usize,
-		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+		folded_expr: &[Option<DeciderSop>],
 	) -> (Vec<NodeId>, NodeId) {
 		assert_eq!(width, sig_in.len());
 		let mut counter = vec![false; width];
 
 		let get_ith_expr = |i: usize, bit: bool| {
 			if folded_expr.is_empty() {
-				return (
+				return DeciderSop::simple(
 					sig_in[i],
 					DeciderOperator::Equal,
 					Signal::Constant(bit as i32),
 				);
 			}
-			if let Some(expr) = folded_expr[i] {
-				let op = if bit { expr.1 } else { expr.1.complement() };
-				match expr {
-					(Signal::None, _, rhs) => (sig_in[i], op, rhs),
-					(lhs, _, Signal::None) => (sig_in[i], op.swap_operands(), lhs),
-					_ => unreachable!(),
+			if let Some(expr) = &folded_expr[i] {
+				if bit {
+					expr.replace_none(sig_in[i])
+				} else {
+					expr.replace_none(sig_in[i]).complement()
 				}
 			} else {
-				(
+				DeciderSop::simple(
 					sig_in[i],
 					DeciderOperator::Equal,
 					Signal::Constant(bit as i32),
@@ -3582,24 +3591,17 @@ impl LogicalDesign {
 		self.add_decider_out_constant(lut_comb, sig_out, 1, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![lut_comb]);
 
-		let mut first = true;
+		let mut total_expr = DeciderSop::default();
+		// Decode LUT into sum of products
 		loop {
 			let lut_idx: usize = counter.get_constant();
 			if lut[lut_idx] {
-				let mut first_condition = true;
+				let mut partial_expr = DeciderSop::default();
 				for (bit_idx, bit) in counter.iter().enumerate() {
-					let conj_disj = if first {
-						DeciderRowConjDisj::FirstRow
-					} else if first_condition {
-						DeciderRowConjDisj::Or
-					} else {
-						DeciderRowConjDisj::And
-					};
 					let expr = get_ith_expr(bit_idx, *bit);
-					self.add_decider_input(lut_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
-					first_condition = false;
-					first = false;
+					partial_expr = partial_expr.and_else_emplace(&expr);
 				}
+				total_expr = total_expr.or(&partial_expr);
 			}
 
 			if counter.iter().all(|x| *x) {
@@ -3612,6 +3614,7 @@ impl LogicalDesign {
 				*x = x_new;
 			}
 		}
+		self.set_decider_inputs(lut_comb, &total_expr);
 		self.timing_engine
 			.add_arc(retwire, lut_comb, Delay::ticks(1));
 		(vec![retwire; width], lut_comb)
@@ -3623,51 +3626,49 @@ impl LogicalDesign {
 		sig_out: Signal,
 		table: Vec<bool>,
 		depth: usize,
-		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+		folded_expr: &FoldedData,
 	) -> (Vec<NodeId>, NodeId) {
 		let sop_comb = self.add_decider();
 		let width = sig_in.len();
 		self.add_decider_out_constant(sop_comb, sig_out, 1, NET_RED_GREEN);
 		let retwire = self.add_wire_red(vec![], vec![sop_comb]);
-		let mut conj_disj = DeciderRowConjDisj::FirstRow;
+		let folded_expr = if let FoldedData::Vec(v) = folded_expr {
+			v.as_slice()
+		} else {
+			&[]
+		};
 		let get_ith_expr = |i: usize, bit: bool| {
-			if folded_expr.is_empty() {
-				return (
-					sig_in[i],
-					DeciderOperator::Equal,
-					Signal::Constant(bit as i32),
-				);
-			}
-			if let Some(expr) = folded_expr[i] {
-				let op = if bit { expr.1 } else { expr.1.complement() };
-				match expr {
-					(Signal::None, _, rhs) => (sig_in[i], op, rhs),
-					(lhs, _, Signal::None) => (sig_in[i], op.swap_operands(), lhs),
-					_ => unreachable!(),
-				}
+			let expr = if folded_expr.is_empty() {
+				DeciderSop::simple(sig_in[i], DeciderOperator::Equal, Signal::Constant(1))
 			} else {
-				(
-					sig_in[i],
-					DeciderOperator::Equal,
-					Signal::Constant(bit as i32),
-				)
+				if let Some(expr) = &folded_expr[i] {
+					expr.replace_none(sig_in[i])
+				} else {
+					DeciderSop::simple(sig_in[i], DeciderOperator::Equal, Signal::Constant(1))
+				}
+			};
+			if bit {
+				expr
+			} else {
+				expr.complement()
 			}
 		};
+		let mut total_expr = DeciderSop::default();
 		for i in 0..depth {
+			let mut partial_expr = DeciderSop::default();
 			for j in 0..width {
 				if table[2 * width * i + 2 * j] {
 					let expr = get_ith_expr(j, false);
-					self.add_decider_input(sop_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
-					conj_disj = DeciderRowConjDisj::And;
+					partial_expr = partial_expr.and_else_emplace(&expr);
 				}
 				if table[2 * width * i + 2 * j + 1] {
 					let expr = get_ith_expr(j, true);
-					self.add_decider_input(sop_comb, expr, conj_disj, NET_RED_GREEN, NET_RED_GREEN);
-					conj_disj = DeciderRowConjDisj::And;
+					partial_expr = partial_expr.and_else_emplace(&expr);
 				}
 			}
-			conj_disj = DeciderRowConjDisj::Or;
+			total_expr = total_expr.or(&partial_expr);
 		}
+		self.set_decider_inputs(sop_comb, &total_expr);
 		self.timing_engine
 			.add_arc(retwire, sop_comb, Delay::ticks(1));
 		(vec![retwire; width], sop_comb)
@@ -3680,7 +3681,7 @@ impl LogicalDesign {
 		sig_out_bar: Signal,
 		table: Vec<bool>,
 		depth: usize,
-		folded_expr: &[Option<(Signal, DeciderOperator, Signal)>],
+		folded_expr: &FoldedData,
 	) -> (Vec<NodeId>, NodeId) {
 		let (inputs, output) = self.add_sop(sig_in, sig_out, table, depth, folded_expr);
 		self.add_decider_out_constant(output, sig_out_bar, -1, NET_RED_GREEN);

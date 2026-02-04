@@ -1316,7 +1316,7 @@ fn print() {
 fn parser1() {
 	let mut logd = LogicalDesign::new();
 	let decider = logd.add_decider();
-	logd.set_decider_inputs(
+	logd.set_decider_expr(
 		decider,
 		"
 		signal-a[] != signal-b[G]

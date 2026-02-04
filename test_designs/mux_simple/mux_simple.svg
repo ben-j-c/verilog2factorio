@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="470" height="120">
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
             <style>
                 .search-match {
                     stroke: #ff00ff !important;
@@ -12,7 +12,12 @@
                     100% { stroke-opacity: 1; }
                 }
             </style>
-        <rect x="0" y="0" width="470" height="120" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="400" height="100" fill="rgba(255,255,255,1)"></rect><rect x="400" y="69" width="50" height="25" fill="rgba(230,230,230,1)"></rect><text x="425" y="81" text-anchor="middle" alignment-baseline="middle" fill="black">0</text><line x1="400" y1="69" x2="400" y2="100" stroke="black" stroke-width="1"></line><rect x="0" y="0" width="200" height="25" fill="rgba(200,200,200,1)"></rect><text x="100" y="12" text-anchor="middle" alignment-baseline="middle" fill="black">Simulation</text>
+        <rect x="0" y="0" width="160" height="160" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="140" height="140" fill="rgba(255,255,255,1)"></rect><rect x="33" y="33" width="20" height="20" fill="rgba(230,100,100,1)"><title>A
+A</title></rect><text x="43" y="43" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="33" y="55" width="20" height="20" fill="rgba(100,100,230,1)"><title>Y
+Y</title></rect><text x="43" y="65" text-anchor="middle" alignment-baseline="middle" fill="black">L</text><rect x="33" y="77" width="20" height="20" fill="rgba(230,100,100,1)"><title>B
+B</title></rect><text x="43" y="87" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="33" y="99" width="20" height="20" fill="rgba(230,100,100,1)"><title>S
+S</title></rect><text x="43" y="109" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="78" y="99" width="40" height="20" fill="rgba(230,230,230,1)"><title>$ternary$./mux.v:7$1:A
+$ternary$./mux.v:7$1:S</title></rect><text x="98" y="109" text-anchor="middle" alignment-baseline="middle" fill="black">≠</text><rect x="78" y="77" width="40" height="20" fill="rgba(230,230,230,1)"><title>$ternary$./mux.v:7$1:B</title></rect><text x="98" y="87" text-anchor="middle" alignment-baseline="middle" fill="black">=</text><rect x="78" y="55" width="40" height="20" fill="rgba(230,230,230,1)"><title>$ternary$./mux.v:7$1:Y</title></rect><text x="98" y="65" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><circle cx="64" cy="42" r="5" fill="rgb(101,67,33)"></circle><line x1="38" y1="38" x2="38" y2="82" stroke="red" stroke-width="1" /><line x1="38" y1="38" x2="38" y2="104" stroke="red" stroke-width="1" /><line x1="38" y1="38" x2="88" y2="104" stroke="red" stroke-width="1" /><line x1="38" y1="38" x2="88" y2="82" stroke="red" stroke-width="1" /><line x1="108" y1="104" x2="108" y2="82" stroke="red" stroke-width="1" /><line x1="108" y1="104" x2="88" y2="60" stroke="red" stroke-width="1" /><line x1="108" y1="60" x2="38" y2="60" stroke="red" stroke-width="1" />
             <foreignObject x="10" y="10" width="250" height="40">
                 <div xmlns="http://www.w3.org/1999/xhtml">
                     <input type="text" 

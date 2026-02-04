@@ -126,7 +126,6 @@ pub fn save_memh_file<P: AsRef<Path>>(path: P, data: Vec<i32>) -> Result<(), std
 
 #[macro_export]
 macro_rules! unwrap_or_continue {
-	// Standard usage: unwrap_or_continue!(option)
 	($e:expr) => {
 		match $e {
 			Some(x) => x,
@@ -134,11 +133,21 @@ macro_rules! unwrap_or_continue {
 		}
 	};
 
-	// Usage with a label: unwrap_or_continue!(option, 'label)
 	($e:expr, $label:lifetime) => {
 		match $e {
 			Some(x) => x,
 			None => continue $label,
 		}
 	};
+}
+
+#[macro_export]
+macro_rules! match_or_continue {
+	($pattern:pat, $target:expr, $($binding:expr),+ $(,)?) => {
+        if let $pattern = $target {
+            ($($binding),+)
+        } else {
+            continue;
+        }
+    };
 }

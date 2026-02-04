@@ -7,7 +7,7 @@ use crate::{
 	signal_lookup_table,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeciderExpr {
 	pub left: Signal,
 	pub op: DeciderOperator,
@@ -16,17 +16,17 @@ pub struct DeciderExpr {
 	pub net_right: (bool, bool),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeciderConj {
 	pub conj: Vec<DeciderExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct DeciderDisj {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeciderSop {
 	pub disj: Vec<DeciderConj>,
 }
 
-pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderDisj, extra::Err<Rich<'src, char>>> {
+pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderSop, extra::Err<Rich<'src, char>>> {
 	let named_signal = {
 		let base = text::ident();
 		let suffix_word = text::ident();
@@ -153,8 +153,150 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderDisj, extra::Err<Ri
 		.padded()
 		.separated_by(just("||"))
 		.collect()
-		.map(|x| DeciderDisj { disj: x })
+		.map(|x| DeciderSop { disj: x })
 		.padded();
 
 	disj.then(end()).map(|x| x.0)
+}
+
+impl DeciderSop {
+	pub fn distribute_conj(&self, term: &DeciderConj) -> DeciderSop {
+		let mut ret = self.clone();
+		for disj in ret.disj.iter_mut() {
+			disj.and(term);
+		}
+		ret
+	}
+
+	pub fn and(&self, term: &Self) -> DeciderSop {
+		let mut ret = Self { disj: vec![] };
+		for conj1 in self.disj.iter() {
+			for conj2 in term.disj.iter() {
+				ret.disj.push(conj1.and(&conj2));
+			}
+		}
+		ret
+	}
+
+	pub fn and_else_emplace(&self, term: &Self) -> DeciderSop {
+		let mut ret = Self { disj: vec![] };
+		if self.disj.is_empty() {
+			return term.clone();
+		}
+		for conj1 in self.disj.iter() {
+			for conj2 in term.disj.iter() {
+				ret.disj.push(conj1.and(&conj2));
+			}
+		}
+		ret
+	}
+
+	pub fn complement(&self) -> DeciderSop {
+		if self.disj.is_empty() {
+			return self.clone();
+		}
+		let mut ret = self.disj[0].complement();
+		for term in self.disj.iter().skip(1) {
+			let tmp = ret.and(&term.complement());
+			ret = tmp;
+		}
+		ret
+	}
+
+	pub fn or(&self, term: &DeciderSop) -> DeciderSop {
+		let mut ret = self.clone();
+		ret.disj.extend(term.disj.iter().cloned());
+		ret
+	}
+
+	pub fn replace_none(&self, repl: Signal) -> Self {
+		let disj = self
+			.disj
+			.iter()
+			.map(|x| x.replace_none(repl))
+			.collect::<Vec<_>>();
+		Self { disj }
+	}
+
+	pub fn simple(left: Signal, op: DeciderOperator, right: Signal) -> Self {
+		DeciderSop {
+			disj: vec![DeciderConj {
+				conj: vec![DeciderExpr::from_args(left, op, right)],
+			}],
+		}
+	}
+
+	pub fn default() -> Self {
+		Self { disj: vec![] }
+	}
+}
+
+impl DeciderConj {
+	pub fn and(&self, term: &DeciderConj) -> DeciderConj {
+		let mut ret = self.clone();
+		ret.conj.extend(term.conj.iter().cloned());
+		ret
+	}
+
+	pub fn complement(&self) -> DeciderSop {
+		let mut ret = DeciderSop { disj: vec![] };
+		for expr in self.conj.iter() {
+			let term = DeciderConj {
+				conj: vec![expr.complement()],
+			};
+			ret.disj.push(term);
+		}
+		ret
+	}
+
+	pub fn replace_none(&self, repl: Signal) -> Self {
+		let conj = self
+			.conj
+			.iter()
+			.map(|x| x.sub_none(repl))
+			.collect::<Vec<_>>();
+		Self { conj }
+	}
+}
+
+impl DeciderExpr {
+	pub fn complement(&self) -> DeciderExpr {
+		DeciderExpr {
+			left: self.left,
+			op: self.op.complement(),
+			right: self.right,
+			net_left: self.net_left,
+			net_right: self.net_right,
+		}
+	}
+
+	pub fn sub_none(&self, repl: Signal) -> DeciderExpr {
+		let left = if self.left.is_none() {
+			repl
+		} else {
+			self.left.clone()
+		};
+		let right = if self.right.is_none() {
+			repl
+		} else {
+			self.right.clone()
+		};
+		DeciderExpr {
+			left,
+			op: self.op,
+			right,
+			net_left: self.net_left,
+			net_right: self.net_right,
+		}
+	}
+
+	pub fn from_args(left: Signal, op: DeciderOperator, right: Signal) -> Self {
+		Self {
+			left,
+			op,
+			right,
+			net_left: (true, true),
+			net_right: (true, true),
+		}
+	}
 }
