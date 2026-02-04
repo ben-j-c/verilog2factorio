@@ -20,31 +20,10 @@ digraph CheckedDesign {
 8"]
   n9[shape=box,label="q_o
 9"]
-  n10[shape=box,label="$12_CMP0
-v2f_eq
-10"]
-  n11[shape=box,label="$15_CMP0
-v2f_eq
-12"]
-  n12[shape=box,label="$14_CMP0
-v2f_eq
-14"]
   n13[shape=box,label="$8
 v2f_pmux"]
-  n14[shape=box,label="$9_CMP0
-v2f_eq
-48"]
-  n15[shape=box,label="$13_CMP0
-v2f_eq
-50"]
   n16[shape=box,label="$187
 $sop"]
-  n17[shape=box,label="$11_CMP0
-v2f_eq
-54"]
-  n18[shape=box,label="$10_CMP0
-v2f_eq
-56"]
   n19[shape=rarrow,label="sel_i
 0"]
   n20[shape=rarrow,label="data_6_i
@@ -64,231 +43,112 @@ v2f_eq
   n27[shape=rarrow,label="data_7_i
 8"]
   n28[shape=larrow,label="q_o
-58"]
-  n29[shape=larrow,label="$12_CMP0
-v2f_eq
-11
-A"]
-  n30[shape=larrow,label="$12_CMP0
-v2f_eq
-11
-B"]
-  n31[shape=rarrow,label="$12_CMP0
-v2f_eq
-10
-Y"]
-  n32[shape=larrow,label="$15_CMP0
-v2f_eq
-13
-A"]
-  n33[shape=larrow,label="$15_CMP0
-v2f_eq
-13
-B"]
-  n34[shape=rarrow,label="$15_CMP0
-v2f_eq
-12
-Y"]
-  n35[shape=larrow,label="$14_CMP0
-v2f_eq
-15
-A"]
-  n36[shape=larrow,label="$14_CMP0
-v2f_eq
-15
-B"]
-  n37[shape=rarrow,label="$14_CMP0
-v2f_eq
-14
-Y"]
+44"]
   n38[shape=larrow,label="$8
 v2f_pmux
-18
+12
 B0"]
   n39[shape=larrow,label="$8
 v2f_pmux
-20
+14
 B1"]
   n40[shape=larrow,label="$8
 v2f_pmux
-24
+18
 B2"]
   n41[shape=larrow,label="$8
 v2f_pmux
-28
+22
 B3"]
   n42[shape=larrow,label="$8
 v2f_pmux
-32
+26
 B4"]
   n43[shape=larrow,label="$8
 v2f_pmux
-36
+30
 B5"]
   n44[shape=larrow,label="$8
 v2f_pmux
-40
+34
 B6"]
   n45[shape=larrow,label="$8
 v2f_pmux
-44
+38
 B7"]
   n46[shape=larrow,label="$8
 v2f_pmux
-18
+12
 S0"]
   n47[shape=larrow,label="$8
 v2f_pmux
-20
+14
 S1"]
   n48[shape=larrow,label="$8
 v2f_pmux
-24
+18
 S2"]
   n49[shape=larrow,label="$8
 v2f_pmux
-28
+22
 S3"]
   n50[shape=larrow,label="$8
 v2f_pmux
-32
+26
 S4"]
   n51[shape=larrow,label="$8
 v2f_pmux
-36
+30
 S5"]
   n52[shape=larrow,label="$8
 v2f_pmux
-40
+34
 S6"]
   n53[shape=larrow,label="$8
 v2f_pmux
-44
+38
 S7"]
   n54[shape=rarrow,label="$8
 v2f_pmux
-16
-Y"]
-  n55[shape=larrow,label="$9_CMP0
-v2f_eq
-49
-A"]
-  n56[shape=larrow,label="$9_CMP0
-v2f_eq
-49
-B"]
-  n57[shape=rarrow,label="$9_CMP0
-v2f_eq
-48
-Y"]
-  n58[shape=larrow,label="$13_CMP0
-v2f_eq
-51
-A"]
-  n59[shape=larrow,label="$13_CMP0
-v2f_eq
-51
-B"]
-  n60[shape=rarrow,label="$13_CMP0
-v2f_eq
-50
+10
 Y"]
   n61[shape=larrow,label="$187
 $sop
-53
+43
 A0"]
   n62[shape=larrow,label="$187
 $sop
-53
+43
 A1"]
   n63[shape=larrow,label="$187
 $sop
-53
+43
 A2"]
   n64[shape=rarrow,label="$187
 $sop
-52
-Y"]
-  n65[shape=larrow,label="$11_CMP0
-v2f_eq
-55
-A"]
-  n66[shape=larrow,label="$11_CMP0
-v2f_eq
-55
-B"]
-  n67[shape=rarrow,label="$11_CMP0
-v2f_eq
-54
-Y"]
-  n68[shape=larrow,label="$10_CMP0
-v2f_eq
-57
-A"]
-  n69[shape=larrow,label="$10_CMP0
-v2f_eq
-57
-B"]
-  n70[shape=rarrow,label="$10_CMP0
-v2f_eq
-56
-Y"]
-  n71[shape=box,label="$constant
-59"]
-  n72[shape=rarrow,label="$constant
-59
-Y"]
-  n73[shape=box,label="$constant
-60"]
-  n74[shape=rarrow,label="$constant
-60
-Y"]
-  n75[shape=box,label="$constant
-61"]
-  n76[shape=rarrow,label="$constant
-61
-Y"]
-  n77[shape=box,label="$constant
-62"]
-  n78[shape=rarrow,label="$constant
-62
-Y"]
-  n79[shape=box,label="$constant
-63"]
-  n80[shape=rarrow,label="$constant
-63
+42
 Y"]
   n81[shape=box,label="$swizzle"]
   n82[shape=rarrow,label="$swizzle
-64
+45
 Y"]
   n83[shape=larrow,label="$swizzle
-67
+48
 A"]
   n84[shape=box,label="$swizzle"]
   n85[shape=rarrow,label="$swizzle
-68
+49
 Y"]
   n86[shape=larrow,label="$swizzle
-69
+50
 A"]
   n87[shape=box,label="$swizzle"]
   n88[shape=rarrow,label="$swizzle
-70
+51
 Y"]
   n89[shape=larrow,label="$swizzle
-73
+54
 A"]
-  n90[shape=box,label="$constant
-74"]
-  n91[shape=rarrow,label="$constant
-74
-Y"]
-  n92[shape=box,label="$constant
-75"]
-  n93[shape=rarrow,label="$constant
-75
-Y"]
   n0 -> n19
   n1 -> n20
   n2 -> n21
@@ -298,25 +158,18 @@ Y"]
   n6 -> n25
   n7 -> n26
   n8 -> n27
-  n10 -> n31
-  n11 -> n34
-  n12 -> n37
   n13 -> n54
-  n14 -> n57
-  n15 -> n60
   n16 -> n64
-  n17 -> n67
-  n18 -> n70
-  n19 -> n29 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n32 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n35 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n55 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n58 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n65 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n68 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n83 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n86 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n89 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n46 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n47 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n48 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n49 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n50 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n51 [label="wooden-chest(0)",syle=bold,color=blue]
+  n19 -> n52 [label="wooden-chest(0)",syle=bold,color=blue]
   n20 -> n39 [label="iron-chest(1)",syle=bold,color=blue]
   n21 -> n40 [label="steel-chest(2)",syle=bold,color=blue]
   n22 -> n41 [label="storage-tank(3)",syle=bold,color=blue]
@@ -326,15 +179,6 @@ Y"]
   n26 -> n45 [label="underground-belt(7)",syle=bold,color=blue]
   n27 -> n38 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n28 -> n9
-  n29 -> n10
-  n30 -> n10
-  n31 -> n49 [label="wooden-chest(0)",syle=bold,color=blue]
-  n32 -> n11
-  n33 -> n11
-  n34 -> n52 [label="inserter(14)",syle=bold,color=blue]
-  n35 -> n12
-  n36 -> n12
-  n37 -> n51 [label="burner-inserter(13)",syle=bold,color=blue]
   n38 -> n13
   n39 -> n13
   n40 -> n13
@@ -352,32 +196,10 @@ Y"]
   n52 -> n13
   n53 -> n13
   n54 -> n28 [label="express-underground-belt(9)",syle=bold,color=blue]
-  n55 -> n14
-  n56 -> n14
-  n57 -> n46 [label="express-underground-belt(9)",syle=bold,color=blue]
-  n58 -> n15
-  n59 -> n15
-  n60 -> n50 [label="express-splitter(12)",syle=bold,color=blue]
   n61 -> n16
   n62 -> n16
   n63 -> n16
-  n64 -> n53 [label="long-handed-inserter(15)",syle=bold,color=blue]
-  n65 -> n17
-  n66 -> n17
-  n67 -> n48 [label="fast-splitter(11)",syle=bold,color=blue]
-  n68 -> n18
-  n69 -> n18
-  n70 -> n47 [label="splitter(10)",syle=bold,color=blue]
-  n71 -> n72
-  n72 -> n30 [label="iron-chest(1)",syle=bold,color=blue]
-  n73 -> n74
-  n74 -> n33 [label="steel-chest(2)",syle=bold,color=blue]
-  n75 -> n76
-  n76 -> n36 [label="storage-tank(3)",syle=bold,color=blue]
-  n77 -> n78
-  n78 -> n56 [label="transport-belt(4)",syle=bold,color=blue]
-  n79 -> n80
-  n80 -> n59 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n64 -> n53 [label="express-underground-belt(9)",syle=bold,color=blue]
   n81 -> n82
   n82 -> n61 [label="wooden-chest(0)",syle=bold,color=blue]
   n83 -> n81
@@ -387,8 +209,4 @@ Y"]
   n87 -> n88
   n88 -> n63 [label="steel-chest(2)",syle=bold,color=blue]
   n89 -> n87
-  n90 -> n91
-  n91 -> n66 [label="express-transport-belt(6)",syle=bold,color=blue]
-  n92 -> n93
-  n93 -> n69 [label="underground-belt(7)",syle=bold,color=blue]
 }

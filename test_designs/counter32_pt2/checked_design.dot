@@ -22,7 +22,7 @@ $adffe"]
   n9[shape=rarrow,label="rst_i
 5"]
   n10[shape=larrow,label="q_o
-61"]
+64"]
   n11[shape=rarrow,label="en_i
 7"]
   n12[shape=larrow,label="$2
@@ -55,58 +55,53 @@ $adff
 Q"]
   n19[shape=larrow,label="$135
 v2f_mux
-30
+31
 A"]
   n20[shape=larrow,label="$135
 v2f_mux
-30
+32
 B"]
   n21[shape=larrow,label="$135
 v2f_mux
-30
+33
 S"]
   n22[shape=rarrow,label="$135
 v2f_mux
-32
+35
 Y"]
   n23[shape=larrow,label="$19
 $adffe
-59
+62
 D"]
   n24[shape=larrow,label="$19
 $adffe
-48
+51
 CLK"]
   n25[shape=larrow,label="$19
 $adffe
-57
+60
 EN"]
   n26[shape=larrow,label="$19
 $adffe
-49
+52
 ARST"]
   n27[shape=rarrow,label="$19
 $adffe
-50
+53
 Q"]
   n28[shape=box,label="$swizzle"]
   n29[shape=rarrow,label="$swizzle
-62
+65
 Y"]
   n30[shape=larrow,label="$swizzle
-65
+68
 A0"]
-  n31[shape=box,label="$constant
-66"]
-  n32[shape=rarrow,label="$constant
-66
-Y"]
   n33[shape=box,label="$swizzle"]
   n34[shape=rarrow,label="$swizzle
-67
+69
 Y"]
   n35[shape=larrow,label="$swizzle
-70
+72
 A0"]
   n0 -> n8
   n1 -> n9
@@ -139,8 +134,6 @@ A0"]
   n28 -> n29
   n29 -> n10 [label="steel-chest(2)",syle=bold,color=blue]
   n30 -> n28
-  n31 -> n32
-  n32 -> n13 [label="iron-chest(1)",syle=bold,color=blue]
   n33 -> n34
   n34 -> n20 [label="transport-belt(4)",syle=bold,color=blue]
   n35 -> n33
