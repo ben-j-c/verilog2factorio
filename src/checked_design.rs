@@ -2693,7 +2693,7 @@ impl CheckedDesign {
 					}
 				},
 				NodeType::PortInput { .. } => {
-					requireds[id] = max_arrival - arrivals[id];
+					//requireds[id] = max_arrival - arrivals[id];
 					requireds[node.fanout[0]] = requireds[id];
 				},
 				NodeType::PortOutput { .. } => {
