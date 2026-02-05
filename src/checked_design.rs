@@ -245,6 +245,10 @@ impl NodeType {
 		}
 	}
 
+	fn is_cell_body(&self) -> bool {
+		matches!(self, NodeType::CellBody { .. })
+	}
+
 	fn mapped_terminal_name(&self) -> &str {
 		match self {
 			NodeType::CellInput { port, .. } => port,
@@ -299,6 +303,7 @@ pub enum FoldedData {
 	Single(DeciderSop),
 	None,
 }
+
 impl FoldedData {
 	fn unwrap_vec(&self) -> &[Option<DeciderSop>] {
 		match self {
@@ -1117,6 +1122,17 @@ impl CheckedDesign {
 
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
+		self.update_folded_data();
+		loop {
+			let n_pruned = self.optimize_graph_post_signal_choice(mapped_design);
+			if n_pruned > 0 {
+				println!("Pruned {n_pruned} nodes while optimizing.");
+			} else {
+				break;
+			}
+		}
+		self.check_connections();
+		self.signals_correctness_check(&self.signals);
 		self.identify_clocks(mapped_design);
 	}
 
@@ -2535,18 +2551,19 @@ impl CheckedDesign {
 		unreachable!("You fucked it, didnt call count_connected_terminals");
 	}
 
-	/** I wish there was a better way to implement optimizations, instead of having an ad-hoc approach for each
-	 optimization there should a DB of sorts. An optimization class can be created with hooks into each needed pass.
-	 Thats too much work right now, and really how many more optimizations will I need? Some can be applied in the
-	 verilog techmaps. Will have to revisit this if I need to scale this.
-	*/
 	fn optimize_graph(&mut self, mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		use checked_design_optimizations as cdo;
 		n_pruned += cdo::ConstantFold::apply(self, mapped_design);
 		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
-		n_pruned += cdo::PmuxFold::apply(self, mapped_design);
+		n_pruned
+	}
+
+	fn optimize_graph_post_signal_choice(&mut self, mapped_design: &MappedDesign) -> usize {
+		let mut n_pruned = 0;
+		use checked_design_optimizations as cdo;
+		n_pruned += cdo::PMuxFold::apply(self, mapped_design);
 		n_pruned
 	}
 
@@ -2813,6 +2830,44 @@ impl CheckedDesign {
 				let node2 = &self.nodes[*fid];
 				assert!(node2.fanin.contains(&id));
 			}
+		}
+	}
+
+	fn update_folded_data_node(&mut self, id: NodeId) {
+		let node = &mut self.nodes[id];
+		if !node.node_type.is_cell_body() {
+			return;
+		}
+		match node.node_type.get_cell_type() {
+			BodyType::MultiPart { op } => {
+				let signals = node.fanin.iter().map(|id| self.signals[*id]).collect_vec();
+				match op {
+					ImplementableOp::LUT(_)
+					| ImplementableOp::Sop(_)
+					| ImplementableOp::SopNot(_) => {
+						checked_design_optimizations::update_folded_data_isotropic_ports(
+							&mut node.folded_expressions,
+							signals,
+						)
+					},
+					ImplementableOp::PMux(full_case, width) => {
+						checked_design_optimizations::update_folded_data_pmux(
+							node, signals, full_case, width,
+						)
+					},
+					ImplementableOp::Mux => {
+						checked_design_optimizations::update_folded_data_mux(node, signals);
+					},
+					_ => {},
+				}
+			},
+			_ => {},
+		}
+	}
+
+	fn update_folded_data(&mut self) {
+		for id in 0..self.nodes.len() {
+			self.update_folded_data_node(id);
 		}
 	}
 }

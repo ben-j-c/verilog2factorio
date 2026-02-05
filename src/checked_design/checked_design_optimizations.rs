@@ -2,6 +2,10 @@ use super::*;
 
 pub trait Optimization {
 	fn apply(design: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize;
+	fn apply_post_signal_selection(
+		design: &mut CheckedDesign,
+		mapped_design: &MappedDesign,
+	) -> usize;
 }
 
 pub struct ConstantFold {}
@@ -51,6 +55,13 @@ impl Optimization for ConstantFold {
 			}
 		}
 		n_pruned
+	}
+
+	fn apply_post_signal_selection(
+		design: &mut CheckedDesign,
+		mapped_design: &MappedDesign,
+	) -> usize {
+		0
 	}
 }
 
@@ -155,9 +166,11 @@ impl Optimization for DeciderFold {
 				}
 			}
 			assert!(n_select == folded_expressions.len());
-			if matches!(mapped.cell_type, ImplementableOp::Mux) && folded_expressions[0].is_some() {
-				let xx = folded_expressions.pop().unwrap().unwrap();
-				des.nodes[id].folded_expressions = FoldedData::Single(xx);
+			if matches!(mapped.cell_type, ImplementableOp::Mux) {
+				if folded_expressions[0].is_some() {
+					let xx = folded_expressions.pop().unwrap().unwrap();
+					des.nodes[id].folded_expressions = FoldedData::Single(xx);
+				}
 			} else {
 				des.nodes[id].folded_expressions = FoldedData::Vec(folded_expressions);
 			}
@@ -170,6 +183,13 @@ impl Optimization for DeciderFold {
 			}
 		}
 		n_pruned
+	}
+
+	fn apply_post_signal_selection(
+		design: &mut CheckedDesign,
+		mapped_design: &MappedDesign,
+	) -> usize {
+		0
 	}
 }
 
@@ -239,11 +259,18 @@ impl Optimization for SopNot {
 		}
 		n_pruned
 	}
+
+	fn apply_post_signal_selection(
+		design: &mut CheckedDesign,
+		mapped_design: &MappedDesign,
+	) -> usize {
+		0
+	}
 }
 
-pub struct PmuxFold {}
+pub struct PMuxFold {}
 
-impl Optimization for PmuxFold {
+impl Optimization for PMuxFold {
 	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		let get_body_driving_pin = |id: NodeId, pin: usize| {
@@ -291,5 +318,65 @@ impl Optimization for PmuxFold {
 			let node = &des.nodes[id];
 		}
 		n_pruned
+	}
+
+	fn apply_post_signal_selection(
+		design: &mut CheckedDesign,
+		mapped_design: &MappedDesign,
+	) -> usize {
+		0
+	}
+}
+
+pub(crate) fn update_folded_data_isotropic_ports(data: &mut FoldedData, signals: Vec<Signal>) {
+	match data {
+		FoldedData::Vec(exprs) => izip!(exprs, signals).for_each(|(expr, signal)| {
+			if let Some(expr) = expr {
+				*expr = expr.replace_none(signal);
+			}
+		}),
+		FoldedData::Single(_) => {
+			panic!("There shouldn't be any isotropic cells with ports with folded expressions. If single input cell is folded, should still use Vec");
+		},
+		FoldedData::None => {},
+	}
+}
+
+pub(crate) fn update_folded_data_mux(node: &mut Node, signals: Vec<Signal>) {
+	match &mut node.folded_expressions {
+		FoldedData::Vec(_) => panic!("Mux should not have a vec of folded data."),
+		FoldedData::Single(expr) => {
+			*expr = expr.replace_none(signals[2]); // S
+		},
+		FoldedData::None => {},
+	}
+}
+
+pub(crate) fn update_folded_data_pmux(
+	node: &mut Node,
+	signals: Vec<Signal>,
+	full_case: bool,
+	width: usize,
+) {
+	match &mut node.folded_expressions {
+		FoldedData::Vec(expr) => {
+			if !full_case {
+				izip!(expr, signals[1 + width..].iter()).for_each(|(expr, signal)| {
+					if let Some(expr) = expr {
+						*expr = expr.replace_none(*signal);
+					}
+				});
+			} else {
+				izip!(expr, signals[width..].iter()).for_each(|(expr, signal)| {
+					if let Some(expr) = expr {
+						*expr = expr.replace_none(*signal);
+					}
+				});
+			}
+		},
+		FoldedData::Single(_expr) => {
+			panic!("PMux should have a vec of folded data.")
+		},
+		FoldedData::None => {},
 	}
 }
