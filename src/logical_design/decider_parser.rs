@@ -1,27 +1,31 @@
 extern crate chumsky;
 
 use chumsky::prelude::*;
+use itertools::Itertools;
 
 use crate::{
 	logical_design::{DeciderOperator, Signal},
 	signal_lookup_table,
+	util::hash_set,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DeciderExpr {
 	pub left: Signal,
 	pub op: DeciderOperator,
 	pub right: Signal,
 	pub net_left: (bool, bool),
 	pub net_right: (bool, bool),
+	pub left_placeholder: Option<usize>,
+	pub right_placeholder: Option<usize>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DeciderConj {
 	pub conj: Vec<DeciderExpr>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DeciderSop {
 	pub disj: Vec<DeciderConj>,
 }
@@ -140,6 +144,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderSop, extra::Err<Ric
 				right,
 				net_left,
 				net_right,
+				left_placeholder: None,
+				right_placeholder: None,
 			});
 
 	let conj = expr
@@ -169,23 +175,27 @@ impl DeciderSop {
 	}
 
 	pub fn and(&self, term: &Self) -> DeciderSop {
-		let mut ret = Self { disj: vec![] };
+		let mut disj_set = hash_set();
 		for conj1 in self.disj.iter() {
 			for conj2 in term.disj.iter() {
-				ret.disj.push(conj1.and(&conj2));
+				disj_set.insert(conj1.and(&conj2));
 			}
 		}
-		ret
+		DeciderSop {
+			disj: disj_set.into_iter().sorted().collect_vec(),
+		}
 	}
 
 	pub fn and_else_emplace(&self, term: &Self) -> DeciderSop {
 		let mut ret = Self { disj: vec![] };
 		if self.disj.is_empty() {
-			return term.clone();
+			return term.cannon();
 		}
 		for conj1 in self.disj.iter() {
 			for conj2 in term.disj.iter() {
-				ret.disj.push(conj1.and(&conj2));
+				ret = ret.or(&&DeciderSop {
+					disj: vec![conj1.and(&conj2)],
+				});
 			}
 		}
 		ret
@@ -200,20 +210,37 @@ impl DeciderSop {
 			let tmp = ret.and(&term.complement());
 			ret = tmp;
 		}
-		ret
+		ret.cannon()
 	}
 
 	pub fn or(&self, term: &DeciderSop) -> DeciderSop {
 		let mut ret = self.clone();
 		ret.disj.extend(term.disj.iter().cloned());
-		ret
+		ret.cannon()
 	}
 
-	pub fn replace_none(&self, repl: Signal) -> Self {
+	pub fn increment_placeholders(&self, count: usize) -> Self {
 		let disj = self
 			.disj
 			.iter()
-			.map(|x| x.replace_none(repl))
+			.map(|x| x.increment_placeholders(count))
+			.collect::<Vec<_>>();
+		Self { disj }
+	}
+
+	pub fn replace_placeholders(&self, repl: &[Signal]) -> Self {
+		if repl.is_empty() {
+			return self.clone();
+		}
+		let ret = self.replace_placeholder(*repl.last().unwrap(), repl.len() - 1);
+		ret.replace_placeholders(&repl[..repl.len() - 1])
+	}
+
+	pub fn replace_placeholder(&self, repl: Signal, ident: usize) -> Self {
+		let disj = self
+			.disj
+			.iter()
+			.map(|x| x.replace_placeholder(repl, ident))
 			.collect::<Vec<_>>();
 		Self { disj }
 	}
@@ -226,16 +253,59 @@ impl DeciderSop {
 		}
 	}
 
+	pub fn placeholder(
+		left: Signal,
+		op: DeciderOperator,
+		right: Signal,
+		left_placeholder: Option<usize>,
+		right_placeholder: Option<usize>,
+	) -> Self {
+		DeciderSop {
+			disj: vec![DeciderConj {
+				conj: vec![DeciderExpr::with_placeholders(
+					left,
+					op,
+					right,
+					left_placeholder,
+					right_placeholder,
+				)],
+			}],
+		}
+	}
+
 	pub fn default() -> Self {
 		Self { disj: vec![] }
+	}
+
+	pub fn num_terms(&self) -> usize {
+		self.disj.iter().map(|x| x.conj.len()).sum::<usize>() + self.disj.len()
+	}
+
+	pub fn cannon(&self) -> DeciderSop {
+		let mut disj_set = hash_set();
+		for disj in self.disj.iter() {
+			disj_set.insert(disj.cannon());
+		}
+		DeciderSop {
+			disj: disj_set.into_iter().sorted().collect_vec(),
+		}
 	}
 }
 
 impl DeciderConj {
-	pub fn and(&self, term: &DeciderConj) -> DeciderConj {
-		let mut ret = self.clone();
-		ret.conj.extend(term.conj.iter().cloned());
-		ret
+	pub fn and(&self, other: &DeciderConj) -> DeciderConj {
+		let a = self.cannon();
+		let b = other.cannon();
+		let mut exprs = hash_set();
+		for expr in a.conj.iter() {
+			exprs.insert(expr);
+		}
+		for expr in b.conj.iter() {
+			exprs.insert(expr);
+		}
+		DeciderConj {
+			conj: exprs.into_iter().sorted().cloned().collect_vec(),
+		}
 	}
 
 	pub fn complement(&self) -> DeciderSop {
@@ -246,16 +316,35 @@ impl DeciderConj {
 			};
 			ret.disj.push(term);
 		}
-		ret
+		ret.cannon()
 	}
 
-	pub fn replace_none(&self, repl: Signal) -> Self {
+	pub fn replace_placeholder(&self, repl: Signal, ident: usize) -> Self {
 		let conj = self
 			.conj
 			.iter()
-			.map(|x| x.sub_none(repl))
+			.map(|x| x.sub_placeholder(repl, ident))
+			.collect::<Vec<_>>();
+		Self { conj }.cannon()
+	}
+
+	fn increment_placeholders(&self, count: usize) -> DeciderConj {
+		let conj = self
+			.conj
+			.iter()
+			.map(|x| x.increment_placeholder(count))
 			.collect::<Vec<_>>();
 		Self { conj }
+	}
+
+	fn cannon(&self) -> DeciderConj {
+		let mut conj_set = hash_set();
+		for expr in self.conj.iter() {
+			conj_set.insert(expr);
+		}
+		DeciderConj {
+			conj: conj_set.into_iter().sorted().cloned().collect_vec(),
+		}
 	}
 }
 
@@ -267,19 +356,21 @@ impl DeciderExpr {
 			right: self.right,
 			net_left: self.net_left,
 			net_right: self.net_right,
+			left_placeholder: self.left_placeholder,
+			right_placeholder: self.right_placeholder,
 		}
 	}
 
-	pub fn sub_none(&self, repl: Signal) -> DeciderExpr {
-		let left = if self.left.is_none() {
-			repl
+	pub fn sub_placeholder(&self, repl: Signal, ident: usize) -> DeciderExpr {
+		let (left, left_placeholder) = if self.left_placeholder == Some(ident) {
+			(repl, None)
 		} else {
-			self.left.clone()
+			(self.left.clone(), self.left_placeholder)
 		};
-		let right = if self.right.is_none() {
-			repl
+		let (right, right_placeholder) = if self.right_placeholder == Some(ident) {
+			(repl, None)
 		} else {
-			self.right.clone()
+			(self.right.clone(), self.right_placeholder)
 		};
 		DeciderExpr {
 			left,
@@ -287,6 +378,8 @@ impl DeciderExpr {
 			right,
 			net_left: self.net_left,
 			net_right: self.net_right,
+			left_placeholder,
+			right_placeholder,
 		}
 	}
 
@@ -297,6 +390,48 @@ impl DeciderExpr {
 			right,
 			net_left: (true, true),
 			net_right: (true, true),
+			left_placeholder: None,
+			right_placeholder: None,
+		}
+	}
+
+	pub fn with_placeholders(
+		left: Signal,
+		op: DeciderOperator,
+		right: Signal,
+		left_placeholder: Option<usize>,
+		right_placeholder: Option<usize>,
+	) -> Self {
+		Self {
+			left,
+			op,
+			right,
+			net_left: (true, true),
+			net_right: (true, true),
+			left_placeholder,
+			right_placeholder,
+		}
+	}
+
+	fn increment_placeholder(&self, count: usize) -> DeciderExpr {
+		let left_placeholder = if let Some(ident) = self.left_placeholder {
+			Some(ident + count)
+		} else {
+			self.left_placeholder
+		};
+		let right_placeholder = if let Some(ident) = self.right_placeholder {
+			Some(ident + count)
+		} else {
+			self.right_placeholder
+		};
+		DeciderExpr {
+			left: self.left,
+			op: self.op,
+			right: self.right,
+			net_left: self.net_left,
+			net_right: self.net_right,
+			left_placeholder,
+			right_placeholder,
 		}
 	}
 }

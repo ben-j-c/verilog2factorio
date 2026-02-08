@@ -1,11 +1,9 @@
+use std::ops::{Range, RangeFrom};
+
 use super::*;
 
 pub trait Optimization {
 	fn apply(design: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize;
-	fn apply_post_signal_selection(
-		design: &mut CheckedDesign,
-		mapped_design: &MappedDesign,
-	) -> usize;
 }
 
 pub struct ConstantFold {}
@@ -56,13 +54,6 @@ impl Optimization for ConstantFold {
 		}
 		n_pruned
 	}
-
-	fn apply_post_signal_selection(
-		design: &mut CheckedDesign,
-		mapped_design: &MappedDesign,
-	) -> usize {
-		0
-	}
 }
 
 pub struct DeciderFold {}
@@ -110,6 +101,7 @@ impl Optimization for DeciderFold {
 			};
 			let (body, output, input) = des.get_fanin_body_subgraphs(id);
 			let mut folded_expressions = vec![];
+			let mut pin_counter = 0;
 			for (idx, body_id) in body.iter().enumerate() {
 				if *body_id == NodeId::MAX {
 					continue;
@@ -117,6 +109,7 @@ impl Optimization for DeciderFold {
 				if !DeciderFold::pin_applies(des, mapped.cell_type, input[idx]) {
 					continue;
 				}
+				pin_counter += 1;
 				folded_expressions.push(None);
 				let folded_expressions = folded_expressions.last_mut().unwrap();
 				let fanin_body = &des.nodes[*body_id];
@@ -148,7 +141,23 @@ impl Optimization for DeciderFold {
 						.map(Signal::Constant)
 						.unwrap_or(Signal::None);
 					assert_ne!(left, right);
-					*folded_expressions = Some(DeciderSop::simple(left, op, right));
+					let left_placeholder = if left == Signal::None {
+						Some(pin_counter - 1)
+					} else {
+						None
+					};
+					let right_placeholder = if right == Signal::None {
+						Some(pin_counter - 1)
+					} else {
+						None
+					};
+					*folded_expressions = Some(DeciderSop::placeholder(
+						left,
+						op,
+						right,
+						left_placeholder,
+						right_placeholder,
+					));
 					// We need to wire around the expression being folded in.
 					//                        1                 2              3                 4                 5
 					// third_party_output (O) -> body_input (I) -> body_id (B) -> output[idx] (O) -> input[idx] (I) -> id
@@ -183,13 +192,6 @@ impl Optimization for DeciderFold {
 			}
 		}
 		n_pruned
-	}
-
-	fn apply_post_signal_selection(
-		design: &mut CheckedDesign,
-		mapped_design: &MappedDesign,
-	) -> usize {
-		0
 	}
 }
 
@@ -259,12 +261,40 @@ impl Optimization for SopNot {
 		}
 		n_pruned
 	}
+}
 
-	fn apply_post_signal_selection(
-		design: &mut CheckedDesign,
-		mapped_design: &MappedDesign,
-	) -> usize {
-		0
+pub struct MuxToPmux {}
+
+impl Optimization for MuxToPmux {
+	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+		let n_pruned = 0;
+		for id in 0..des.nodes.len() {
+			let node = &mut des.nodes[id];
+			if !matches!(
+				&node.node_type,
+				NodeType::CellBody {
+					cell_type: BodyType::MultiPart {
+						op: ImplementableOp::Mux,
+					}
+				}
+			) {
+				continue;
+			}
+			node.node_type = NodeType::CellBody {
+				cell_type: BodyType::MultiPart {
+					op: ImplementableOp::PMux(false, 1),
+				},
+			};
+			let expr = match &node.folded_expressions {
+				FoldedData::Vec(_) => unreachable!(),
+				FoldedData::Single(expr) => expr.clone(),
+				FoldedData::None => {
+					continue;
+				},
+			};
+			node.folded_expressions = FoldedData::Vec(vec![Some(expr)]);
+		}
+		n_pruned
 	}
 }
 
@@ -273,68 +303,191 @@ pub struct PMuxFold {}
 impl Optimization for PMuxFold {
 	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
-		let get_body_driving_pin = |id: NodeId, pin: usize| {
+		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
 			let input = des.nodes[id].fanin[pin];
 			let output = des.nodes[input].fanin.get(0)?;
 			let body = des.nodes[*output].fanin[0];
 			Some(body)
 		};
-		let n_siblings_for_pin = |id: NodeId, pin: usize| {
+		let n_siblings_for_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
 			let input = des.nodes[id].fanin[pin];
 			let output = des.nodes[input].fanin[0];
 			des.nodes[output].fanout.len()
 		};
 		for id in 0..des.nodes.len() {
-			let (n_ports_sink, n_ports_source, source_id, source_full_case) = {
+			let (width_sink, width_source, source_id, source_full_case) = {
 				let node = &des.nodes[id];
 				let n_ports_sink = match_or_continue!(
 					NodeType::CellBody {
 						cell_type: BodyType::MultiPart {
-							op: ImplementableOp::PMux(false, n_ports),
+							op: ImplementableOp::PMux(false, width),
 						},
 					},
 					&node.node_type,
-					*n_ports
+					*width
 				);
-				let source_id = unwrap_or_continue!(get_body_driving_pin(id, 0));
-				if n_siblings_for_pin(id, 0) != 1 {
-					continue;
-				}
+				let source_id = unwrap_or_continue!(get_body_driving_pin(des, id, 0));
 				let source_node = &des.nodes[source_id];
 				let (source_full_case, n_ports_source) = match_or_continue!(
 					NodeType::CellBody {
 						cell_type: BodyType::MultiPart {
-							op: ImplementableOp::PMux(full_case, n_ports),
+							op: ImplementableOp::PMux(full_case, width),
 						},
 					},
 					&source_node.node_type,
 					*full_case,
-					*n_ports
+					*width
 				);
+				if n_siblings_for_pin(des, id, 0) != 1 {
+					//println!("Skipping {id} -> {source_id} due to multi-fanout.");
+					continue;
+				}
 				(n_ports_sink, n_ports_source, source_id, source_full_case)
 			};
+			let source_has_a = !source_full_case;
+			if width_sink > 1 || width_source > 1 {
+				continue;
+			}
 			// Now we know pmux -> Y -> A -> pmux
-			let source_ports = des.nodes[source_id].fanin.clone();
-			let node = &des.nodes[id];
+			let source_s_range = {
+				let start_idx = source_has_a as usize + width_source;
+				start_idx..start_idx + width_sink
+			};
+			force_insert_expressions(des, source_id, source_s_range);
+			let sink_s_range = {
+				let start_idx = 1 + width_sink;
+				start_idx..start_idx + width_source
+			};
+			force_insert_expressions(des, id, sink_s_range);
+
+			let mut to_del = vec![source_id];
+			{
+				let (source, sink) = util::mut_idx(&mut des.nodes, source_id, id);
+				to_del.push(source.fanout[0]);
+				{
+					// insert B ports
+					let idx = 1 + width_sink;
+					let start_idx = source_has_a as usize;
+					sink.fanin.splice(
+						idx..idx,
+						source.fanin[start_idx..start_idx + width_source]
+							.iter()
+							.cloned(),
+					);
+					sink.constants.splice(
+						idx..idx,
+						source.constants[start_idx..start_idx + width_source]
+							.iter()
+							.cloned(),
+					);
+				}
+				{
+					// insert S ports
+					let start_idx = source_has_a as usize + width_source;
+					sink.fanin.extend(
+						source.fanin[start_idx..start_idx + width_source]
+							.iter()
+							.copied(),
+					);
+					sink.constants.extend(
+						source.constants[start_idx..start_idx + width_source]
+							.iter()
+							.cloned(),
+					);
+				}
+				// replace A
+				to_del.push(sink.fanin[0]); // Not needed anymore
+				if source_has_a {
+					sink.fanin[0] = source.fanin[0];
+					sink.constants[0] = source.constants[0];
+				}
+				if let NodeType::CellBody {
+					cell_type:
+						BodyType::MultiPart {
+							op: ImplementableOp::PMux(full_case, width),
+						},
+				} = &mut sink.node_type
+				{
+					*full_case = source_full_case;
+					*width = width_source + width_sink;
+				}
+				// For all new S pins, they must not fire when any of the original fire, so you must
+				// Distribute the conjunction of the existing pin expressions with the new ones.
+				let sink_exprs = sink.folded_expressions.unwrap_vec();
+				let mut combined_sink_expr = DeciderSop::default();
+				for sink_expr in sink_exprs.iter() {
+					let sink_expr = sink_expr.as_ref().unwrap();
+					combined_sink_expr = combined_sink_expr.or(&sink_expr);
+				}
+				let combined_sink_expr = combined_sink_expr.complement();
+				let mut new_exprs = sink_exprs.iter().cloned().collect_vec();
+				let source_exprs = source.folded_expressions.unwrap_vec();
+				for source_expr in source_exprs.iter() {
+					let expr = source_expr.as_ref().unwrap();
+					new_exprs.push(Some(
+						combined_sink_expr.and(&expr.increment_placeholders(width_sink)),
+					));
+				}
+				sink.folded_expressions = FoldedData::Vec(new_exprs);
+				if !source_has_a {
+					sink.fanin.remove(0);
+					sink.constants.remove(0);
+				}
+			}
+			{
+				for i in 0..des.nodes[id].fanin.len() {
+					let fid = des.nodes[id].fanin[i];
+					des.nodes[fid].fanout = vec![id];
+				}
+			}
+			for x in to_del {
+				let node = &mut des.nodes[x];
+				node.node_type = NodeType::Pruned;
+				node.fanin.clear();
+				node.fanout.clear();
+				n_pruned += 1;
+			}
 		}
 		n_pruned
 	}
+}
 
-	fn apply_post_signal_selection(
-		design: &mut CheckedDesign,
-		mapped_design: &MappedDesign,
-	) -> usize {
-		0
+pub(crate) fn force_insert_expressions(des: &mut CheckedDesign, id: NodeId, ports: Range<usize>) {
+	let width = ports.len();
+	let source_node = &mut des.nodes[id];
+	if source_node.folded_expressions.is_empty() {
+		let folded_expr = vec![None; width];
+		source_node.folded_expressions = FoldedData::Vec(folded_expr);
+	}
+	{
+		let exprs = source_node.folded_expressions.unwrap_vec_mut();
+		izip!(exprs.iter_mut().enumerate()).for_each(|(idx, expr)| {
+			if expr.is_some() {
+				return;
+			}
+			*expr = Some(DeciderSop::placeholder(
+				Signal::None,
+				DeciderOperator::Equal,
+				Signal::Constant(1),
+				Some(idx),
+				None,
+			));
+		});
+	}
+	if source_node.constants.is_empty() {
+		source_node.constants = vec![None; width];
 	}
 }
 
 pub(crate) fn update_folded_data_isotropic_ports(data: &mut FoldedData, signals: Vec<Signal>) {
 	match data {
-		FoldedData::Vec(exprs) => izip!(exprs, signals).for_each(|(expr, signal)| {
-			if let Some(expr) = expr {
-				*expr = expr.replace_none(signal);
-			}
-		}),
+		FoldedData::Vec(exprs) => {
+			izip!(exprs, signals.iter().enumerate()).for_each(|(expr, (ident, signal))| {
+				if let Some(expr) = expr {
+					*expr = expr.replace_placeholder(*signal, ident);
+				}
+			})
+		},
 		FoldedData::Single(_) => {
 			panic!("There shouldn't be any isotropic cells with ports with folded expressions. If single input cell is folded, should still use Vec");
 		},
@@ -346,7 +499,7 @@ pub(crate) fn update_folded_data_mux(node: &mut Node, signals: Vec<Signal>) {
 	match &mut node.folded_expressions {
 		FoldedData::Vec(_) => panic!("Mux should not have a vec of folded data."),
 		FoldedData::Single(expr) => {
-			*expr = expr.replace_none(signals[2]); // S
+			*expr = expr.replace_placeholder(signals[2], 0); // S
 		},
 		FoldedData::None => {},
 	}
@@ -361,17 +514,21 @@ pub(crate) fn update_folded_data_pmux(
 	match &mut node.folded_expressions {
 		FoldedData::Vec(expr) => {
 			if !full_case {
-				izip!(expr, signals[1 + width..].iter()).for_each(|(expr, signal)| {
-					if let Some(expr) = expr {
-						*expr = expr.replace_none(*signal);
-					}
-				});
+				izip!(expr, signals[1 + width..].iter().enumerate()).for_each(
+					|(expr, (ident, signal))| {
+						if let Some(expr) = expr {
+							*expr = expr.replace_placeholder(*signal, ident);
+						}
+					},
+				);
 			} else {
-				izip!(expr, signals[width..].iter()).for_each(|(expr, signal)| {
-					if let Some(expr) = expr {
-						*expr = expr.replace_none(*signal);
-					}
-				});
+				izip!(expr, signals[width..].iter().enumerate()).for_each(
+					|(expr, (ident, signal))| {
+						if let Some(expr) = expr {
+							*expr = expr.replace_placeholder(*signal, ident);
+						}
+					},
+				);
 			}
 		},
 		FoldedData::Single(_expr) => {

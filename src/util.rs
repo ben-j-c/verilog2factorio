@@ -124,6 +124,17 @@ pub fn save_memh_file<P: AsRef<Path>>(path: P, data: Vec<i32>) -> Result<(), std
 	Ok(())
 }
 
+pub fn mut_idx<T>(data: &mut [T], idx1: usize, idx2: usize) -> (&mut T, &mut T) {
+	assert!(idx1 != idx2);
+	if idx1 < idx2 {
+		let (low, high) = data.split_at_mut(idx2);
+		(&mut low[idx1], &mut high[0])
+	} else {
+		let (low, high) = data.split_at_mut(idx1);
+		(&mut high[0], &mut low[idx2])
+	}
+}
+
 #[macro_export]
 macro_rules! unwrap_or_continue {
 	($e:expr) => {

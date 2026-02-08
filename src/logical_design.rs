@@ -72,7 +72,7 @@ pub enum ArithmeticOperator {
 
 // Supported Decider Combinator operations as in the game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, PartialOrd, Ord)]
 pub enum DeciderOperator {
 	LessThan,
 	GreaterThan,
@@ -126,7 +126,7 @@ pub enum DeciderRowConjDisj {
 ///
 /// See [crate::signal_lookup_table] for exact mapping between ids and names in game.
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum Signal {
 	/// An unset signal. i.e., a blank spot on the left hand side of an expression in a combinator.
 	None,
@@ -1317,7 +1317,7 @@ impl LogicalDesign {
 		s_folded_expr: Option<&[Option<DeciderSop>]>,
 	) -> (Option<NodeId>, Vec<NodeId>, Vec<NodeId>, NodeId) {
 		let n = b.len();
-		assert!(n > 1);
+		assert!(n > 0);
 		assert_eq!(b.len(), s.len());
 		assert!(
 			!matches!(
@@ -1340,7 +1340,7 @@ impl LogicalDesign {
 		let get_ith_s_expr = |i: usize| {
 			if let Some(s_expr) = s_folded_expr {
 				if let Some(disj) = &s_expr[i] {
-					return disj.replace_none(s[i]);
+					return disj.replace_placeholders(s);
 				}
 			}
 			DeciderSop::simple(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
@@ -1405,9 +1405,9 @@ impl LogicalDesign {
 		// Build the fallback case.
 		let a_mux = if let Some(a_signal) = a {
 			let a_case = self.add_decider();
-			let mut expr = get_ith_s_expr(0).replace_none(s[0]);
+			let mut expr = get_ith_s_expr(0);
 			for i in 1..n {
-				let expr2 = get_ith_s_expr(i).replace_none(s[0]);
+				let expr2 = get_ith_s_expr(i);
 				expr = expr2.or(&expr);
 			}
 			let expr = expr.complement(); // Not (s_0 + s_1 + ... + s_n-1)
@@ -1579,7 +1579,7 @@ impl LogicalDesign {
 		let inp_a = self.add_decider();
 
 		let expr = if let Some(s_expr) = s_folded_expr {
-			s_expr.replace_none(s)
+			s_expr.replace_placeholder(s, 0)
 		} else {
 			DeciderSop::simple(s, DeciderOperator::Equal, Signal::Constant(1))
 		};
@@ -3574,9 +3574,9 @@ impl LogicalDesign {
 			}
 			if let Some(expr) = &folded_expr[i] {
 				if bit {
-					expr.replace_none(sig_in[i])
+					expr.replace_placeholder(sig_in[i], i)
 				} else {
-					expr.replace_none(sig_in[i]).complement()
+					expr.replace_placeholder(sig_in[i], i).complement()
 				}
 			} else {
 				DeciderSop::simple(
@@ -3642,7 +3642,7 @@ impl LogicalDesign {
 				DeciderSop::simple(sig_in[i], DeciderOperator::Equal, Signal::Constant(1))
 			} else {
 				if let Some(expr) = &folded_expr[i] {
-					expr.replace_none(sig_in[i])
+					expr.replace_placeholders(&sig_in)
 				} else {
 					DeciderSop::simple(sig_in[i], DeciderOperator::Equal, Signal::Constant(1))
 				}

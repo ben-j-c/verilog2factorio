@@ -13,26 +13,26 @@ v2f_mux"]
   n5[shape=rarrow,label="A
 0"]
   n6[shape=larrow,label="Y
-13"]
+11"]
   n7[shape=rarrow,label="B
 2"]
   n8[shape=rarrow,label="S
 3"]
   n9[shape=larrow,label="$1
 v2f_mux
-7
+9
 A"]
   n10[shape=larrow,label="$1
 v2f_mux
-8
+6
 B"]
   n11[shape=larrow,label="$1
 v2f_mux
-9
+6
 S"]
   n12[shape=rarrow,label="$1
 v2f_mux
-11
+4
 Y"]
   n0 -> n5
   n2 -> n7

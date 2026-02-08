@@ -1,7 +1,7 @@
 name = "pmux"
 module = name
 module_file = "./" .. module .. ".v"
-vcd_file = "." .. name .. "_tb.vcd"
+vcd_file = name .. "_tb.vcd"
 delay = 6
 
 rtl = yosys_load_rtl(module_file, module)

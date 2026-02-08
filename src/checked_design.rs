@@ -311,6 +311,12 @@ impl FoldedData {
 			_ => panic!(),
 		}
 	}
+	fn unwrap_vec_mut(&mut self) -> &mut [Option<DeciderSop>] {
+		match self {
+			FoldedData::Vec(pmux) => pmux.as_mut_slice(),
+			_ => panic!(),
+		}
+	}
 
 	fn is_empty(&self) -> bool {
 		matches!(self, FoldedData::None)
@@ -433,9 +439,6 @@ impl CheckedDesign {
 	}
 
 	fn disconnect(&mut self, send: NodeId, recv: NodeId) {
-		if recv == 101 {
-			println!("aa");
-		}
 		if self.nodes[send].fanout.contains(&recv) {
 			let idx1 = self.nodes[send]
 				.fanout
@@ -1119,20 +1122,10 @@ impl CheckedDesign {
 				},
 			}
 		}
-
 		self.signals_correctness_check(&signal_choices);
 		self.signals = signal_choices;
 		self.update_folded_data();
-		loop {
-			let n_pruned = self.optimize_graph_post_signal_choice(mapped_design);
-			if n_pruned > 0 {
-				println!("Pruned {n_pruned} nodes while optimizing.");
-			} else {
-				break;
-			}
-		}
 		self.check_connections();
-		self.signals_correctness_check(&self.signals);
 		self.identify_clocks(mapped_design);
 	}
 
@@ -2557,12 +2550,7 @@ impl CheckedDesign {
 		n_pruned += cdo::ConstantFold::apply(self, mapped_design);
 		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
-		n_pruned
-	}
-
-	fn optimize_graph_post_signal_choice(&mut self, mapped_design: &MappedDesign) -> usize {
-		let mut n_pruned = 0;
-		use checked_design_optimizations as cdo;
+		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::PMuxFold::apply(self, mapped_design);
 		n_pruned
 	}
@@ -2781,7 +2769,7 @@ impl CheckedDesign {
 			let node = &self.nodes[id];
 			if slacks[id] == 0 {
 				if let Some(lid) = logic_map[id] {
-					print!("    {}: ", lid.0);
+					print!("    {}, {}: ", lid.0, id);
 				} else {
 					print!("    N/A: ");
 				}

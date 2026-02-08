@@ -3,6 +3,7 @@ rust.log
 yosys.log
 svg/global_*
 svg/partition*
+svg/best*
 cfg
 perf.data
 perf.data.old
