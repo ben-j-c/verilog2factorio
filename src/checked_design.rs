@@ -2551,6 +2551,7 @@ impl CheckedDesign {
 		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
+		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
 		n_pruned += cdo::PMuxFold::apply(self, mapped_design);
 		n_pruned
 	}
@@ -2817,6 +2818,16 @@ impl CheckedDesign {
 			for fid in &node.fanout {
 				let node2 = &self.nodes[*fid];
 				assert!(node2.fanin.contains(&id));
+			}
+		}
+		for id in 0..self.nodes.len() {
+			match self.node_type(id) {
+				NodeType::CellBody { .. } => {},
+				NodeType::Pruned => {},
+				_ => {
+					let len = self.nodes[id].fanin.len();
+					assert!(len <= 1);
+				},
 			}
 		}
 	}

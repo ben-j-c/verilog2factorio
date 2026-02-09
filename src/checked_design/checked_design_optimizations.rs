@@ -537,3 +537,75 @@ pub(crate) fn update_folded_data_pmux(
 		FoldedData::None => {},
 	}
 }
+
+pub struct MuxDuplication {}
+
+impl Optimization for MuxDuplication {
+	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
+			let input = des.nodes[id].fanin[pin];
+			let output = des.nodes[input].fanin.get(0)?;
+			let body = des.nodes[*output].fanin[0];
+			Some(body)
+		};
+		let n_siblings_for_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
+			let input = des.nodes[id].fanin[pin];
+			let output = des.nodes[input].fanin[0];
+			des.nodes[output].fanout.len()
+		};
+		for id in 0..des.nodes.len() {
+			let (width_sink, width_source, source_id) = {
+				let node = &des.nodes[id];
+				let width_sink = match_or_continue!(
+					NodeType::CellBody {
+						cell_type: BodyType::MultiPart {
+							op: ImplementableOp::PMux(false, width),
+						},
+					},
+					&node.node_type,
+					*width
+				);
+				let source_id = unwrap_or_continue!(get_body_driving_pin(des, id, 0));
+				let source_node = &des.nodes[source_id];
+				let width_source = match_or_continue!(
+					NodeType::CellBody {
+						cell_type: BodyType::MultiPart {
+							op: ImplementableOp::PMux(_, width),
+						},
+					},
+					&source_node.node_type,
+					*width
+				);
+				if n_siblings_for_pin(des, id, 0) == 1 {
+					continue;
+				}
+				(width_sink, width_source, source_id)
+			};
+			if width_sink > 1 || width_source > 1 {
+				continue;
+			}
+			let fanout = des.nodes[source_id].fanout[0];
+			let fanin = des.nodes[source_id].fanin.clone();
+			let new_body = des.new_node("$v2f_pmux_duplication", des.node_type(source_id).clone());
+			des.nodes[new_body].constants = des.nodes[source_id].constants.clone();
+			des.nodes[new_body].folded_expressions =
+				des.nodes[source_id].folded_expressions.clone();
+
+			for i in 0..fanin.len() {
+				let new_fid =
+					des.new_node("$v2f_pmux_duplication", des.node_type(fanin[i]).clone());
+				des.connect(new_fid, new_body);
+				if let Some(id) = des.nodes[fanin[i]].fanin.get(0) {
+					des.connect(*id, new_fid);
+				}
+			}
+			let new_fanout = des.new_node("$v2f_pmux_duplication", des.node_type(fanout).clone());
+			des.connect(new_body, new_fanout);
+
+			des.disconnect(fanout, des.nodes[id].fanin[0]);
+			des.connect(new_fanout, des.nodes[id].fanin[0]);
+			des.check_connections();
+		}
+		0
+	}
+}
