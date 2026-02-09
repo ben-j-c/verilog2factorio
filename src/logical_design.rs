@@ -1308,7 +1308,7 @@ impl LogicalDesign {
 		(d_wire, clk_wire, rst_wire, en_wire, q)
 	}
 
-	pub(crate) fn add_pmux(
+	pub(crate) fn add_pmux_slow(
 		&mut self,
 		a: Option<Signal>,
 		b: &[Signal],
@@ -1458,6 +1458,144 @@ impl LogicalDesign {
 		}
 
 		(a_mux, mux_wires.clone(), mux_wires, y)
+	}
+
+	pub(crate) fn add_pmux(
+		&mut self,
+		a: Option<Signal>,
+		b: &[Signal],
+		s: &[Signal],
+		y: Signal,
+		s_folded_expr: Option<&[Option<DeciderSop>]>,
+	) -> (Option<NodeId>, Vec<NodeId>, Vec<NodeId>, NodeId) {
+		let n = b.len();
+		assert!(n > 0);
+		assert_eq!(b.len(), s.len());
+		assert!(
+			!matches!(
+				y,
+				Signal::Each | Signal::Everything | Signal::Anything | Signal::Constant(_)
+			),
+			"PMux not designed for each/everything."
+		);
+		for i in 0..n {
+			assert!(
+				!matches!(b[i], Signal::Each | Signal::Everything | Signal::Anything),
+				"PMux not designed for each/everything."
+			);
+			assert!(
+				!matches!(s[i], Signal::Each | Signal::Everything | Signal::Anything),
+				"PMux not designed for each/everything."
+			);
+		}
+
+		let get_ith_s_expr = |i: usize| {
+			if let Some(s_expr) = s_folded_expr {
+				if let Some(disj) = &s_expr[i] {
+					return disj.replace_placeholders(s);
+				}
+			}
+			DeciderSop::simple(s[i], DeciderOperator::NotEqual, Signal::Constant(0))
+		};
+
+		// Build the one-hot encoded mux switch.
+		let mut select_wires = Vec::with_capacity(n);
+		let mut select_muxes = Vec::with_capacity(n);
+		for i in 0..n {
+			let inp = self.add_decider();
+			select_muxes.push(inp);
+			self.set_decider_inputs(inp, &get_ith_s_expr(i));
+			self.add_decider_out_constant(
+				inp,
+				(i as i32).try_into().expect("pmux too big"),
+				1,
+				NET_RED,
+			);
+			select_wires.push(self.add_wire_red_on_input(inp));
+			if i != 0 {
+				self.add_wire_red(vec![], vec![inp, select_muxes[i - 1]]);
+			}
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(
+					inp,
+					format!(
+						"{n}-pmux|i={i},s={:?},b={:?}",
+						get_ith_s_expr(i),
+						Signal::Id(i as i32),
+					),
+				);
+			}
+		}
+		let mut b_outputs = Vec::with_capacity(n);
+		let mut b_wires = Vec::with_capacity(n);
+		for i in 0..n {
+			let b_output = self.add_arithmetic_with_net(
+				(
+					b[i],
+					ArithmeticOperator::Mult,
+					(i as i32).try_into().expect("pmux too big"),
+				),
+				y,
+				NET_RED,
+				NET_GREEN,
+			);
+			b_outputs.push(b_output);
+			self.add_wire_green_simple(select_muxes[i], b_outputs[i]);
+			b_wires.push(self.add_wire_red_on_input(b_outputs[i]));
+			if i != 0 {
+				self.add_wire_red_tie_outputs(b_output, b_outputs[i - 1]);
+			}
+		}
+		let y_output = b_outputs[0];
+
+		// Build the fallback case.
+		let a_mux = if let Some(a_signal) = a {
+			let a_flag = self.add_decider();
+			let mut expr = get_ith_s_expr(0);
+			for i in 1..n {
+				let expr2 = get_ith_s_expr(i);
+				expr = expr2.or(&expr);
+			}
+			self.set_decider_inputs(a_flag, &expr);
+			let a_flag_signal = (n as i32).try_into().expect("pmux too big");
+			self.add_decider_out_constant(a_flag, a_flag_signal, -1, NET_RED);
+			let complement_constant = self.add_constant_simple(a_flag_signal, 1);
+			self.add_wire_green_tie_outputs(a_flag, complement_constant);
+			self.add_wire_red_tie_inputs(select_muxes[0], a_flag);
+
+			let a_output = self.add_arithmetic_with_net(
+				(a_signal, ArithmeticOperator::Mult, a_flag_signal),
+				y,
+				NET_RED,
+				NET_GREEN,
+			);
+
+			self.add_wire_green_simple(a_flag, a_output);
+			self.add_wire_red_tie_outputs(a_output, y_output);
+
+			let a_wire = self.add_wire_red_on_input(a_output);
+
+			#[cfg(debug_assertions)]
+			{
+				self.set_description_node(a_flag, format!("{n}-pmux fallback"));
+			}
+			self.timing_engine
+				.add_arc(a_wire, y_output, Delay::ticks(1));
+			Some(a_wire)
+		} else {
+			None
+		};
+
+		for wire in &select_wires {
+			self.timing_engine.add_arc(*wire, y_output, Delay::ticks(2));
+		}
+
+		for wire in &b_wires {
+			self.timing_engine.add_arc(*wire, y_output, Delay::ticks(1));
+		}
+
+		(a_mux, b_wires, select_wires, y_output)
 	}
 
 	fn add_mux_internal<const N: i32>(&mut self, data: Signal, s: Signal) -> Vec<NodeId> {
@@ -3364,6 +3502,14 @@ impl LogicalDesign {
 	/// Returns the id for the wire you created.
 	pub fn add_wire_red_tie_inputs(&mut self, first: NodeId, second: NodeId) -> NodeId {
 		self.add_wire_red(vec![], vec![first, second])
+	}
+
+	pub fn add_wire_red_on_input(&mut self, comb: NodeId) -> NodeId {
+		self.add_wire_red(vec![], vec![comb])
+	}
+
+	pub fn add_wire_green_on_input(&mut self, comb: NodeId) -> NodeId {
+		self.add_wire_green(vec![], vec![comb])
 	}
 
 	/// It has the same behaviour as a wire in game. fanin/fanout MUST be anything other than another wire.

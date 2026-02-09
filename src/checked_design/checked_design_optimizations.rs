@@ -266,7 +266,7 @@ impl Optimization for SopNot {
 pub struct MuxToPmux {}
 
 impl Optimization for MuxToPmux {
-	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let n_pruned = 0;
 		for id in 0..des.nodes.len() {
 			let node = &mut des.nodes[id];
@@ -301,7 +301,7 @@ impl Optimization for MuxToPmux {
 pub struct PMuxFold {}
 
 impl Optimization for PMuxFold {
-	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
 			let input = des.nodes[id].fanin[pin];
@@ -541,7 +541,7 @@ pub(crate) fn update_folded_data_pmux(
 pub struct MuxDuplication {}
 
 impl Optimization for MuxDuplication {
-	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
 			let input = des.nodes[id].fanin[pin];
 			let output = des.nodes[input].fanin.get(0)?;

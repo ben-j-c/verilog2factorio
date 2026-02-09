@@ -2806,6 +2806,27 @@ impl CheckedDesign {
 				println!()
 			}
 		}
+		let mut filter = hash_set();
+		for id in &topo {
+			if slacks[*id] == 0 {
+				filter.insert(*id);
+			}
+			let node = &self.nodes[*id];
+			if node.node_type.is_cell_body() {
+				if node.fanin.iter().any(|id| slacks[*id] == 0)
+					|| node.fanout.iter().any(|id| slacks[*id] == 0)
+				{
+					filter.insert(*id);
+					for fid in &node.fanin {
+						filter.insert(*fid);
+					}
+					for fid in &node.fanout {
+						filter.insert(*fid);
+					}
+				}
+			}
+		}
+		self.save_dot(mapped_design, Some(&filter), "worst_path.dot");
 	}
 
 	fn check_connections(&self) {
