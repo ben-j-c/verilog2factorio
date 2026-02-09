@@ -1,29 +1,11 @@
 digraph CheckedDesign {
   rankdir=LR
-  n0[shape=box,label="data_7_i
-0"]
-  n1[shape=box,label="data_6_i
-1"]
-  n2[shape=box,label="data_5_i
-2"]
-  n3[shape=box,label="data_4_i
-3"]
-  n4[shape=box,label="sel_1_i
-4"]
-  n5[shape=box,label="data_2_i
-5"]
-  n6[shape=box,label="data_1_i
-6"]
-  n7[shape=box,label="data_0_i
-7"]
   n8[shape=box,label="sel_0_i
 8"]
   n9[shape=box,label="sel_3_i
 9"]
   n10[shape=box,label="sel_2_i
 10"]
-  n11[shape=box,label="data_3_i
-11"]
   n12[shape=box,label="q_o
 12"]
   n15[shape=box,label="$39
@@ -34,35 +16,14 @@ v2f_mux"]
 v2f_mux"]
   n21[shape=box,label="$228
 $sop"]
-  n23[shape=box,label="$3
-v2f_add
-75"]
   n27[shape=box,label="$21
 v2f_mux"]
-  n30[shape=rarrow,label="data_7_i
-0"]
-  n31[shape=rarrow,label="data_6_i
-1"]
-  n32[shape=rarrow,label="data_5_i
-2"]
-  n33[shape=rarrow,label="data_4_i
-3"]
-  n34[shape=rarrow,label="sel_1_i
-4"]
-  n35[shape=rarrow,label="data_2_i
-5"]
-  n36[shape=rarrow,label="data_1_i
-6"]
-  n37[shape=rarrow,label="data_0_i
-7"]
   n38[shape=rarrow,label="sel_0_i
 8"]
   n39[shape=rarrow,label="sel_3_i
 9"]
   n40[shape=rarrow,label="sel_2_i
 10"]
-  n41[shape=rarrow,label="data_3_i
-11"]
   n42[shape=larrow,label="q_o
 97"]
   n50[shape=larrow,label="$39
@@ -245,18 +206,6 @@ B"]
 v2f_mux
 36
 S"]
-  n107[shape=larrow,label="$3
-v2f_add
-76
-A"]
-  n108[shape=larrow,label="$3
-v2f_add
-76
-B"]
-  n109[shape=rarrow,label="$3
-v2f_add
-75
-Y"]
   n113[shape=larrow,label="$36
 v2f_mux
 32
@@ -305,13 +254,6 @@ B"]
 v2f_mux
 56
 S"]
-  n136[shape=box,label="$swizzle"]
-  n137[shape=rarrow,label="$swizzle
-98
-Y"]
-  n138[shape=larrow,label="$swizzle
-99
-A"]
   n145[shape=box,label="$swizzle"]
   n146[shape=rarrow,label="$swizzle
 100
@@ -522,13 +464,6 @@ Y"]
   n234[shape=larrow,label="$swizzle
 219
 A"]
-  n235[shape=box,label="$swizzle"]
-  n236[shape=rarrow,label="$swizzle
-220
-Y"]
-  n237[shape=larrow,label="$swizzle
-221
-A"]
   n238[shape=box,label="$swizzle"]
   n239[shape=rarrow,label="$swizzle
 222
@@ -536,35 +471,14 @@ Y"]
   n240[shape=larrow,label="$swizzle
 225
 A"]
-  n0 -> n30
-  n1 -> n31
-  n2 -> n32
-  n3 -> n33
-  n4 -> n34
-  n5 -> n35
-  n6 -> n36
-  n7 -> n37
   n8 -> n38
   n9 -> n39
   n10 -> n40
-  n11 -> n41
   n15 -> n52
   n18 -> n62
   n20 -> n69
   n21 -> n102
-  n23 -> n109
   n27 -> n123
-  n30 -> n124 [label="wooden-chest(0)",syle=bold,color=blue]
-  n31 -> n125 [label="iron-chest(1)",syle=bold,color=blue]
-  n32 -> n121 [label="steel-chest(2)",syle=bold,color=blue]
-  n33 -> n104 [label="storage-tank(3)",syle=bold,color=blue]
-  n34 -> n105 [label="transport-belt(4)",syle=bold,color=blue]
-  n34 -> n115 [label="transport-belt(4)",syle=bold,color=blue]
-  n35 -> n129 [label="fast-transport-belt(5)",syle=bold,color=blue]
-  n36 -> n67 [label="express-transport-belt(6)",syle=bold,color=blue]
-  n36 -> n108 [label="express-transport-belt(6)",syle=bold,color=blue]
-  n37 -> n107 [label="underground-belt(7)",syle=bold,color=blue]
-  n37 -> n114 [label="underground-belt(7)",syle=bold,color=blue]
   n38 -> n147 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n150 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n153 [label="fast-underground-belt(8)",syle=bold,color=blue]
@@ -595,14 +509,12 @@ A"]
   n38 -> n228 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n231 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n234 [label="fast-underground-belt(8)",syle=bold,color=blue]
-  n38 -> n237 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n240 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n38 -> n61 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n39 -> n126 [label="express-underground-belt(9)",syle=bold,color=blue]
   n39 -> n130 [label="express-underground-belt(9)",syle=bold,color=blue]
   n40 -> n68 [label="splitter(10)",syle=bold,color=blue]
   n40 -> n122 [label="splitter(10)",syle=bold,color=blue]
-  n41 -> n60 [label="fast-splitter(11)",syle=bold,color=blue]
   n42 -> n12
   n50 -> n15
   n51 -> n15
@@ -649,9 +561,6 @@ A"]
   n103 -> n18
   n104 -> n18
   n105 -> n18
-  n107 -> n23
-  n108 -> n23
-  n109 -> n138 [label="wooden-chest(0)",syle=bold,color=blue]
   n113 -> n15
   n114 -> n15
   n115 -> n15
@@ -664,9 +573,6 @@ A"]
   n128 -> n20
   n129 -> n20
   n130 -> n20
-  n136 -> n137
-  n137 -> n50 [label="burner-inserter(13)",syle=bold,color=blue]
-  n138 -> n136
   n145 -> n146
   n146 -> n70 [label="wooden-chest(0)",syle=bold,color=blue]
   n147 -> n145
@@ -757,9 +663,6 @@ A"]
   n232 -> n233
   n233 -> n99 [label="locomotive(29)",syle=bold,color=blue]
   n234 -> n232
-  n235 -> n236
-  n236 -> n100 [label="cargo-wagon(30)",syle=bold,color=blue]
-  n237 -> n235
   n238 -> n239
   n239 -> n101 [label="fluid-wagon(31)",syle=bold,color=blue]
   n240 -> n238

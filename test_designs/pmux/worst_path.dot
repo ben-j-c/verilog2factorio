@@ -2,22 +2,6 @@ digraph CheckedDesign {
   rankdir=LR
   n0[shape=box,label="sel_i
 0"]
-  n1[shape=box,label="data_6_i
-1"]
-  n2[shape=box,label="data_5_i
-2"]
-  n3[shape=box,label="data_4_i
-3"]
-  n4[shape=box,label="data_3_i
-4"]
-  n5[shape=box,label="data_2_i
-5"]
-  n6[shape=box,label="data_1_i
-6"]
-  n7[shape=box,label="data_0_i
-7"]
-  n8[shape=box,label="data_7_i
-8"]
   n9[shape=box,label="q_o
 9"]
   n13[shape=box,label="$8
@@ -26,22 +10,6 @@ v2f_pmux"]
 $sop"]
   n19[shape=rarrow,label="sel_i
 0"]
-  n20[shape=rarrow,label="data_6_i
-1"]
-  n21[shape=rarrow,label="data_5_i
-2"]
-  n22[shape=rarrow,label="data_4_i
-3"]
-  n23[shape=rarrow,label="data_3_i
-4"]
-  n24[shape=rarrow,label="data_2_i
-5"]
-  n25[shape=rarrow,label="data_1_i
-6"]
-  n26[shape=rarrow,label="data_0_i
-7"]
-  n27[shape=rarrow,label="data_7_i
-8"]
   n28[shape=larrow,label="q_o
 66"]
   n38[shape=larrow,label="$8
@@ -135,13 +103,6 @@ Y"]
   n83[shape=larrow,label="$swizzle
 70
 A"]
-  n84[shape=box,label="$swizzle"]
-  n85[shape=rarrow,label="$swizzle
-71
-Y"]
-  n86[shape=larrow,label="$swizzle
-72
-A"]
   n87[shape=box,label="$swizzle"]
   n88[shape=rarrow,label="$swizzle
 73
@@ -150,18 +111,9 @@ Y"]
 76
 A"]
   n0 -> n19
-  n1 -> n20
-  n2 -> n21
-  n3 -> n22
-  n4 -> n23
-  n5 -> n24
-  n6 -> n25
-  n7 -> n26
-  n8 -> n27
   n13 -> n54
   n16 -> n64
   n19 -> n83 [label="wooden-chest(0)",syle=bold,color=blue]
-  n19 -> n86 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n89 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n46 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n47 [label="wooden-chest(0)",syle=bold,color=blue]
@@ -170,14 +122,6 @@ A"]
   n19 -> n50 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n51 [label="wooden-chest(0)",syle=bold,color=blue]
   n19 -> n52 [label="wooden-chest(0)",syle=bold,color=blue]
-  n20 -> n39 [label="iron-chest(1)",syle=bold,color=blue]
-  n21 -> n40 [label="steel-chest(2)",syle=bold,color=blue]
-  n22 -> n41 [label="storage-tank(3)",syle=bold,color=blue]
-  n23 -> n42 [label="transport-belt(4)",syle=bold,color=blue]
-  n24 -> n43 [label="fast-transport-belt(5)",syle=bold,color=blue]
-  n25 -> n44 [label="express-transport-belt(6)",syle=bold,color=blue]
-  n26 -> n45 [label="underground-belt(7)",syle=bold,color=blue]
-  n27 -> n38 [label="fast-underground-belt(8)",syle=bold,color=blue]
   n28 -> n9
   n38 -> n13
   n39 -> n13
@@ -203,9 +147,6 @@ A"]
   n81 -> n82
   n82 -> n61 [label="wooden-chest(0)",syle=bold,color=blue]
   n83 -> n81
-  n84 -> n85
-  n85 -> n62 [label="iron-chest(1)",syle=bold,color=blue]
-  n86 -> n84
   n87 -> n88
   n88 -> n63 [label="steel-chest(2)",syle=bold,color=blue]
   n89 -> n87

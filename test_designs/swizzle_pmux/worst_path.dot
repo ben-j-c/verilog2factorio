@@ -1,0 +1,93 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n0[shape=box,label="sel
+0"]
+  n2[shape=box,label="q_o
+2"]
+  n4[shape=box,label="$181
+$sop"]
+  n7[shape=box,label="$8
+v2f_pmux"]
+  n8[shape=rarrow,label="sel
+0"]
+  n10[shape=larrow,label="q_o
+31"]
+  n14[shape=larrow,label="$181
+$sop
+4
+A0"]
+  n15[shape=larrow,label="$181
+$sop
+4
+A1"]
+  n16[shape=rarrow,label="$181
+$sop
+3
+Y"]
+  n23[shape=larrow,label="$8
+v2f_pmux
+18
+B0"]
+  n24[shape=larrow,label="$8
+v2f_pmux
+21
+B1"]
+  n25[shape=larrow,label="$8
+v2f_pmux
+25
+B2"]
+  n26[shape=larrow,label="$8
+v2f_pmux
+29
+B3"]
+  n27[shape=larrow,label="$8
+v2f_pmux
+6
+S0"]
+  n28[shape=larrow,label="$8
+v2f_pmux
+8
+S1"]
+  n29[shape=larrow,label="$8
+v2f_pmux
+11
+S2"]
+  n30[shape=larrow,label="$8
+v2f_pmux
+14
+S3"]
+  n31[shape=rarrow,label="$8
+v2f_pmux
+16
+Y"]
+  n37[shape=box,label="$swizzle"]
+  n38[shape=rarrow,label="$swizzle
+34
+Y"]
+  n39[shape=larrow,label="$swizzle
+37
+A"]
+  n0 -> n8
+  n4 -> n16
+  n7 -> n31
+  n8 -> n39 [label="wooden-chest(0)",syle=bold,color=blue]
+  n8 -> n28 [label="wooden-chest(0)",syle=bold,color=blue]
+  n8 -> n29 [label="wooden-chest(0)",syle=bold,color=blue]
+  n8 -> n30 [label="wooden-chest(0)",syle=bold,color=blue]
+  n10 -> n2
+  n14 -> n4
+  n15 -> n4
+  n16 -> n27 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n23 -> n7
+  n24 -> n7
+  n25 -> n7
+  n26 -> n7
+  n27 -> n7
+  n28 -> n7
+  n29 -> n7
+  n30 -> n7
+  n31 -> n10 [label="steel-chest(2)",syle=bold,color=blue]
+  n37 -> n38
+  n38 -> n15 [label="iron-chest(1)",syle=bold,color=blue]
+  n39 -> n37
+}

@@ -1,42 +1,11 @@
 digraph CheckedDesign {
   rankdir=LR
-  n0[shape=box,label="clk_i
-2"]
-  n1[shape=box,label="rst_i
-5"]
-  n2[shape=box,label="q_o
-6"]
-  n3[shape=box,label="en_i
-7"]
-  n4[shape=box,label="$2
-v2f_add
-8"]
   n5[shape=box,label="$139
 $adff"]
   n6[shape=box,label="$135
 v2f_mux"]
   n7[shape=box,label="$19
 $adffe"]
-  n8[shape=rarrow,label="clk_i
-2"]
-  n9[shape=rarrow,label="rst_i
-5"]
-  n10[shape=larrow,label="q_o
-68"]
-  n11[shape=rarrow,label="en_i
-7"]
-  n12[shape=larrow,label="$2
-v2f_add
-9
-A"]
-  n13[shape=larrow,label="$2
-v2f_add
-9
-B"]
-  n14[shape=rarrow,label="$2
-v2f_add
-8
-Y"]
   n15[shape=larrow,label="$139
 $adff
 18
@@ -89,13 +58,6 @@ ARST"]
 $adffe
 57
 Q"]
-  n28[shape=box,label="$swizzle"]
-  n29[shape=rarrow,label="$swizzle
-69
-Y"]
-  n30[shape=larrow,label="$swizzle
-72
-A0"]
   n33[shape=box,label="$swizzle"]
   n34[shape=rarrow,label="$swizzle
 73
@@ -103,24 +65,13 @@ Y"]
   n35[shape=larrow,label="$swizzle
 76
 A0"]
-  n0 -> n8
-  n1 -> n9
-  n3 -> n11
-  n4 -> n14
   n5 -> n18
   n6 -> n22
   n7 -> n27
-  n10 -> n2
-  n11 -> n21 [label="storage-tank(3)",syle=bold,color=blue]
-  n11 -> n25 [label="storage-tank(3)",syle=bold,color=blue]
-  n12 -> n4
-  n13 -> n4
-  n14 -> n23 [label="fast-transport-belt(5)",syle=bold,color=blue]
   n15 -> n5
   n16 -> n5
   n17 -> n5
   n18 -> n19 [label="steel-chest(2)",syle=bold,color=blue]
-  n18 -> n30 [label="steel-chest(2)",syle=bold,color=blue]
   n19 -> n6
   n20 -> n6
   n21 -> n6
@@ -129,11 +80,7 @@ A0"]
   n24 -> n7
   n25 -> n7
   n26 -> n7
-  n27 -> n12 [label="wooden-chest(0)",syle=bold,color=blue]
   n27 -> n35 [label="wooden-chest(0)",syle=bold,color=blue]
-  n28 -> n29
-  n29 -> n10 [label="steel-chest(2)",syle=bold,color=blue]
-  n30 -> n28
   n33 -> n34
   n34 -> n20 [label="transport-belt(4)",syle=bold,color=blue]
   n35 -> n33

@@ -1,0 +1,36 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n4[shape=box,label="en_i
+8"]
+  n5[shape=box,label="$13
+$adffe"]
+  n10[shape=rarrow,label="en_i
+8"]
+  n11[shape=larrow,label="$13
+$adffe
+40
+D"]
+  n12[shape=larrow,label="$13
+$adffe
+29
+CLK"]
+  n13[shape=larrow,label="$13
+$adffe
+38
+EN"]
+  n14[shape=larrow,label="$13
+$adffe
+30
+ARST"]
+  n15[shape=rarrow,label="$13
+$adffe
+31
+Q"]
+  n4 -> n10
+  n5 -> n15
+  n10 -> n13 [label="transport-belt(4)",syle=bold,color=blue]
+  n11 -> n5
+  n12 -> n5
+  n13 -> n5
+  n14 -> n5
+}

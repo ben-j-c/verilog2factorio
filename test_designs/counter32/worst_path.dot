@@ -1,0 +1,50 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n4[shape=box,label="$2
+v2f_add
+8"]
+  n5[shape=box,label="$14
+$adffe"]
+  n10[shape=larrow,label="$2
+v2f_add
+9
+A"]
+  n11[shape=larrow,label="$2
+v2f_add
+9
+B"]
+  n12[shape=rarrow,label="$2
+v2f_add
+8
+Y"]
+  n13[shape=larrow,label="$14
+$adffe
+35
+D"]
+  n14[shape=larrow,label="$14
+$adffe
+24
+CLK"]
+  n15[shape=larrow,label="$14
+$adffe
+33
+EN"]
+  n16[shape=larrow,label="$14
+$adffe
+25
+ARST"]
+  n17[shape=rarrow,label="$14
+$adffe
+26
+Q"]
+  n4 -> n12
+  n5 -> n17
+  n10 -> n4
+  n11 -> n4
+  n12 -> n13 [label="steel-chest(2)",syle=bold,color=blue]
+  n13 -> n5
+  n14 -> n5
+  n15 -> n5
+  n16 -> n5
+  n17 -> n10 [label="steel-chest(2)",syle=bold,color=blue]
+}

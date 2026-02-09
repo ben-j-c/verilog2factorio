@@ -1,21 +1,13 @@
 digraph CheckedDesign {
   rankdir=LR
-  n0[shape=box,label="A
-0"]
   n1[shape=box,label="Y
 1"]
-  n2[shape=box,label="B
-2"]
   n3[shape=box,label="S
 3"]
   n4[shape=box,label="$1
 v2f_mux"]
-  n5[shape=rarrow,label="A
-0"]
   n6[shape=larrow,label="Y
 17"]
-  n7[shape=rarrow,label="B
-2"]
   n8[shape=rarrow,label="S
 3"]
   n9[shape=larrow,label="$1
@@ -34,13 +26,9 @@ S"]
 v2f_mux
 6
 Y"]
-  n0 -> n5
-  n2 -> n7
   n3 -> n8
   n4 -> n12
-  n5 -> n10 [label="wooden-chest(0)",syle=bold,color=blue]
   n6 -> n1
-  n7 -> n9 [label="steel-chest(2)",syle=bold,color=blue]
   n8 -> n11 [label="storage-tank(3)",syle=bold,color=blue]
   n9 -> n4
   n10 -> n4
