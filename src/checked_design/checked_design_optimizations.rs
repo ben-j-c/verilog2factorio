@@ -298,9 +298,9 @@ impl Optimization for MuxToPmux {
 	}
 }
 
-pub struct PMuxFold {}
+pub struct PMuxFoldA {}
 
-impl Optimization for PMuxFold {
+impl Optimization for PMuxFoldA {
 	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {

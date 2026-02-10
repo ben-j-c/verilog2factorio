@@ -2552,7 +2552,7 @@ impl CheckedDesign {
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
-		n_pruned += cdo::PMuxFold::apply(self, mapped_design);
+		n_pruned += cdo::PMuxFoldA::apply(self, mapped_design);
 		n_pruned
 	}
 
@@ -2614,6 +2614,7 @@ impl CheckedDesign {
 	}
 
 	fn report_timing_save_worst_path(&self, logd: &LogicalDesign, mapped_design: &MappedDesign) {
+		println!("Timing Analysis:");
 		self.check_connections();
 		let topo = self.get_topo_order(mapped_design);
 		let mut arrivals = vec![0; topo.len()];
@@ -2827,6 +2828,8 @@ impl CheckedDesign {
 			}
 		}
 		self.save_dot(mapped_design, Some(&filter), "worst_path.dot");
+		println!("Saved worst_path.dot:");
+		println!("Timing analysis end.");
 	}
 
 	fn check_connections(&self) {
