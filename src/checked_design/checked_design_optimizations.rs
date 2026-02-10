@@ -1,4 +1,4 @@
-use std::ops::{Range, RangeFrom};
+use std::ops::Range;
 
 use super::*;
 
@@ -198,29 +198,26 @@ impl Optimization for DeciderFold {
 pub struct SopNot {}
 
 impl Optimization for SopNot {
-	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		for id in 0..des.nodes.len() {
 			{
 				let node = &mut des.nodes[id];
-				if !node.folded_expressions.is_empty() {
-					continue;
-				}
-				if !matches!(&node.node_type, NodeType::CellBody { .. }) {
-					continue;
-				};
-				let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-					m
-				} else {
-					continue;
-				};
-				let optimization_applies = matches!(mapped.cell_type, ImplementableOp::Neg);
-				if !optimization_applies {
-					continue;
-				};
+				match_or_continue!(
+					NodeType::CellBody {
+						cell_type: BodyType::AY {
+							op: ImplementableOp::Neg,
+						},
+					},
+					&node.node_type,
+					()
+				);
 			}
 
 			let (body, output, input) = des.get_fanin_body_subgraphs(id);
+			if body.len() == 0 {
+				continue;
+			}
 			assert!(body.len() == 1);
 			let (body, _output, _input) = (body[0], output[0], input[0]);
 			assert!(body != NodeId::MAX);
@@ -766,6 +763,56 @@ impl Optimization for PMuxFoldB {
 					n_pruned += 1;
 				}
 				break;
+			}
+		}
+		n_pruned
+	}
+}
+
+pub struct NotDetectAndReplace {}
+
+impl Optimization for NotDetectAndReplace {
+	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+		let mut n_pruned = 0;
+		for id in 0..des.nodes.len() {
+			let table = {
+				let node = &mut des.nodes[id];
+				match_or_continue!(
+					NodeType::CellBody {
+						cell_type: BodyType::MultiPart {
+							op: ImplementableOp::Sop(1),
+						},
+					},
+					&node.node_type,
+					()
+				);
+				let cell = mapped_design.get_cell(&node.mapped_id);
+				cell.parameters["TABLE"]
+					.into_bool_vec()
+					.unwrap()
+					.into_iter()
+					.rev()
+					.collect_vec()
+			};
+			if table[0] {
+				let node = &mut des.nodes[id];
+				node.node_type = NodeType::CellBody {
+					cell_type: BodyType::AY {
+						op: ImplementableOp::Neg,
+					},
+				};
+				assert!(!table[1])
+			} else {
+				// Is a nop? weird, but acceptable.
+				let output_pin = des.nodes[id].fanout[0];
+				let input_pin = des.nodes[id].fanin[0];
+				let source = des.nodes[input_pin].fanin[0];
+				while !des.nodes[output_pin].fanout.is_empty() {
+					let sink = *des.nodes[output_pin].fanout.last().unwrap();
+					des.connect(source, sink);
+					des.disconnect(output_pin, sink);
+				}
+				n_pruned += des.disconnect_and_try_prune(id);
 			}
 		}
 		n_pruned

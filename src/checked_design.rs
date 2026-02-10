@@ -116,25 +116,25 @@ impl ImplementableOp {
 	pub(crate) fn get_body_type(&self) -> BodyType {
 		let multipart = |op: ImplementableOp| BodyType::MultiPart { op };
 		match self {
-			ImplementableOp::AndBitwise => BodyType::ABY,
-			ImplementableOp::OrBitwise => BodyType::ABY,
-			ImplementableOp::XorBitwise => BodyType::ABY,
+			ImplementableOp::AndBitwise => BodyType::ABY { op: *self },
+			ImplementableOp::OrBitwise => BodyType::ABY { op: *self },
+			ImplementableOp::XorBitwise => BodyType::ABY { op: *self },
 			ImplementableOp::Shl => multipart(*self),
-			ImplementableOp::Sshr => BodyType::ABY,
+			ImplementableOp::Sshr => BodyType::ABY { op: *self },
 			ImplementableOp::Srl => multipart(*self),
-			ImplementableOp::Mul => BodyType::ABY,
-			ImplementableOp::Div => BodyType::ABY,
-			ImplementableOp::Mod => BodyType::ABY,
-			ImplementableOp::Pow => BodyType::ABY,
-			ImplementableOp::Add => BodyType::ABY,
-			ImplementableOp::Sub => BodyType::ABY,
-			ImplementableOp::GreaterThan => BodyType::ABY,
-			ImplementableOp::LessThan => BodyType::ABY,
-			ImplementableOp::Equal => BodyType::ABY,
-			ImplementableOp::NotEqual => BodyType::ABY,
-			ImplementableOp::GreaterThanEqual => BodyType::ABY,
-			ImplementableOp::LessThanEqual => BodyType::ABY,
-			ImplementableOp::V2FRollingAccumulate => BodyType::AY,
+			ImplementableOp::Mul => BodyType::ABY { op: *self },
+			ImplementableOp::Div => BodyType::ABY { op: *self },
+			ImplementableOp::Mod => BodyType::ABY { op: *self },
+			ImplementableOp::Pow => BodyType::ABY { op: *self },
+			ImplementableOp::Add => BodyType::ABY { op: *self },
+			ImplementableOp::Sub => BodyType::ABY { op: *self },
+			ImplementableOp::GreaterThan => BodyType::ABY { op: *self },
+			ImplementableOp::LessThan => BodyType::ABY { op: *self },
+			ImplementableOp::Equal => BodyType::ABY { op: *self },
+			ImplementableOp::NotEqual => BodyType::ABY { op: *self },
+			ImplementableOp::GreaterThanEqual => BodyType::ABY { op: *self },
+			ImplementableOp::LessThanEqual => BodyType::ABY { op: *self },
+			ImplementableOp::V2FRollingAccumulate => BodyType::AY { op: *self },
 			ImplementableOp::DFF => multipart(*self),
 			ImplementableOp::Swizzle => multipart(*self),
 			ImplementableOp::LUT(_) => multipart(*self),
@@ -143,8 +143,8 @@ impl ImplementableOp {
 			ImplementableOp::Mux => multipart(*self),
 			ImplementableOp::ReduceAnd => multipart(*self),
 			ImplementableOp::ReduceOr => multipart(*self),
-			ImplementableOp::Neg => BodyType::AY,
-			ImplementableOp::Not => BodyType::AY,
+			ImplementableOp::Neg => BodyType::AY { op: *self },
+			ImplementableOp::Not => BodyType::AY { op: *self },
 			ImplementableOp::SDFF => multipart(*self),
 			ImplementableOp::SDFFE => multipart(*self),
 			ImplementableOp::ADFFE => multipart(*self),
@@ -283,8 +283,8 @@ impl NodeType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BodyType {
-	ABY,
-	AY,
+	ABY { op: ImplementableOp },
+	AY { op: ImplementableOp },
 	MultiPart { op: ImplementableOp }, // This should be a superset of ABY and AY and Constant
 	Constant { value: i32 },
 	Nop,
@@ -1596,16 +1596,12 @@ impl CheckedDesign {
 					}
 				},
 				NodeType::CellBody { cell_type } => match cell_type {
-					BodyType::ABY => {
+					BodyType::ABY { op } => {
 						let sig_left = self.signals[node.fanin[0]];
 						let sig_right = self.signals[node.fanin[1]];
 						let sig_out = self.signals[node.fanout[0]];
-						let (input_w, output) = logical_design.add_binary_op(
-							mapped_design.get_cell(&node.mapped_id).cell_type,
-							sig_left,
-							sig_right,
-							sig_out,
-						);
+						let (input_w, output) =
+							logical_design.add_binary_op(*op, sig_left, sig_right, sig_out);
 						logic_map[nodeid] = Some(output);
 						logic_map[node.fanout[0]] = Some(output);
 						logic_map[node.fanin[0]] = Some(input_w);
@@ -1625,14 +1621,10 @@ impl CheckedDesign {
 						logic_map[node.fanout[0]] = Some(nop);
 						logic_map[node.fanin[0]] = Some(wire);
 					},
-					BodyType::AY => {
+					BodyType::AY { op } => {
 						let sig_in = self.signals[node.fanin[0]];
 						let sig_out = self.signals[node.fanout[0]];
-						let (wire, output) = logical_design.add_unary_op(
-							mapped_design.get_cell(&node.mapped_id).cell_type,
-							sig_in,
-							sig_out,
-						);
+						let (wire, output) = logical_design.add_unary_op(*op, sig_in, sig_out);
 						logic_map[nodeid] = Some(output);
 						logic_map[node.fanout[0]] = Some(output);
 						logic_map[node.fanin[0]] = Some(wire);
@@ -1689,11 +1681,9 @@ impl CheckedDesign {
 				_ => unreachable!(),
 			};
 			match cell_type {
-				BodyType::ABY | BodyType::AY => mapped_design
-					.get_cell(&node.mapped_id)
-					.cell_type
-					.simple_string(),
-				BodyType::MultiPart { op } => op.simple_string(),
+				BodyType::ABY { op } | BodyType::AY { op } | BodyType::MultiPart { op } => {
+					op.simple_string()
+				},
 				BodyType::Constant { .. } => "Constant",
 				BodyType::Nop => "Nop",
 			}
@@ -2486,6 +2476,7 @@ impl CheckedDesign {
 		n_pruned
 	}
 
+	/// Looks at the cell and disconnects it from the surrounding world, then prune itself.
 	fn disconnect_and_try_prune(&mut self, id: NodeId) -> usize {
 		match self.nodes[id].node_type {
 			NodeType::CellInput { .. } => {
@@ -2549,6 +2540,7 @@ impl CheckedDesign {
 		use checked_design_optimizations as cdo;
 		n_pruned += cdo::ConstantFold::apply(self, mapped_design);
 		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
+		n_pruned += cdo::NotDetectAndReplace::apply(self, mapped_design);
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
@@ -2788,14 +2780,7 @@ impl CheckedDesign {
 					NodeType::PortBody { .. } => {},
 					NodeType::CellBody { cell_type } => {
 						let display_op = match cell_type {
-							BodyType::ABY => mapped_design
-								.get_cell(&node.mapped_id)
-								.cell_type
-								.simple_string(),
-							BodyType::AY => mapped_design
-								.get_cell(&node.mapped_id)
-								.cell_type
-								.simple_string(),
+							BodyType::ABY { op } | BodyType::AY { op } => op.simple_string(),
 							BodyType::MultiPart { op } => op.simple_string(),
 							BodyType::Constant { .. } => "$constant",
 							BodyType::Nop => "$nop",
