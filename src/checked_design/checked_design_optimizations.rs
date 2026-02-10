@@ -315,7 +315,7 @@ impl Optimization for PMuxFoldA {
 			des.nodes[output].fanout.len()
 		};
 		for id in 0..des.nodes.len() {
-			let (width_sink, width_source, source_id, source_full_case) = {
+			let (sink_width, source_width, source_id, source_full_case) = {
 				let node = &des.nodes[id];
 				let n_ports_sink = match_or_continue!(
 					NodeType::CellBody {
@@ -345,20 +345,22 @@ impl Optimization for PMuxFoldA {
 				(n_ports_sink, n_ports_source, source_id, source_full_case)
 			};
 			let source_has_a = !source_full_case;
-			if width_sink > 1 || width_source > 1 {
+			let source_start_b = source_has_a as usize;
+			let source_end_b = source_start_b + source_width;
+			let source_start_s = source_end_b;
+			let source_end_s = source_start_s + source_width;
+			let sink_has_a = true;
+			let sink_start_b = sink_has_a as usize;
+			let sink_end_b = sink_start_b + sink_width;
+			let sink_start_s = sink_end_b;
+			let sink_end_s = sink_start_s + sink_width;
+
+			if sink_width > 4 || source_width > 4 {
 				continue;
 			}
 			// Now we know pmux -> Y -> A -> pmux
-			let source_s_range = {
-				let start_idx = source_has_a as usize + width_source;
-				start_idx..start_idx + width_sink
-			};
-			force_insert_expressions(des, source_id, source_s_range);
-			let sink_s_range = {
-				let start_idx = 1 + width_sink;
-				start_idx..start_idx + width_source
-			};
-			force_insert_expressions(des, id, sink_s_range);
+			force_insert_expressions(des, source_id, source_start_s..source_end_s);
+			force_insert_expressions(des, id, sink_start_s..sink_end_s);
 
 			let mut to_del = vec![source_id];
 			{
@@ -366,31 +368,23 @@ impl Optimization for PMuxFoldA {
 				to_del.push(source.fanout[0]);
 				{
 					// insert B ports
-					let idx = 1 + width_sink;
-					let start_idx = source_has_a as usize;
 					sink.fanin.splice(
-						idx..idx,
-						source.fanin[start_idx..start_idx + width_source]
-							.iter()
-							.cloned(),
+						sink_end_b..sink_end_b,
+						source.fanin[source_start_b..source_end_b].iter().cloned(),
 					);
 					sink.constants.splice(
-						idx..idx,
-						source.constants[start_idx..start_idx + width_source]
+						sink_end_b..sink_end_b,
+						source.constants[source_start_b..source_end_b]
 							.iter()
 							.cloned(),
 					);
 				}
 				{
 					// insert S ports
-					let start_idx = source_has_a as usize + width_source;
-					sink.fanin.extend(
-						source.fanin[start_idx..start_idx + width_source]
-							.iter()
-							.copied(),
-					);
+					sink.fanin
+						.extend(source.fanin[source_start_s..source_end_s].iter().copied());
 					sink.constants.extend(
-						source.constants[start_idx..start_idx + width_source]
+						source.constants[source_start_s..source_end_s]
 							.iter()
 							.cloned(),
 					);
@@ -409,7 +403,7 @@ impl Optimization for PMuxFoldA {
 				} = &mut sink.node_type
 				{
 					*full_case = source_full_case;
-					*width = width_source + width_sink;
+					*width = source_width + sink_width;
 				}
 				// For all new S pins, they must not fire when any of the original fire, so you must
 				// Distribute the conjunction of the existing pin expressions with the new ones.
@@ -425,7 +419,7 @@ impl Optimization for PMuxFoldA {
 				for source_expr in source_exprs.iter() {
 					let expr = source_expr.as_ref().unwrap();
 					new_exprs.push(Some(
-						combined_sink_expr.and(&expr.increment_placeholders(width_sink)),
+						combined_sink_expr.and(&expr.increment_placeholders(sink_width)),
 					));
 				}
 				sink.folded_expressions = FoldedData::Vec(new_exprs);
@@ -581,7 +575,7 @@ impl Optimization for MuxDuplication {
 				}
 				(width_sink, width_source, source_id)
 			};
-			if width_sink > 1 || width_source > 1 {
+			if width_sink > 6 || width_source > 6 {
 				continue;
 			}
 			let fanout = des.nodes[source_id].fanout[0];
@@ -607,5 +601,173 @@ impl Optimization for MuxDuplication {
 			des.check_connections();
 		}
 		0
+	}
+}
+
+pub struct PMuxFoldB {}
+
+impl Optimization for PMuxFoldB {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
+		let mut n_pruned = 0;
+		let get_body_driving_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
+			let input = des.nodes[id].fanin[pin];
+			let output = des.nodes[input].fanin.get(0)?;
+			let body = des.nodes[*output].fanin[0];
+			Some(body)
+		};
+		let n_siblings_for_pin = |des: &CheckedDesign, id: NodeId, pin: usize| {
+			let input = des.nodes[id].fanin[pin];
+			let output = des.nodes[input].fanin[0];
+			des.nodes[output].fanout.len()
+		};
+		for sink_id in 0..des.nodes.len() {
+			for sink_pin in 0.. {
+				let (sink_full_case, sink_width, source_width, source_id, source_full_case) = {
+					let node = &des.nodes[sink_id];
+					let (sink_full_case, sink_width) = match_or_continue!(
+						NodeType::CellBody {
+							cell_type: BodyType::MultiPart {
+								op: ImplementableOp::PMux(full_case, width),
+							},
+						},
+						&node.node_type,
+						*full_case,
+						*width
+					);
+					// Dont count A
+					if !sink_full_case && sink_pin == 0 {
+						continue;
+					}
+					// Dont count S
+					if sink_pin >= !sink_full_case as usize + sink_width {
+						break;
+					}
+					let source_id =
+						unwrap_or_continue!(get_body_driving_pin(des, sink_id, sink_pin));
+					let source_node = &des.nodes[source_id];
+					let (source_full_case, source_width) = match_or_continue!(
+						NodeType::CellBody {
+							cell_type: BodyType::MultiPart {
+								op: ImplementableOp::PMux(full_case, width),
+							},
+						},
+						&source_node.node_type,
+						*full_case,
+						*width
+					);
+					if n_siblings_for_pin(des, sink_id, sink_pin) != 1 {
+						//println!("Skipping {id} -> {source_id} due to multi-fanout.");
+						continue;
+					}
+					(
+						sink_full_case,
+						sink_width,
+						source_width,
+						source_id,
+						source_full_case,
+					)
+				};
+
+				if sink_width > 6 || source_width > 6 {
+					break;
+				}
+				let source_has_a = !source_full_case;
+				let source_start_b = source_has_a as usize;
+				let source_end_b = source_start_b + source_width;
+				let source_start_s = source_end_b;
+				let source_end_s = source_start_s + source_width;
+				let sink_has_a = !sink_full_case;
+				let sink_start_b = sink_has_a as usize;
+				let sink_end_b = sink_start_b + sink_width;
+				let sink_start_s = sink_end_b;
+				let sink_end_s = sink_start_s + sink_width;
+
+				// Now we know pmux -> Y -> A -> pmux
+				force_insert_expressions(des, source_id, source_start_s..source_end_s);
+				force_insert_expressions(des, sink_id, sink_start_s..sink_end_s);
+
+				let mut to_del = vec![source_id];
+				{
+					let (source, sink) = util::mut_idx(&mut des.nodes, source_id, sink_id);
+					{
+						// insert B ports
+						sink.fanin.splice(
+							sink_end_b..sink_end_b,
+							source.fanin[source_start_b..source_end_b].iter().cloned(),
+						);
+						sink.constants.splice(
+							sink_end_b..sink_end_b,
+							source.constants[source_start_b..source_end_b]
+								.iter()
+								.cloned(),
+						);
+					}
+					{
+						// insert S ports
+						sink.fanin
+							.extend(source.fanin[source_start_s..source_end_s].iter().copied());
+						sink.constants.extend(
+							source.constants[source_start_s..source_end_s]
+								.iter()
+								.cloned(),
+						);
+					}
+					// remove sink_pin
+					to_del.push(sink.fanin[sink_pin]); // Not needed anymore
+					sink.fanin.remove(sink_pin);
+					if let NodeType::CellBody {
+						cell_type:
+							BodyType::MultiPart {
+								op: ImplementableOp::PMux(_, width),
+							},
+					} = &mut sink.node_type
+					{
+						// + source_has_a because we have to transform A on the source.
+						*width = source_width + sink_width + source_has_a as usize;
+					}
+					// For all new S pins, they must not fire when the replaced pin fires.
+					let sink_exprs = sink.folded_expressions.unwrap_vec();
+					let sink_expr = sink_exprs[sink_pin - sink_has_a as usize].as_ref().unwrap();
+					let sink_expr = sink_expr.complement();
+					let mut new_exprs = sink_exprs.iter().cloned().collect_vec();
+					new_exprs.remove(sink_pin - sink_has_a as usize); // Remove previous pin's expression.
+					let source_exprs = source.folded_expressions.unwrap_vec();
+					for source_expr in source_exprs.iter() {
+						let expr = source_expr.as_ref().unwrap();
+						new_exprs.push(Some(
+							sink_expr.and(&expr.increment_placeholders(sink_width)),
+						));
+					}
+					if source_has_a {
+						let mut combined_expr = DeciderSop::default();
+						for source_expr in source_exprs.iter() {
+							let expr = source_expr.as_ref().unwrap();
+							combined_expr = combined_expr.or(&expr);
+						}
+						combined_expr = combined_expr.complement().and(&sink_expr);
+						new_exprs.push(Some(combined_expr));
+						// Todo: insert source pin, A, into end of B, add a dummy select pin with a dummy constant.
+						// In this way, source pin A will have the correct behaviour as it was when it was under a B pin on source.
+						// should be at sink_has_a + sink_width + source_width. maybe -1 because we removed a pin above.
+					}
+					sink.folded_expressions = FoldedData::Vec(new_exprs);
+				}
+				{
+					for i in 0..des.nodes[sink_id].fanin.len() {
+						let fid = des.nodes[sink_id].fanin[i];
+						des.nodes[fid].fanout = vec![sink_id];
+					}
+				}
+				for x in to_del {
+					let node = &mut des.nodes[x];
+					node.node_type = NodeType::Pruned;
+					node.fanin.clear();
+					node.fanout.clear();
+					n_pruned += 1;
+				}
+				break;
+			}
+		}
+		n_pruned
 	}
 }
