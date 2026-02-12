@@ -8,14 +8,12 @@ digraph CheckedDesign {
 $sop"]
   n21[shape=box,label="$37
 v2f_pmux"]
-  n26[shape=box,label="$32
-v2f_pmux"]
   n33[shape=box,label="$21
 v2f_pmux"]
   n46[shape=rarrow,label="sel_2_i
 10"]
   n48[shape=larrow,label="q_o
-119"]
+113"]
   n58[shape=larrow,label="$203
 $sop
 16
@@ -28,21 +26,17 @@ A1"]
 $sop
 15
 Y"]
-  n73[shape=larrow,label="$37
-v2f_pmux
-47
-A"]
   n74[shape=larrow,label="$37
 v2f_pmux
-31
+40
 B0"]
   n75[shape=larrow,label="$37
 v2f_pmux
-34
+43
 B1"]
   n76[shape=larrow,label="$37
 v2f_pmux
-38
+47
 B2"]
   n77[shape=larrow,label="$37
 v2f_pmux
@@ -58,94 +52,88 @@ v2f_pmux
 S2"]
   n80[shape=rarrow,label="$37
 v2f_pmux
-29
+38
 Y"]
   n93[shape=larrow,label="$32
 v2f_pmux
-78
+68
 A"]
   n94[shape=larrow,label="$32
 v2f_pmux
-62
+51
 B0"]
   n95[shape=larrow,label="$32
 v2f_pmux
-65
+55
 B1"]
   n96[shape=larrow,label="$32
 v2f_pmux
-69
+59
 B2"]
   n97[shape=larrow,label="$32
 v2f_pmux
-53
+30
 S0"]
   n98[shape=larrow,label="$32
 v2f_pmux
-55
+33
 S1"]
   n99[shape=larrow,label="$32
 v2f_pmux
-58
+36
 S2"]
-  n100[shape=rarrow,label="$32
-v2f_pmux
-60
-Y"]
   n119[shape=larrow,label="$21
 v2f_pmux
-102
+96
 B0"]
   n120[shape=larrow,label="$21
 v2f_pmux
-105
+99
 B1"]
   n121[shape=larrow,label="$21
 v2f_pmux
-109
+103
 B2"]
   n122[shape=larrow,label="$21
 v2f_pmux
-113
+107
 B3"]
   n123[shape=larrow,label="$21
 v2f_pmux
-90
+84
 S0"]
   n124[shape=larrow,label="$21
 v2f_pmux
-92
+86
 S1"]
   n125[shape=larrow,label="$21
 v2f_pmux
-95
+89
 S2"]
   n126[shape=larrow,label="$21
 v2f_pmux
-98
+92
 S3"]
   n127[shape=rarrow,label="$21
 v2f_pmux
-100
+94
 Y"]
   n150[shape=box,label="$swizzle"]
   n151[shape=rarrow,label="$swizzle
-130
+124
 Y"]
   n152[shape=larrow,label="$swizzle
-133
+127
 A"]
   n10 -> n46
   n16 -> n60
   n21 -> n80
-  n26 -> n100
   n33 -> n127
   n46 -> n152 [label="splitter(10)",syle=bold,color=blue]
   n48 -> n12
   n58 -> n16
   n59 -> n16
   n60 -> n126 [label="fast-transport-belt(5)",syle=bold,color=blue]
-  n73 -> n21
   n74 -> n21
   n75 -> n21
   n76 -> n21
@@ -153,14 +141,13 @@ A"]
   n78 -> n21
   n79 -> n21
   n80 -> n48 [label="express-splitter(12)",syle=bold,color=blue]
-  n93 -> n26
-  n94 -> n26
-  n95 -> n26
-  n96 -> n26
-  n97 -> n26
-  n98 -> n26
-  n99 -> n26
-  n100 -> n73 [label="iron-chest(1)",syle=bold,color=blue]
+  n93 -> n21
+  n94 -> n21
+  n95 -> n21
+  n96 -> n21
+  n97 -> n21
+  n98 -> n21
+  n99 -> n21
   n119 -> n33
   n120 -> n33
   n121 -> n33
@@ -169,7 +156,7 @@ A"]
   n124 -> n33
   n125 -> n33
   n126 -> n33
-  n127 -> n93 [label="iron-chest(1)",syle=bold,color=blue]
+  n127 -> n93 [label="express-transport-belt(6)",syle=bold,color=blue]
   n150 -> n151
   n151 -> n59 [label="iron-chest(1)",syle=bold,color=blue]
   n152 -> n150

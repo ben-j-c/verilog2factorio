@@ -51,6 +51,7 @@
 ---@field output TerminalSide
 ---@field add_condition fun(self: Decider, row: DeciderRowConjDisj, expr: DeciderExpr, network_left: Network, network_right: Network)
 ---@field add_output fun(self: Decider, sig: Signal|string, constant_or_use_input_count: integer|nil, network: Network)
+---@field set_conditions fun(self: Decider, expr: string)
 ---@field signals fun(self: Decider): Signal[]
 ---@field set_description fun(self: Decider, description: string)
 

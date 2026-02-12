@@ -616,6 +616,19 @@ impl UserData for Decider {
 				}
 			},
 		);
+		methods.add_method("set_conditions", |_, this, expression: String| {
+			let res = catch_unwind(AssertUnwindSafe(|| {
+				this.logd
+					.write()
+					.unwrap()
+					.set_decider_expr(this.id, expression);
+			}));
+			if let Err(_) = res {
+				Err(Error::RuntimeError("Condition invalid.".to_owned()))
+			} else {
+				Ok(())
+			}
+		});
 		methods.add_method("add_output", |_, this, args: (Signal, Value, i32)| {
 			let sig = args.0;
 			let net_out = (args.2 & 1 > 0, args.2 & 2 > 0);
