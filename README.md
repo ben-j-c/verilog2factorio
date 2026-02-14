@@ -100,6 +100,19 @@ Read the docs to get a better understanding on how to use the APIs. For beginner
 
 # Sample images
 
+## RISC-V 32 Bit Processor
+
+Under [`/examples/riscv_v2f_optimized/top_v2f`](/examples/riscv_v2f_optimized/top_v2f) I have compiled a fully functional RISC-V processor (RV32IM) along with some example programs that run in the game. The design is originally from Ultraembedded, but I have tweaked the multiplication and division to synthesize a more efficient design.
+
+Once compiled and the clock started, the `hello_world` program runs and produces the following result.
+![in game view](examples/riscv_v2f_optimized/top_v2f/doc/1000ft_view.png)
+
+Here is an image of what the core looks like. This is their diagram, and is identical to mine.
+![Image of the RV32IM core](https://github.com/ben-j-c/riscv_v2f_optimized/blob/7f76b0459d402eee0993eac75e75c2aa3ca6af48/doc/overview.png)
+
+Above their core is a fabric that provides the visual output. Here is a diagram of the total system, plus the memory layout.
+![in game view](examples/riscv_v2f_optimized/top_v2f/doc/system_diagram.svg)
+
 ## Simulation traces for a DFFE
 The program can also simulate your design so you can experiment more quickly in code rather than in game. Here is a simple DFF simulation I do in the tests to verify functionality.
 ![DFFE simulated](svg/sim_dffe_traces.svg)
