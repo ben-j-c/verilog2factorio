@@ -102,16 +102,19 @@ Read the docs to get a better understanding on how to use the APIs. For beginner
 
 ## RISC-V 32 Bit Processor
 
-Under [`/examples/riscv_v2f_optimized/top_v2f`](/examples/riscv_v2f_optimized/top_v2f) I have compiled a fully functional RISC-V processor (RV32IM) along with some example programs that run in the game. The design is originally from Ultraembedded, but I have tweaked the multiplication and division to synthesize a more efficient design.
+Under [`/examples/riscv_v2f_optimized/top_v2f`](https://github.com/ben-j-c/riscv_v2f_optimized/tree/master/top_v2f) I have compiled a fully functional RISC-V processor (RV32IM) along with some example programs that run in the game. The design is originally from Ultraembedded, but I have tweaked the multiplication and division to synthesize a more efficient design.
 
-Once compiled and the clock started, the `hello_world` program runs and produces the following result.
-![in game view](examples/riscv_v2f_optimized/top_v2f/doc/1000ft_view.png)
+Once compiled and the clock started, the [`hello_world`](https://github.com/ben-j-c/riscv_v2f_optimized/blob/master/top_v2f/programs/hello_world.c) program runs and produces the following result. I had a little bug in the ASCII font, so the smiley face is frowning. I have not yet rerun this program to get a better picture.
+![In game view](https://raw.githubusercontent.com/ben-j-c/riscv_v2f_optimized/refs/heads/master/top_v2f/doc/1000ft_view.png)
 
 Here is an image of what the core looks like. This is their diagram, and is identical to mine.
 ![Image of the RV32IM core](https://github.com/ben-j-c/riscv_v2f_optimized/blob/7f76b0459d402eee0993eac75e75c2aa3ca6af48/doc/overview.png)
 
-Above their core is a fabric that provides the visual output. Here is a diagram of the total system, plus the memory layout.
-![in game view](examples/riscv_v2f_optimized/top_v2f/doc/system_diagram.svg)
+Wrapping their core is a fabric that provides the display output and access to a programmable RAM. Here is a diagram of the total system, plus the memory layout I have defined in [`sys_device.h`](https://github.com/ben-j-c/riscv_v2f_optimized/blob/master/top_v2f/programs/sys_device.h).
+![System diagram](https://raw.githubusercontent.com/ben-j-c/riscv_v2f_optimized/refs/heads/master/top_v2f/doc/system_diagram.svg)
+
+To help facilitate the programming process I setup a cross compiler targeting a freestanding RV32IM. This is simply done with the [GNU toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain). I keep the makefiles and scripts in a subdirectory of the `top_v2f` mentioned above ([link](https://github.com/ben-j-c/riscv_v2f_optimized/tree/master/top_v2f/programs)). Here is the hello world implementation.
+![hello world](https://raw.githubusercontent.com/ben-j-c/riscv_v2f_optimized/refs/heads/master/top_v2f/doc/hello_world.png)
 
 ## Simulation traces for a DFFE
 The program can also simulate your design so you can experiment more quickly in code rather than in game. Here is a simple DFF simulation I do in the tests to verify functionality.
