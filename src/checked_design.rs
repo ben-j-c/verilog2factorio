@@ -2545,6 +2545,7 @@ impl CheckedDesign {
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
 		n_pruned += cdo::PMuxFoldA::apply(self, mapped_design);
+		// n_pruned += cdo::PMuxFoldB::apply(self, mapped_design); disabled due to bug
 		n_pruned
 	}
 

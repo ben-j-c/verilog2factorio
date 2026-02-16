@@ -601,6 +601,24 @@ impl Optimization for MuxDuplication {
 	}
 }
 
+/*
+Graph(G) -- some graph connecting to input of source
+Sink(X): [B0, B1, S0, S1]
+Source(W): [B0, B1, S0, S1]
+G -> ... -> W-> Y -> B1 -> X
+
+Optimization:
+Sink(X): [XB0, B_dummy, WB0, WB1, XS0, XS1, WS0, WS1]
+delete Source(W)
+
+A problem with the current implementation is stopping progress:
+B_dummy is deleted, so the width doesn't match causing a crash.
+It needs to be retained, but detached from G and given a constant 0.
+
+XS1 is there, but I need to make sure its still connected to G. If not
+WS0 and WS1 wont see its important gating signal that it inherits from XS1.
+
+*/
 pub struct PMuxFoldB {}
 
 impl Optimization for PMuxFoldB {
@@ -618,19 +636,18 @@ impl Optimization for PMuxFoldB {
 			des.nodes[output].fanout.len()
 		};
 		for sink_id in 0..des.nodes.len() {
+			let (sink_full_case, sink_width) = match_or_continue!(
+				NodeType::CellBody {
+					cell_type: BodyType::MultiPart {
+						op: ImplementableOp::PMux(full_case, width),
+					},
+				},
+				des.node_type(sink_id),
+				*full_case,
+				*width
+			);
 			for sink_pin in 0.. {
-				let (sink_full_case, sink_width, source_width, source_id, source_full_case) = {
-					let node = &des.nodes[sink_id];
-					let (sink_full_case, sink_width) = match_or_continue!(
-						NodeType::CellBody {
-							cell_type: BodyType::MultiPart {
-								op: ImplementableOp::PMux(full_case, width),
-							},
-						},
-						&node.node_type,
-						*full_case,
-						*width
-					);
+				let (source_width, source_id, source_full_case) = {
 					// Dont count A
 					if !sink_full_case && sink_pin == 0 {
 						continue;
@@ -656,13 +673,7 @@ impl Optimization for PMuxFoldB {
 						//println!("Skipping {id} -> {source_id} due to multi-fanout.");
 						continue;
 					}
-					(
-						sink_full_case,
-						sink_width,
-						source_width,
-						source_id,
-						source_full_case,
-					)
+					(source_width, source_id, source_full_case)
 				};
 
 				if sink_width > 6 || source_width > 6 {
@@ -684,7 +695,7 @@ impl Optimization for PMuxFoldB {
 				force_insert_expressions(des, sink_id, sink_start_s..sink_end_s);
 
 				let mut to_del = vec![source_id];
-				{
+				let should_add_new_pin = {
 					let (source, sink) = util::mut_idx(&mut des.nodes, source_id, sink_id);
 					{
 						// insert B ports
@@ -727,7 +738,7 @@ impl Optimization for PMuxFoldB {
 					let sink_expr = sink_exprs[sink_pin - sink_has_a as usize].as_ref().unwrap();
 					let sink_expr = sink_expr.complement();
 					let mut new_exprs = sink_exprs.iter().cloned().collect_vec();
-					new_exprs.remove(sink_pin - sink_has_a as usize); // Remove previous pin's expression.
+					new_exprs.remove(sink_pin + sink_has_a as usize); // Remove previous pin's expression.
 					let source_exprs = source.folded_expressions.unwrap_vec();
 					for source_expr in source_exprs.iter() {
 						let expr = source_expr.as_ref().unwrap();
@@ -742,13 +753,30 @@ impl Optimization for PMuxFoldB {
 							combined_expr = combined_expr.or(&expr);
 						}
 						combined_expr = combined_expr.complement().and(&sink_expr);
-						new_exprs.push(Some(combined_expr));
-						// Todo: insert source pin, A, into end of B, add a dummy select pin with a dummy constant.
-						// In this way, source pin A will have the correct behaviour as it was when it was under a B pin on source.
-						// should be at sink_has_a + sink_width + source_width. maybe -1 because we removed a pin above.
+						new_exprs.push(Some(combined_expr)); // S pin for source.A
+						let final_b_end = sink_has_a as usize + sink_width + source_width;
+						// Put source.A into sink.B
+						sink.constants.insert(final_b_end, source.constants[0]);
+						sink.fanin.insert(final_b_end, source.fanin[0]);
+						// Dummy S pin for source.A
+						sink.constants.push(Some(0));
+						// should_add_new_pin branch below will add this dummy S.
 					}
 					sink.folded_expressions = FoldedData::Vec(new_exprs);
+					source_has_a
+				};
+				if should_add_new_pin {
+					let new_pin = des.new_node(
+						"dummy-S",
+						NodeType::CellInput {
+							port: "dummy-S".to_owned(),
+							connected_id: usize::MAX,
+						},
+					);
+					des.connect(new_pin, sink_id);
 				}
+
+				// Forcibly take the fanin nodes so delete can cleanly remove unused pins/nodes.
 				{
 					for i in 0..des.nodes[sink_id].fanin.len() {
 						let fid = des.nodes[sink_id].fanin[i];
