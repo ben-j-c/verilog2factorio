@@ -1,6 +1,6 @@
 use std::{
 	fmt::Display,
-	ops::{BitAnd, BitOr, BitXor, Index, IndexMut, Shl, Shr},
+	ops::{BitAnd, BitOr, BitXor, Index, IndexMut},
 	sync::{Arc, RwLock},
 	usize,
 };
@@ -102,8 +102,6 @@ pub struct SimState {
 	step_number: usize,
 	/// Indexed by Logical id
 	state: Vec<SimStateRow>,
-	first_wire_red: Vec<NodeId>,
-	first_wire_green: Vec<NodeId>,
 
 	traces: Vec<Trace>,
 	trace_set: Vec<NodeId>,
@@ -117,6 +115,8 @@ pub struct SimStateRow {
 	netmap: NetMapEntry,
 	red: OutputState,
 	green: OutputState,
+	first_wire_red: NodeId,
+	first_wire_green: NodeId,
 }
 
 impl SimState {
@@ -131,8 +131,6 @@ impl SimState {
 			trace_set: vec![],
 			new_state_green: vec![],
 			new_state_red: vec![],
-			first_wire_red: vec![],
-			first_wire_green: vec![],
 		};
 		ret.update_logical_design();
 		ret
@@ -148,8 +146,6 @@ impl SimState {
 				red: vec![],
 				green: vec![],
 			});
-			self.first_wire_red.push(NodeId(usize::MAX));
-			self.first_wire_green.push(NodeId(usize::MAX));
 		}
 		for (nodeid, node) in logd.nodes.iter().enumerate().skip(state_len) {
 			let colour = if let NodeFunction::WireSum(colour) = node.function {
@@ -163,10 +159,10 @@ impl SimState {
 			let network_wires = logd.get_wire_network(node.id);
 			match colour {
 				WireColour::Red => {
-					self.first_wire_red[nodeid] = network_wires.first().unwrap().clone();
+					self.state[nodeid].first_wire_red = *network_wires.first().unwrap();
 				},
 				WireColour::Green => {
-					self.first_wire_green[nodeid] = network_wires.first().unwrap().clone();
+					self.state[nodeid].first_wire_green = *network_wires.first().unwrap();
 				},
 			}
 
@@ -217,7 +213,7 @@ impl SimState {
 					.first()
 					.unwrap()
 					.0;
-				self.first_wire_red[nodeid] = NodeId(first_wire);
+				self.state[nodeid].first_wire_red = NodeId(first_wire);
 			}
 			let output_green_entry = self.state[nodeid].netmap.output_green;
 			if output_green_entry.is_some() {
@@ -226,7 +222,7 @@ impl SimState {
 					.first()
 					.unwrap()
 					.0;
-				self.first_wire_green[nodeid] = NodeId(first_wire);
+				self.state[nodeid].first_wire_green = NodeId(first_wire);
 			}
 		}
 	}
@@ -425,12 +421,12 @@ impl SimState {
 		let mut ret = 0;
 		let output_red_entry = self.state[node.0].netmap.output_red;
 		if colours.0 && output_red_entry.is_some() {
-			let first_wire = self.first_wire_red[node.0].0;
+			let first_wire = self.state[node.0].first_wire_red.0;
 			ret += self.state[first_wire].red[id];
 		}
 		let output_green_entry = self.state[node.0].netmap.output_green;
 		if colours.1 && output_green_entry.is_some() {
-			let first_wire = self.first_wire_green[node.0].0;
+			let first_wire = self.state[node.0].first_wire_green.0;
 			ret += self.state[first_wire].green[id];
 		}
 		ret

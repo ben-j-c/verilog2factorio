@@ -325,6 +325,12 @@ impl NodeFunction {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub(crate) usize);
 
+impl Default for NodeId {
+	fn default() -> Self {
+		NodeId::NONE
+	}
+}
+
 impl NodeId {
 	const NONE: NodeId = NodeId(usize::MAX);
 }
