@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+            <style>
+                .search-match {
+                    stroke: #ff00ff !important;
+                    stroke-width: 4px !important;
+                    stroke-dasharray: none !important;
+                    animation: pulse 0.75s infinite;
+                }
+                @keyframes pulse {
+                    0% { stroke-opacity: 1; }
+                    50% { stroke-opacity: 0.4; }
+                    100% { stroke-opacity: 1; }
+                }
+            </style>
+        <rect x="0" y="0" width="240" height="240" fill="rgb(255,255,255)"></rect><rect x="0" y="0" width="220" height="220" fill="rgba(255,255,255,1)"></rect><rect x="33" y="55" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_7_i
+data_7_i</title></rect><text x="43" y="65" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="121" y="33" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_6_i
+data_6_i</title></rect><text x="131" y="43" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="77" y="77" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_5_i
+data_5_i</title></rect><text x="87" y="87" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="77" y="99" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_4_i
+data_4_i</title></rect><text x="87" y="109" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="77" y="165" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_3_i
+data_3_i</title></rect><text x="87" y="175" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="77" y="187" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_2_i
+data_2_i</title></rect><text x="87" y="197" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="165" y="165" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_1_i
+data_1_i</title></rect><text x="175" y="175" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="77" y="33" width="20" height="20" fill="rgba(230,100,100,1)"><title>data_0_i
+data_0_i</title></rect><text x="87" y="43" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="121" y="121" width="20" height="20" fill="rgba(100,100,230,1)"><title>q_1
+q_1</title></rect><text x="131" y="131" text-anchor="middle" alignment-baseline="middle" fill="black">L</text><rect x="165" y="187" width="20" height="20" fill="rgba(100,100,230,1)"><title>q_0
+q_0</title></rect><text x="175" y="197" text-anchor="middle" alignment-baseline="middle" fill="black">L</text><rect x="34" y="187" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:A
+$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:B
+$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:Y</title></rect><text x="54" y="197" text-anchor="middle" alignment-baseline="middle" fill="black">&gt;</text><rect x="122" y="77" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:A
+$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:B
+$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:Y</title></rect><text x="142" y="87" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="34" y="121" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:A
+$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:B
+$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:Y</title></rect><text x="54" y="131" text-anchor="middle" alignment-baseline="middle" fill="black">&lt;</text><rect x="122" y="55" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:A
+$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:B
+$techmap$techmap113$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:Y</title></rect><text x="142" y="65" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="34" y="99" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:A
+$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:B
+$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:113$111:Y</title></rect><text x="54" y="109" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="34" y="165" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:A
+$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:B
+$techmap$techmap112$techmap$gt$./sop.v:21$7.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:112$110:Y</title></rect><text x="54" y="175" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="78" y="143" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:A
+$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:B
+$techmap$gt$./sop.v:15$1.$gt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:394$101:Y</title></rect><text x="98" y="153" text-anchor="middle" alignment-baseline="middle" fill="black">&gt;</text><rect x="122" y="143" width="40" height="20" fill="rgba(230,230,230,1)"><title>$abc$221$auto$blifparse.cc:520:parse_blif$225:A0
+$abc$221$auto$blifparse.cc:520:parse_blif$225:Y</title></rect><text x="142" y="153" text-anchor="middle" alignment-baseline="middle" fill="black">=</text><rect x="78" y="121" width="40" height="20" fill="rgba(230,230,230,1)"><title>$abc$221$auto$blifparse.cc:520:parse_blif$222:A0
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A1
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A2
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A3
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A4
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A5
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A6
+$abc$221$auto$blifparse.cc:520:parse_blif$222:A7
+$abc$221$auto$blifparse.cc:520:parse_blif$222:Y
+Y_BAR:Y_BAR</title></rect><text x="98" y="131" text-anchor="middle" alignment-baseline="middle" fill="black">=</text><rect x="121" y="99" width="20" height="20" fill="rgba(230,230,230,1)"></rect><text x="131" y="109" text-anchor="middle" alignment-baseline="middle" fill="black">C</text><rect x="78" y="55" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:A
+$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:B
+$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98:Y</title></rect><text x="98" y="65" text-anchor="middle" alignment-baseline="middle" fill="black">&lt;</text><rect x="122" y="187" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:A
+$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:B
+$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:Y</title></rect><text x="142" y="197" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="34" y="143" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:A
+$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:B
+$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:Y</title></rect><text x="54" y="153" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="34" y="77" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:A
+$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:B
+$techmap$techmap107$techmap$lt$./sop.v:22$8.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:89$105:Y</title></rect><text x="54" y="87" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><rect x="122" y="165" width="40" height="20" fill="rgba(230,230,230,1)"><title>$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:A
+$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:B
+$techmap$techmap108$techmap$lt$./sop.v:16$2.$lt$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:341$98.$add$/home/ben/repo/verilog2factorio/techmap/v2f_simplify.v:90$106:Y</title></rect><text x="142" y="175" text-anchor="middle" alignment-baseline="middle" fill="black">+</text><circle cx="108" cy="174" r="5" fill="rgb(101,67,33)"></circle><circle cx="64" cy="20" r="5" fill="rgb(101,67,33)"></circle><line x1="64" y1="104" x2="64" y2="170" stroke="red" stroke-width="1" /><line x1="64" y1="104" x2="44" y2="192" stroke="red" stroke-width="1" /><line x1="82" y1="38" x2="132" y2="82" stroke="red" stroke-width="1" /><line x1="82" y1="38" x2="44" y2="148" stroke="red" stroke-width="1" /><line x1="64" y1="148" x2="64" y2="82" stroke="red" stroke-width="1" /><line x1="64" y1="148" x2="44" y2="126" stroke="red" stroke-width="1" /><line x1="38" y1="60" x2="44" y2="104" stroke="red" stroke-width="1" /><line x1="38" y1="60" x2="44" y2="82" stroke="red" stroke-width="1" /><line x1="126" y1="38" x2="44" y2="170" stroke="red" stroke-width="1" /><line x1="152" y1="82" x2="152" y2="60" stroke="red" stroke-width="1" /><line x1="152" y1="82" x2="88" y2="148" stroke="red" stroke-width="1" /><line x1="108" y1="126" x2="126" y2="104" stroke="red" stroke-width="1" /><line x1="108" y1="126" x2="126" y2="126" stroke="red" stroke-width="1" /><line x1="108" y1="126" x2="132" y2="148" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="82" y2="104" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="82" y2="170" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="82" y2="192" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="64" y2="192" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="64" y2="126" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="108" y2="148" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="108" y2="60" stroke="red" stroke-width="1" /><line x1="82" y1="82" x2="88" y2="126" stroke="red" stroke-width="1" /><line x1="152" y1="192" x2="152" y2="170" stroke="red" stroke-width="1" /><line x1="152" y1="192" x2="88" y2="60" stroke="red" stroke-width="1" /><line x1="170" y1="170" x2="132" y2="192" stroke="red" stroke-width="1" /><line x1="152" y1="148" x2="170" y2="192" stroke="red" stroke-width="1" />
+            <foreignObject x="10" y="10" width="250" height="40">
+                <div xmlns="http://www.w3.org/1999/xhtml">
+                    <input type="text" 
+                           id="svg-search" 
+                           placeholder="Search hover text..." 
+                           style="position: fixed; width: 100%; padding: 5px; border: 2px solid #333; border-radius: 4px; font-family: sans-serif; opacity: 0.9;"
+                           oninput="performSearch(this.value)" 
+                    />
+                </div>
+            </foreignObject>
+        
+            <script><![CDATA[
+                function performSearch(query) {
+                    // Normalize query
+                    query = query.toLowerCase();
+                    
+                    // Get all shapes (rects and circles)
+                    // We look for any element that has a <title> child
+                    const shapes = document.querySelectorAll("rect, circle");
+                    
+                    shapes.forEach(shape => {
+                        const titleEl = shape.querySelector("title");
+                        
+                        // Clear previous highlight
+                        shape.classList.remove("search-match");
+                        
+                        if (query.length > 0 && titleEl) {
+                            const hoverText = titleEl.textContent.toLowerCase();
+                            if (hoverText.includes(query)) {
+                                shape.classList.add("search-match");
+                            }
+                        }
+                    });
+                }
+            ]]></script>
+        </svg>

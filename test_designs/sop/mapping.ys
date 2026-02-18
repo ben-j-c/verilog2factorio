@@ -1,0 +1,19 @@
+read_json sop_rtl.json
+memory_libmap -lib /home/ben/repo/verilog2factorio/techmap/memory_primitives.txt;;
+techmap -autoproc -map /home/ben/repo/verilog2factorio/techmap/v2f_simplify.v;;
+muxpack
+techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
+techmap -dont_map $adff -dont_map $adffe -dont_map $dff -dont_map $dffe -dont_map $sdff -dont_map $sdffe
+abc -sop -I 30
+techmap -map /home/ben/repo/verilog2factorio/techmap/v2f_techmap.v;;
+techmap -map /home/ben/repo/verilog2factorio/yosys/techlibs/common/gate2lut.v -D LUT_WIDTH 10
+clean; opt_lut
+flowmap -maxlut 10
+opt -fast
+abc -fast
+abc -fast -lut 10
+opt -fast
+opt_lut
+opt_clean
+select sop
+write_json -selected sop_rtl_map.json
