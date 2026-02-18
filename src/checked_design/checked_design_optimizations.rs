@@ -76,23 +76,23 @@ impl DeciderFold {
 }
 
 impl Optimization for DeciderFold {
-	fn apply(des: &mut CheckedDesign, mapped_design: &MappedDesign) -> usize {
+	fn apply(des: &mut CheckedDesign, _mapped_design: &MappedDesign) -> usize {
 		let mut n_pruned = 0;
 		for id in 0..des.nodes.len() {
 			let node = &des.nodes[id];
 			if !node.folded_expressions.is_empty() {
 				continue;
 			}
-			if let NodeType::CellBody { .. } = &node.node_type {
+			let op = if let NodeType::CellBody { cell_type } = &node.node_type {
+				if let Some(op) = cell_type.get_op() {
+					op
+				} else {
+					continue;
+				}
 			} else {
 				continue;
 			};
-			let mapped = if let Some(m) = mapped_design.get_cell_option(&node.mapped_id) {
-				m
-			} else {
-				continue;
-			};
-			let n_select = match mapped.cell_type {
+			let n_select = match op {
 				ImplementableOp::LUT(x) | ImplementableOp::PMux(_, x) | ImplementableOp::Sop(x) => {
 					x
 				},
@@ -106,7 +106,7 @@ impl Optimization for DeciderFold {
 				if *body_id == NodeId::MAX {
 					continue;
 				}
-				if !DeciderFold::pin_applies(des, mapped.cell_type, input[idx]) {
+				if !DeciderFold::pin_applies(des, op, input[idx]) {
 					continue;
 				}
 				pin_counter += 1;
@@ -117,14 +117,18 @@ impl Optimization for DeciderFold {
 					continue;
 				}
 
-				let fanin_body_mapped =
-					if let Some(m) = mapped_design.get_cell_option(&fanin_body.mapped_id) {
-						m
+				let fanin_body_op = if let NodeType::CellBody { cell_type } = &fanin_body.node_type
+				{
+					if let Some(op) = cell_type.get_op() {
+						op
 					} else {
 						continue;
-					};
+					}
+				} else {
+					continue;
+				};
 				// Finally, retain the body node for future reference when building the next
-				if fanin_body_mapped.cell_type.get_decider_op().is_some()
+				if fanin_body_op.get_decider_op().is_some()
 					&& des.count_connected_terminals(*body_id) == 1
 				{
 					assert!(
@@ -136,7 +140,7 @@ impl Optimization for DeciderFold {
 					let left = fanin_body.constants[0] // Recall, terminals are order sensitive, so 0 is left.
 						.map(Signal::Constant)
 						.unwrap_or(Signal::None);
-					let op = fanin_body_mapped.cell_type.get_decider_op().unwrap();
+					let op = fanin_body_op.get_decider_op().unwrap();
 					let right = fanin_body.constants[1]
 						.map(Signal::Constant)
 						.unwrap_or(Signal::None);
@@ -175,7 +179,7 @@ impl Optimization for DeciderFold {
 				}
 			}
 			assert!(n_select == folded_expressions.len());
-			if matches!(mapped.cell_type, ImplementableOp::Mux) {
+			if matches!(op, ImplementableOp::Mux) {
 				if folded_expressions[0].is_some() {
 					let xx = folded_expressions.pop().unwrap().unwrap();
 					des.nodes[id].folded_expressions = FoldedData::Single(xx);
@@ -823,6 +827,7 @@ impl Optimization for NotDetectAndReplace {
 					.collect_vec()
 			};
 			if table[0] {
+				assert!(table.len() == 2);
 				let node = &mut des.nodes[id];
 				node.node_type = NodeType::CellBody {
 					cell_type: BodyType::AY {
@@ -835,8 +840,9 @@ impl Optimization for NotDetectAndReplace {
 				let output_pin = des.nodes[id].fanout[0];
 				let input_pin = des.nodes[id].fanin[0];
 				let source = des.nodes[input_pin].fanin[0];
+				des.disconnect(source, input_pin);
 				while !des.nodes[output_pin].fanout.is_empty() {
-					let sink = *des.nodes[output_pin].fanout.last().unwrap();
+					let sink = *des.nodes[output_pin].fanout.first().unwrap();
 					des.connect(source, sink);
 					des.disconnect(output_pin, sink);
 				}

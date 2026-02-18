@@ -290,6 +290,18 @@ pub(crate) enum BodyType {
 	Nop,
 }
 
+impl BodyType {
+	fn get_op(&self) -> Option<ImplementableOp> {
+		match self {
+			BodyType::ABY { op } => Some(*op),
+			BodyType::AY { op } => Some(*op),
+			BodyType::MultiPart { op } => Some(*op),
+			BodyType::Constant { .. } => None,
+			BodyType::Nop => None,
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TimingBoundary {
 	None,
@@ -2539,13 +2551,13 @@ impl CheckedDesign {
 		let mut n_pruned = 0;
 		use checked_design_optimizations as cdo;
 		n_pruned += cdo::ConstantFold::apply(self, mapped_design);
-		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
 		n_pruned += cdo::NotDetectAndReplace::apply(self, mapped_design);
+		n_pruned += cdo::DeciderFold::apply(self, mapped_design);
 		n_pruned += cdo::SopNot::apply(self, mapped_design);
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
 		n_pruned += cdo::PMuxFoldA::apply(self, mapped_design);
-		// n_pruned += cdo::PMuxFoldB::apply(self, mapped_design); disabled due to bug
+		//n_pruned += cdo::PMuxFoldB::apply(self, mapped_design); disabled due to bug
 		n_pruned
 	}
 

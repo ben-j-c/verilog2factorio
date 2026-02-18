@@ -696,7 +696,7 @@ impl SimState {
 		network_states: &mut Vec<OutputState>,
 	) {
 		network_states.resize(self.network.len(), OutputState::default());
-		let chunk_size = 4096;
+		let chunk_size = 2000;
 		network_states
 			.par_iter_mut()
 			.with_min_len(chunk_size)
@@ -1064,16 +1064,25 @@ impl SimState {
 					logd.set_ith_output_count(*id, 0, count);
 				}
 			}
+			if vcd_time == 100000000 {
+				return false;
+			}
 			self.step(propagation_delay);
+			#[cfg(false)]
+			{
+				println!("\nSTART-------------------{vcd_time}-----------------------");
+				let logd = self.logd.read().unwrap();
+				for x in 0..self.state.len() {
+					println!("{}", logd.get_node(NodeId(x)));
+				}
+				for x in 0..self.state.len() {
+					self.print_row(x);
+				}
+			}
 			#[cfg(false)]
 			{
 				{
 					let logd = self.logd.read().unwrap();
-					println!("\nSTART-------------------{vcd_time}-----------------------");
-					for x in 0..self.state.len() {
-						println!("{}", logd.get_node(NodeId(x)));
-						self.print_row(x);
-					}
 				}
 				if vcd_time == 14 {
 					for i in 0..propagation_delay {
@@ -1530,10 +1539,7 @@ impl OutputState {
 	}
 
 	fn copy(&mut self, other: &Self) {
-		self.clear();
-		for x in &other.data {
-			self.data.insert(*x.0, *x.1);
-		}
+		self.data.clone_from(&other.data);
 	}
 
 	fn keys(&self) -> impl Iterator<Item = i32> + '_ {

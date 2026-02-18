@@ -15,7 +15,7 @@ opt
 wreduce
 peepopt
 opt_clean
-share
+#share
 opt
 
 opt_mem_priority
@@ -38,4 +38,6 @@ opt_merge -share_all
 opt_dff -sat
 opt_clean
 opt_expr
+muxpack
+opt_clean
 write_json alu_rtl.json

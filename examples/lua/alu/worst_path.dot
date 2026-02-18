@@ -1,0 +1,242 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n1[shape=box,label="result_y
+1"]
+  n3[shape=box,label="select
+3"]
+  n7[shape=box,label="$22
+v2f_pmux"]
+  n31[shape=box,label="$328
+$sop"]
+  n36[shape=larrow,label="result_y
+149"]
+  n38[shape=rarrow,label="select
+3"]
+  n48[shape=larrow,label="$22
+v2f_pmux
+57
+B0"]
+  n49[shape=larrow,label="$22
+v2f_pmux
+60
+B1"]
+  n50[shape=larrow,label="$22
+v2f_pmux
+64
+B2"]
+  n51[shape=larrow,label="$22
+v2f_pmux
+68
+B3"]
+  n52[shape=larrow,label="$22
+v2f_pmux
+72
+B4"]
+  n53[shape=larrow,label="$22
+v2f_pmux
+76
+B5"]
+  n54[shape=larrow,label="$22
+v2f_pmux
+80
+B6"]
+  n55[shape=larrow,label="$22
+v2f_pmux
+84
+B7"]
+  n56[shape=larrow,label="$22
+v2f_pmux
+88
+B8"]
+  n57[shape=larrow,label="$22
+v2f_pmux
+92
+B9"]
+  n58[shape=larrow,label="$22
+v2f_pmux
+96
+B10"]
+  n59[shape=larrow,label="$22
+v2f_pmux
+100
+B11"]
+  n60[shape=larrow,label="$22
+v2f_pmux
+104
+B12"]
+  n61[shape=larrow,label="$22
+v2f_pmux
+108
+B13"]
+  n62[shape=larrow,label="$22
+v2f_pmux
+112
+B14"]
+  n63[shape=larrow,label="$22
+v2f_pmux
+116
+B15"]
+  n64[shape=larrow,label="$22
+v2f_pmux
+9
+S0"]
+  n65[shape=larrow,label="$22
+v2f_pmux
+11
+S1"]
+  n66[shape=larrow,label="$22
+v2f_pmux
+14
+S2"]
+  n67[shape=larrow,label="$22
+v2f_pmux
+17
+S3"]
+  n68[shape=larrow,label="$22
+v2f_pmux
+20
+S4"]
+  n69[shape=larrow,label="$22
+v2f_pmux
+23
+S5"]
+  n70[shape=larrow,label="$22
+v2f_pmux
+26
+S6"]
+  n71[shape=larrow,label="$22
+v2f_pmux
+29
+S7"]
+  n72[shape=larrow,label="$22
+v2f_pmux
+32
+S8"]
+  n73[shape=larrow,label="$22
+v2f_pmux
+35
+S9"]
+  n74[shape=larrow,label="$22
+v2f_pmux
+38
+S10"]
+  n75[shape=larrow,label="$22
+v2f_pmux
+41
+S11"]
+  n76[shape=larrow,label="$22
+v2f_pmux
+44
+S12"]
+  n77[shape=larrow,label="$22
+v2f_pmux
+47
+S13"]
+  n78[shape=larrow,label="$22
+v2f_pmux
+50
+S14"]
+  n79[shape=larrow,label="$22
+v2f_pmux
+53
+S15"]
+  n80[shape=rarrow,label="$22
+v2f_pmux
+55
+Y"]
+  n149[shape=larrow,label="$328
+$sop
+146
+A0"]
+  n150[shape=larrow,label="$328
+$sop
+146
+A1"]
+  n151[shape=larrow,label="$328
+$sop
+146
+A2"]
+  n152[shape=larrow,label="$328
+$sop
+146
+A3"]
+  n153[shape=rarrow,label="$328
+$sop
+145
+Y"]
+  n198[shape=box,label="$swizzle"]
+  n199[shape=rarrow,label="$swizzle
+156
+Y"]
+  n200[shape=larrow,label="$swizzle
+159
+A"]
+  n201[shape=box,label="$swizzle"]
+  n202[shape=rarrow,label="$swizzle
+160
+Y"]
+  n203[shape=larrow,label="$swizzle
+163
+A"]
+  n207[shape=box,label="$swizzle"]
+  n208[shape=rarrow,label="$swizzle
+166
+Y"]
+  n209[shape=larrow,label="$swizzle
+169
+A"]
+  n3 -> n38
+  n7 -> n80
+  n31 -> n153
+  n36 -> n1
+  n38 -> n200 [label="storage-tank(3)",syle=bold,color=blue]
+  n38 -> n203 [label="storage-tank(3)",syle=bold,color=blue]
+  n38 -> n209 [label="storage-tank(3)",syle=bold,color=blue]
+  n48 -> n7
+  n49 -> n7
+  n50 -> n7
+  n51 -> n7
+  n52 -> n7
+  n53 -> n7
+  n54 -> n7
+  n55 -> n7
+  n56 -> n7
+  n57 -> n7
+  n58 -> n7
+  n59 -> n7
+  n60 -> n7
+  n61 -> n7
+  n62 -> n7
+  n63 -> n7
+  n64 -> n7
+  n65 -> n7
+  n66 -> n7
+  n67 -> n7
+  n68 -> n7
+  n69 -> n7
+  n70 -> n7
+  n71 -> n7
+  n72 -> n7
+  n73 -> n7
+  n74 -> n7
+  n75 -> n7
+  n76 -> n7
+  n77 -> n7
+  n78 -> n7
+  n79 -> n7
+  n80 -> n36 [label="iron-chest(1)",syle=bold,color=blue]
+  n149 -> n31
+  n150 -> n31
+  n151 -> n31
+  n152 -> n31
+  n153 -> n79 [label="small-electric-pole(18)",syle=bold,color=blue]
+  n198 -> n199
+  n199 -> n149 [label="wooden-chest(0)",syle=bold,color=blue]
+  n200 -> n198
+  n201 -> n202
+  n202 -> n150 [label="iron-chest(1)",syle=bold,color=blue]
+  n203 -> n201
+  n207 -> n208
+  n208 -> n152 [label="storage-tank(3)",syle=bold,color=blue]
+  n209 -> n207
+}
