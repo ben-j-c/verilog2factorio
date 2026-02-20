@@ -161,6 +161,7 @@
 			"cargo": {
 				"args": [
 					"build",
+					"--release",
 					"--example",
 					"riscv",
 				]
