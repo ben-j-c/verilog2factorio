@@ -1151,7 +1151,7 @@ impl CheckedDesign {
 		&body.fanin
 	}
 
-	fn insert_nop_between(&mut self, first: NodeId, second: NodeId) {
+	fn insert_nop_between(&mut self, first: NodeId, second: NodeId) -> bool {
 		assert!(matches!(
 			self.node_type(second),
 			NodeType::PortInput { .. } | NodeType::CellInput { .. }
@@ -1161,14 +1161,14 @@ impl CheckedDesign {
 			NodeType::PortOutput { .. } | NodeType::CellOutput { .. }
 		));
 		assert!(first != second);
-		let y = if self.nop_cache.contains_key(&first) {
+		let (y, new) = if self.nop_cache.contains_key(&first) {
 			let y = self.nop_cache[&first];
 			let inputs = self.get_inputs_through_body(y);
 			if inputs.contains(&second) {
 				println!("{second} asking to add Nop to itself.");
-				return;
+				return false;
 			}
-			y
+			(y, false)
 		} else {
 			let nop = self.new_node(
 				"$nop",
@@ -1194,10 +1194,11 @@ impl CheckedDesign {
 			self.connect(nop, y);
 			self.connect(first, a);
 			self.nop_cache.insert(first, y);
-			y
+			(y, true)
 		};
 		self.disconnect(first, second);
 		self.connect(y, second);
+		new
 	}
 
 	fn partition_io_network(&mut self, mut local_io: Vec<NodeId>) {
@@ -1276,9 +1277,9 @@ impl CheckedDesign {
 		let mut partition = vec![0; connectivity.len()];
 		let graph = metis::Graph::new(1, min_n_parts, &idx_adj, &adj).unwrap();
 		let graph = graph.set_option(metis::option::UFactor(150));
-		let ret = graph.part_recursive(&mut partition).unwrap() / 2;
+		let _ret = graph.part_recursive(&mut partition).unwrap() / 2;
 
-		println!("Have to incur ~{ret} nops to enforce network requirements.");
+		let mut counter = 0;
 		for (idx, id) in local_io.iter().enumerate() {
 			let node = &self.nodes[*id];
 			match &node.node_type {
@@ -1297,12 +1298,15 @@ impl CheckedDesign {
 					};
 					let fiid = node.fanin[0];
 					if has_been_cut {
-						self.insert_nop_between(fiid, *id);
+						if self.insert_nop_between(fiid, *id) {
+							counter += 1;
+						}
 					};
 				},
 				_ => {},
 			}
 		}
+		println!("Have to incur {counter} nops to enforce network requirements.");
 	}
 
 	fn set_signal(&self, signals: &mut Vec<Signal>, nodeid: NodeId, signal: Signal) -> bool {
@@ -2557,7 +2561,7 @@ impl CheckedDesign {
 		n_pruned += cdo::MuxToPmux::apply(self, mapped_design);
 		n_pruned += cdo::MuxDuplication::apply(self, mapped_design);
 		n_pruned += cdo::PMuxFoldA::apply(self, mapped_design);
-		//n_pruned += cdo::PMuxFoldB::apply(self, mapped_design); disabled due to bug
+		//n_pruned += cdo::PMuxFoldB::apply(self, mapped_design);
 		n_pruned
 	}
 

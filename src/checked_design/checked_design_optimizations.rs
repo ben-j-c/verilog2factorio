@@ -700,6 +700,12 @@ impl Optimization for PMuxFoldB {
 
 				let mut to_del = vec![source_id];
 				let should_add_new_pin = {
+					{
+						let sink_pin_id = des.nodes[sink_id].fanin[sink_pin];
+						let source_pin_id = des.nodes[sink_pin_id].fanin[0];
+						to_del.push(source_pin_id);
+						des.disconnect(source_pin_id, sink_pin_id);
+					}
 					let (source, sink) = util::mut_idx(&mut des.nodes, source_id, sink_id);
 					{
 						// insert B ports
@@ -713,6 +719,7 @@ impl Optimization for PMuxFoldB {
 								.iter()
 								.cloned(),
 						);
+						sink.constants[sink_pin] = Some(0);
 					}
 					{
 						// insert S ports
@@ -725,8 +732,10 @@ impl Optimization for PMuxFoldB {
 						);
 					}
 					// remove sink_pin
-					to_del.push(sink.fanin[sink_pin]); // Not needed anymore
-					sink.fanin.remove(sink_pin);
+					//to_del.push(sink.fanin[sink_pin]); // Not needed anymore
+					//sink.fanin.remove(sink_pin);
+					// + source_has_a because we have to transform A on the source.
+					let final_sink_width = source_width + sink_width + source_has_a as usize;
 					if let NodeType::CellBody {
 						cell_type:
 							BodyType::MultiPart {
@@ -734,15 +743,16 @@ impl Optimization for PMuxFoldB {
 							},
 					} = &mut sink.node_type
 					{
-						// + source_has_a because we have to transform A on the source.
-						*width = source_width + sink_width + source_has_a as usize;
+						*width = final_sink_width;
+					} else {
+						unreachable!();
 					}
 					// For all new S pins, they must not fire when the replaced pin fires.
 					let sink_exprs = sink.folded_expressions.unwrap_vec();
 					let sink_expr = sink_exprs[sink_pin - sink_has_a as usize].as_ref().unwrap();
 					let sink_expr = sink_expr.complement();
 					let mut new_exprs = sink_exprs.iter().cloned().collect_vec();
-					new_exprs.remove(sink_pin + sink_has_a as usize); // Remove previous pin's expression.
+					//new_exprs.remove(sink_pin + sink_has_a as usize); // Remove previous pin's expression.
 					let source_exprs = source.folded_expressions.unwrap_vec();
 					for source_expr in source_exprs.iter() {
 						let expr = source_expr.as_ref().unwrap();

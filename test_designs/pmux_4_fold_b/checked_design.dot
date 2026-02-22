@@ -1,0 +1,221 @@
+digraph CheckedDesign {
+  rankdir=LR
+  n0[shape=box,label="data_7_i
+0"]
+  n1[shape=box,label="data_6_i
+1"]
+  n2[shape=box,label="data_5_i
+2"]
+  n3[shape=box,label="data_4_i
+3"]
+  n4[shape=box,label="sel_1_i
+4"]
+  n5[shape=box,label="data_2_i
+5"]
+  n6[shape=box,label="data_1_i
+6"]
+  n7[shape=box,label="data_0_i
+7"]
+  n8[shape=box,label="sel_0_i
+8"]
+  n9[shape=box,label="sel_3_i
+9"]
+  n10[shape=box,label="sel_2_i
+10"]
+  n11[shape=box,label="data_3_i
+11"]
+  n12[shape=box,label="q_o
+12"]
+  n21[shape=box,label="$3
+v2f_add
+13"]
+  n24[shape=box,label="$31
+v2f_mux"]
+  n29[shape=box,label="$39
+v2f_mux"]
+  n30[shape=rarrow,label="data_7_i
+0"]
+  n31[shape=rarrow,label="data_6_i
+1"]
+  n32[shape=rarrow,label="data_5_i
+2"]
+  n33[shape=rarrow,label="data_4_i
+3"]
+  n34[shape=rarrow,label="sel_1_i
+4"]
+  n35[shape=rarrow,label="data_2_i
+5"]
+  n36[shape=rarrow,label="data_1_i
+6"]
+  n37[shape=rarrow,label="data_0_i
+7"]
+  n38[shape=rarrow,label="sel_0_i
+8"]
+  n39[shape=rarrow,label="sel_3_i
+9"]
+  n40[shape=rarrow,label="sel_2_i
+10"]
+  n41[shape=rarrow,label="data_3_i
+11"]
+  n42[shape=larrow,label="q_o
+83"]
+  n46[shape=larrow,label="$22
+v2f_mux
+48
+A"]
+  n47[shape=larrow,label="$22
+v2f_mux
+39
+B"]
+  n48[shape=larrow,label="$22
+v2f_mux
+24
+S"]
+  n51[shape=larrow,label="$33
+v2f_mux
+69
+B"]
+  n52[shape=larrow,label="$33
+v2f_mux
+55
+S"]
+  n64[shape=larrow,label="$28
+v2f_mux
+31
+B"]
+  n65[shape=larrow,label="$28
+v2f_mux
+18
+S"]
+  n70[shape=larrow,label="$3
+v2f_add
+14
+A"]
+  n71[shape=larrow,label="$3
+v2f_add
+14
+B"]
+  n72[shape=rarrow,label="$3
+v2f_add
+13
+Y"]
+  n77[shape=larrow,label="$36
+v2f_mux
+65
+B"]
+  n78[shape=larrow,label="$36
+v2f_mux
+52
+S"]
+  n81[shape=larrow,label="$31
+v2f_mux
+28
+B"]
+  n82[shape=larrow,label="$31
+v2f_mux
+16
+S"]
+  n83[shape=rarrow,label="$31
+v2f_mux
+26
+Y"]
+  n85[shape=larrow,label="$25
+v2f_mux
+35
+B"]
+  n86[shape=larrow,label="$25
+v2f_mux
+21
+S"]
+  n91[shape=larrow,label="$18
+v2f_mux
+82
+A"]
+  n92[shape=larrow,label="$18
+v2f_mux
+73
+B"]
+  n93[shape=larrow,label="$18
+v2f_mux
+58
+S"]
+  n99[shape=larrow,label="$39
+v2f_mux
+62
+B"]
+  n100[shape=larrow,label="$39
+v2f_mux
+50
+S"]
+  n101[shape=rarrow,label="$39
+v2f_mux
+60
+Y"]
+  n118[shape=box,label="$swizzle"]
+  n119[shape=rarrow,label="$swizzle
+84
+Y"]
+  n120[shape=larrow,label="$swizzle
+85
+A"]
+  n0 -> n30
+  n1 -> n31
+  n2 -> n32
+  n3 -> n33
+  n4 -> n34
+  n5 -> n35
+  n6 -> n36
+  n7 -> n37
+  n8 -> n38
+  n9 -> n39
+  n10 -> n40
+  n11 -> n41
+  n21 -> n72
+  n24 -> n83
+  n29 -> n101
+  n30 -> n46 [label="wooden-chest(0)",syle=bold,color=blue]
+  n31 -> n47 [label="iron-chest(1)",syle=bold,color=blue]
+  n32 -> n85 [label="steel-chest(2)",syle=bold,color=blue]
+  n33 -> n64 [label="storage-tank(3)",syle=bold,color=blue]
+  n34 -> n65 [label="transport-belt(4)",syle=bold,color=blue]
+  n34 -> n78 [label="transport-belt(4)",syle=bold,color=blue]
+  n35 -> n92 [label="fast-transport-belt(5)",syle=bold,color=blue]
+  n36 -> n91 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n36 -> n71 [label="express-transport-belt(6)",syle=bold,color=blue]
+  n37 -> n70 [label="underground-belt(7)",syle=bold,color=blue]
+  n37 -> n77 [label="underground-belt(7)",syle=bold,color=blue]
+  n38 -> n82 [label="fast-underground-belt(8)",syle=bold,color=blue]
+  n38 -> n100 [label="fast-underground-belt(8)",syle=bold,color=blue]
+  n39 -> n48 [label="express-underground-belt(9)",syle=bold,color=blue]
+  n39 -> n93 [label="express-underground-belt(9)",syle=bold,color=blue]
+  n40 -> n52 [label="splitter(10)",syle=bold,color=blue]
+  n40 -> n86 [label="splitter(10)",syle=bold,color=blue]
+  n41 -> n81 [label="fast-splitter(11)",syle=bold,color=blue]
+  n42 -> n12
+  n46 -> n24
+  n47 -> n24
+  n48 -> n24
+  n51 -> n29
+  n52 -> n29
+  n64 -> n24
+  n65 -> n24
+  n70 -> n21
+  n71 -> n21
+  n72 -> n120 [label="wooden-chest(0)",syle=bold,color=blue]
+  n77 -> n29
+  n78 -> n29
+  n81 -> n24
+  n82 -> n24
+  n83 -> n51 [label="express-splitter(12)",syle=bold,color=blue]
+  n85 -> n24
+  n86 -> n24
+  n91 -> n29
+  n92 -> n29
+  n93 -> n29
+  n99 -> n29
+  n100 -> n29
+  n101 -> n42 [label="express-splitter(12)",syle=bold,color=blue]
+  n118 -> n119
+  n119 -> n99 [label="burner-inserter(13)",syle=bold,color=blue]
+  n120 -> n118
+}
