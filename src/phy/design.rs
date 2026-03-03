@@ -1929,7 +1929,11 @@ impl PhysicalDesign {
 			return 0;
 		}
 		let mut n_parts = (connectivity.len() as f64 / target_size as f64).ceil() as i32;
+		partition::spectral(&connectivity);
+		#[cfg(not(target_arch = "wasm32"))]
 		let (mut partition, n_cuts) = partition::metis(&connectivity, n_parts);
+		#[cfg(target_arch = "wasm32")]
+		let (mut partition, n_cuts) = partition::spectral_k_way(&connectivity, n_parts);
 		partition::report_partition_quality(&partition, n_cuts, &connectivity, n_parts);
 		let mut ret = 0;
 		if self.settings.group_io {

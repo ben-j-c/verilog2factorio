@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use nalgebra::{DMatrix, SymmetricEigen};
+use rand::{rngs::StdRng, seq::IndexedRandom, SeedableRng};
 
 #[allow(dead_code)]
 pub(crate) fn kernighan_lin(
@@ -107,6 +108,146 @@ pub(crate) fn spectral(connectivity: &Vec<Vec<usize>>) -> (Vec<bool>, Vec<bool>)
 	(by_median, by_sign)
 }
 
+fn simple_kmeans_balance_partitions(data: &DMatrix<f64>, k: usize) -> Vec<i32> {
+	let (n_rows, n_cols) = (data.nrows(), data.ncols());
+	let mut rng = StdRng::seed_from_u64(0xB1FFB0FF);
+
+	// Initialize centroids randomly from existing points
+	let mut centroids: Vec<Vec<f64>> = (0..n_rows)
+		.collect_vec()
+		.choose_multiple(&mut rng, k)
+		.map(|&idx| data.row(idx).iter().cloned().collect())
+		.collect();
+
+	let mut assignments = vec![0; n_rows];
+
+	for _ in 0..20 {
+		for i in 0..n_rows {
+			let row = data.row(i);
+			let best_cluster = centroids
+				.iter()
+				.enumerate()
+				.map(|(idx, c)| {
+					let d2: f64 = row.iter().zip(c).map(|(a, b)| (a - b).powi(2)).sum();
+					(idx, d2)
+				})
+				.min_by(|a, b| a.1.total_cmp(&b.1))
+				.unwrap();
+
+			assignments[i] = best_cluster.0;
+		}
+
+		let mut new_centroids = vec![vec![0.0; n_cols]; k];
+		let mut counts = vec![0; k];
+		for i in 0..n_rows {
+			let c = assignments[i];
+			counts[c] += 1;
+			for j in 0..n_cols {
+				new_centroids[c][j] += data[(i, j)];
+			}
+		}
+
+		for c in 0..k {
+			if counts[c] > 0 {
+				for j in 0..n_cols {
+					centroids[c][j] = new_centroids[c][j] / counts[c] as f64;
+				}
+			}
+		}
+	}
+
+	let mut cluster_usage = vec![0; k];
+	let max_usage = n_rows / k * 11 / 10;
+	let mut assignments = vec![-1i32; n_rows];
+
+	let min_distance = (0..n_rows)
+		.map(|i| {
+			let row = data.row(i);
+			let best_cluster = centroids
+				.iter()
+				.enumerate()
+				.map(|(idx, c)| {
+					let d2: f64 = row.iter().zip(c).map(|(a, b)| (a - b).powi(2)).sum();
+					(idx, d2)
+				})
+				.min_by(|a, b| a.1.total_cmp(&b.1))
+				.unwrap();
+
+			(i, best_cluster.1)
+		})
+		.sorted_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+		.map(|(i, _)| i);
+
+	for i in min_distance {
+		let row = data.row(i);
+		let best_cluster = centroids
+			.iter()
+			.enumerate()
+			.map(|(idx, c)| {
+				if cluster_usage[idx] > max_usage {
+					return (idx, f64::MAX);
+				}
+				let d2: f64 = row.iter().zip(c).map(|(a, b)| (a - b).powi(2)).sum();
+				(idx, d2)
+			})
+			.min_by(|a, b| a.1.total_cmp(&b.1))
+			.unwrap();
+
+		assignments[i] = best_cluster.0 as i32;
+		cluster_usage[best_cluster.0] += 1;
+	}
+
+	assignments
+}
+
+pub(crate) fn spectral_k_way(connectivity: &Vec<Vec<usize>>, k: i32) -> (Vec<i32>, i32) {
+	let num_nodes = connectivity.len();
+	let mut laplacian: DMatrix<f64> = DMatrix::zeros(num_nodes, num_nodes);
+	for (i, connections) in connectivity.iter().enumerate() {
+		laplacian[(i, i)] = connections.len() as f64;
+		for j in connections {
+			laplacian[(i, *j)] = -1.0;
+		}
+	}
+	let ev = SymmetricEigen::new(laplacian);
+	let sorted_indices = (0..num_nodes)
+		.map(|idx| (idx, ev.eigenvalues[idx]))
+		.sorted_by(|(_, a), (_, b)| a.total_cmp(b))
+		.skip(1)
+		.take(k as usize)
+		.map(|(idx, _)| idx)
+		.collect_vec();
+
+	let mut embedding = DMatrix::zeros(num_nodes, k as usize);
+	for (col_idx, &ev_idx) in sorted_indices.iter().enumerate() {
+		let column = ev.eigenvectors.column(ev_idx);
+		for row_idx in 0..num_nodes {
+			embedding[(row_idx, col_idx)] = column[row_idx];
+		}
+	}
+
+	// 5. Row Normalization (Crucial for k-way clustering)
+	for mut row in embedding.row_iter_mut() {
+		let norm = row.norm();
+		if norm > 1e-9 {
+			row /= norm;
+		}
+	}
+
+	let assignments = simple_kmeans_balance_partitions(&embedding, k as usize);
+	let mut n_cuts = 0;
+	for i in 0..num_nodes {
+		let assignment = assignments[i];
+		for j in &connectivity[i] {
+			if assignments[*j] != assignment {
+				n_cuts += 1;
+			}
+		}
+	}
+	(assignments, n_cuts)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn metis(connectivity: &Vec<Vec<usize>>, n_parts: i32) -> (Vec<i32>, i32) {
 	let (adj, idx_adj) = crate::util::convert_connectivity_to_csr(connectivity);
 	let graph = metis::Graph::new(1, n_parts, &idx_adj, &adj).unwrap();
@@ -147,6 +288,7 @@ pub(crate) fn report_partition_quality(
 	}
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod test {
 	use crate::phy::PhysicalDesign;

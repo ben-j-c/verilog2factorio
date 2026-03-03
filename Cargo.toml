@@ -14,24 +14,35 @@ path = "src/main.rs"
 [dependencies]
 chumsky = "0.11.2"
 clap = { version = "4.5.23", features = ["derive"] }
-color-eyre = "0.6.5"
+egui = "0.33.3"
+eframe = {version = "0.33.3", features = ["glow", "persistence", "wayland"] }
 graphviz-rust = "0.9.5"
 hashers = "1.0.1"
 itertools = "0.13.0"
-metis = { version = "0.2.2", features = ["use-system"] }
-mlua = { version = "0.10.3", features = ["lua54"] }
-mlua-sys = { version = "0.6.7", features = ["lua54"] }
 nalgebra = { version = "0.33.2" }
 once_cell = "1.20.3"
-rand = "0.9.0"
-ratatui = "0.30.0"
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
+rand = { version = "0.9.0", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rayon = "1.10.0"
 regex = "1.11.2"
-rustyline = "15.0.0"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 toml = "0.9.5"
 vcd = "0.7.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4.50"
+web-sys = "0.3.77"
+glow = { version = "0.16.0" }
+log = "0.4.29"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+color-eyre = "0.6.5"
+mlua-sys = { version = "0.6.7", features = ["lua54"] }
+mlua = { version = "0.10.3", features = ["lua54"] }
+ratatui = "0.30.0"
+rustyline = "15.0.0"
+metis = { version = "0.2.2" }
 
 [profile.perf]
 inherits = "dev"
@@ -48,5 +59,7 @@ overflow-checks = false
 overflow-checks = false
 
 [features]
+default = ["native"]
+native = []
 solve_as_mcmc_dense = []
 print_route_commit = []

@@ -8,12 +8,16 @@ use std::{
 use checked_design::CheckedDesign;
 use clap::Parser;
 use logical_design::LogicalDesign;
+#[cfg(not(target_arch = "wasm32"))]
 use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
 use mapped_design::MappedDesign;
+
+#[cfg(not(target_arch = "wasm32"))]
 use mlua::Value;
 use phy::PhysicalDesign;
 use serializable_design::SerializableDesign;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::lua::PhysicalEnsembleAPI;
 
 pub mod checked_design;
@@ -25,11 +29,14 @@ mod serializable_design;
 pub mod signal_lookup_table;
 mod timing_engine;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lua;
 pub mod sim;
 
 mod ndarr;
 mod svg;
+
+pub mod gui;
 
 pub mod util;
 
@@ -39,9 +46,11 @@ mod tests;
 #[derive(Debug)]
 pub enum Error {
 	SerializationError(serde_json::Error),
+	#[cfg(not(target_arch = "wasm32"))]
 	LuaError(mlua::Error),
 	IOError(std::io::Error),
 	NoSuchFile,
+	#[cfg(not(target_arch = "wasm32"))]
 	ReadlineError(rustyline::error::ReadlineError),
 	LuaErrorNoReturnedDesign,
 	ResultantFileNameIsBad(PathBuf),
@@ -55,6 +64,7 @@ impl From<serde_json::Error> for Error {
 	}
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<mlua::Error> for Error {
 	fn from(value: mlua::Error) -> Self {
 		Self::LuaError(value)
@@ -110,6 +120,7 @@ pub fn mapped_flow(args: Args) -> Result<String> {
 	Ok(blueprint_json)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn lua_flow(args: Args) -> Result<String> {
 	let input_file = args.input_file.unwrap();
 	let lua = get_lua()?;

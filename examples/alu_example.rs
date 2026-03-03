@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod test {
 	use std::path::PathBuf;
@@ -10,6 +11,7 @@ mod test {
 
 use std::{env, path::PathBuf};
 use v2f::*;
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
 	env::set_var("V2F_ROOT", env::current_dir().unwrap());
 	env::set_current_dir("examples/lua/alu").expect("Failed to chdir");

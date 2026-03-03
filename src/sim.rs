@@ -17,6 +17,7 @@ use rayon::{
 
 mod decider_model;
 pub mod snapshot;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod tui;
 pub mod vcd;
 
@@ -1255,6 +1256,10 @@ impl SimState {
 		self.trace_set.clear();
 	}
 
+	#[cfg(target_arch = "wasm32")]
+	pub fn inspect(&mut self) {}
+
+	#[cfg(not(target_arch = "wasm32"))]
 	pub fn inspect(&mut self) {
 		println!("Valid commands:");
 		println!("\tlogic <id> // basic print logical node");

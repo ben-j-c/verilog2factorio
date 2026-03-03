@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::{env, fs};
 use v2f::*;
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
 	// Simulate that its being invoked from the CLI, in reality you can just call
 	// `v2f -i tb.lua` and it will work.
@@ -47,6 +48,7 @@ fn main() {
 	}
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
 	#[test]

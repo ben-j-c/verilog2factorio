@@ -1103,6 +1103,12 @@ impl CheckedDesign {
 		}
 	}
 
+	#[cfg(target_arch = "wasm32")]
+	pub fn build_from(&mut self, _mapped_design: &MappedDesign) {
+		unreachable!("How did you get here?");
+	}
+
+	#[cfg(not(target_arch = "wasm32"))]
 	pub fn build_from(&mut self, mapped_design: &MappedDesign) {
 		self.connected_design.promote_all_nets_to_ports = self.promote_all_nets_to_ports;
 		self.connected_design.build_from(mapped_design);
@@ -1201,6 +1207,7 @@ impl CheckedDesign {
 		new
 	}
 
+	#[cfg(not(target_arch = "wasm32"))]
 	fn partition_io_network(&mut self, mut local_io: Vec<NodeId>) {
 		use metis;
 		{
