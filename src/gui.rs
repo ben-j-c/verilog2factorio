@@ -1,31 +1,29 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-	// Example stuff:
-	label: String,
+use chumsky::{ParseResult, Parser};
+use egui::{Color32, Id, Layout, Spacing};
+use egui_snarl::ui::PinInfo;
 
-	#[serde(skip)] // This how you opt-out of serialization of a field
-	value: f32,
+use crate::logical_design::{self, arithmetic_parser, ArithmeticOperator, DeciderOperator, Signal};
+use crate::signal_lookup_table;
+use crate::{logical_design::NodeId, LogDRef};
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct TemplateApp {
+	snarl: egui_snarl::Snarl<Node>,
+	viewer: Viewer,
 }
 
 impl Default for TemplateApp {
 	fn default() -> Self {
 		Self {
-			// Example stuff:
-			label: "Hello World!".to_owned(),
-			value: 2.7,
+			snarl: egui_snarl::Snarl::new(),
+			viewer: Viewer::default(),
 		}
 	}
 }
 
 impl TemplateApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-		// This is also where you can customize the look and feel of egui using
-		// `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-		// Load previous app state (if any).
-		// Note that you must enable the `persistence` feature for this to work.
 		if let Some(storage) = cc.storage {
 			eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
 		} else {
@@ -64,45 +62,377 @@ impl eframe::App for TemplateApp {
 			});
 		});
 
+		egui::SidePanel::left("side_panel").show(ctx, |ui| {
+			egui::ScrollArea::vertical().show(ui, |ui| {});
+		});
+
 		egui::CentralPanel::default().show(ctx, |ui| {
-			// The central panel the region left after adding TopPanel's and SidePanel's
-			ui.heading("eframe template");
+			egui_snarl::ui::SnarlWidget::new()
+				.id(Id::new("node-canvas"))
+				.show(&mut self.snarl, &mut self.viewer, ui)
+		});
 
-			ui.horizontal(|ui| {
-				ui.label("Write something: ");
-				ui.text_edit_singleline(&mut self.label);
-			});
-
-			ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-			if ui.button("Increment").clicked() {
-				self.value += 1.0;
-			}
-
-			ui.separator();
-
-			ui.add(egui::github_link_file!(
-				"https://github.com/emilk/eframe_template/blob/main/",
-				"Source code."
-			));
-
+		egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
 			ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-				powered_by_egui_and_eframe(ui);
+				source_link(ui);
 				egui::warn_if_debug_build(ui);
 			});
 		});
 	}
 }
 
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
+fn source_link(ui: &mut egui::Ui) {
 	ui.horizontal(|ui| {
 		ui.spacing_mut().item_spacing.x = 0.0;
-		ui.label("Powered by ");
-		ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-		ui.label(" and ");
-		ui.hyperlink_to(
-			"eframe",
-			"https://github.com/emilk/egui/tree/master/crates/eframe",
-		);
+		ui.label("Licensed exclusively under AGLPv3. Source available at ");
+		ui.hyperlink_to("v2f", "https://github.com/ben-j-c/verilog2factorio");
 		ui.label(".");
+	});
+}
+
+#[derive(Default, serde::Deserialize, serde::Serialize)]
+struct Node {
+	lid: NodeId,
+	logd: LogDRef,
+	left_input_text: Vec<String>,
+	right_input_text: Vec<String>,
+	output_input_text: Vec<String>,
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+struct Viewer {
+	logd: LogDRef,
+}
+
+impl Viewer {
+	fn add_decider(&mut self) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		Node {
+			lid: logd.add_decider(),
+			logd: self.logd.clone(),
+			left_input_text: Vec::default(),
+			right_input_text: Vec::default(),
+			output_input_text: Vec::default(),
+		}
+	}
+
+	fn add_arithmetic(&mut self) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		Node {
+			lid: logd.add_arithmetic(
+				(Signal::None, ArithmeticOperator::Add, Signal::None),
+				Signal::None,
+			),
+			logd: self.logd.clone(),
+			left_input_text: vec!["none".to_owned()],
+			right_input_text: vec!["none".to_owned()],
+			output_input_text: vec!["none".to_owned()],
+		}
+	}
+
+	fn add_constant(&mut self) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		Node {
+			lid: logd.add_constant(vec![], vec![]),
+			logd: self.logd.clone(),
+			left_input_text: Vec::default(),
+			right_input_text: Vec::default(),
+			output_input_text: Vec::default(),
+		}
+	}
+
+	fn add_lamp(&mut self) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		Node {
+			lid: logd.add_lamp((Signal::None, DeciderOperator::Equal, Signal::None)),
+			logd: self.logd.clone(),
+			left_input_text: vec!["none".to_owned()],
+			right_input_text: vec!["none".to_owned()],
+			output_input_text: Vec::default(),
+		}
+	}
+
+	fn add_display_panel(&mut self) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		Node {
+			lid: logd.add_display_panel(),
+			logd: self.logd.clone(),
+			left_input_text: Vec::default(),
+			right_input_text: Vec::default(),
+			output_input_text: Vec::default(),
+		}
+	}
+}
+
+impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
+	fn title(&mut self, node: &Node) -> String {
+		let logd = node.logd.read().unwrap();
+		let node = logd.get_node(node.lid);
+		let pfx = match &node.function {
+			logical_design::NodeFunction::Arithmetic { .. } => "Arith.",
+			logical_design::NodeFunction::Decider { .. } => "Deci. ",
+			logical_design::NodeFunction::Constant { .. } => "Const.",
+			logical_design::NodeFunction::Lamp { .. } => "Lamp",
+			logical_design::NodeFunction::DisplayPanel { .. } => "Disp.",
+			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		};
+		match &node.description {
+			Some(d) => format!("{} {}", pfx, d),
+			None => format!("{}", pfx),
+		}
+	}
+
+	fn inputs(&mut self, node: &Node) -> usize {
+		let logd = node.logd.read().unwrap();
+		let node = logd.get_node(node.lid);
+		match node.function {
+			logical_design::NodeFunction::Arithmetic { .. } => 2,
+			logical_design::NodeFunction::Decider { .. } => 2,
+			logical_design::NodeFunction::Constant { .. } => 0,
+			logical_design::NodeFunction::Lamp { .. } => 2,
+			logical_design::NodeFunction::DisplayPanel { .. } => 2,
+			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		}
+	}
+
+	fn show_input(
+		&mut self,
+		pin: &egui_snarl::InPin,
+		_ui: &mut egui::Ui,
+		_snarl: &mut egui_snarl::Snarl<Node>,
+	) -> impl egui_snarl::ui::SnarlPin + 'static {
+		if pin.id.input == 0 {
+			PinInfo::circle().with_fill(Color32::from_rgb(0xb0, 0x00, 0x00))
+		} else if pin.id.input == 1 {
+			PinInfo::circle().with_fill(Color32::from_rgb(0x00, 0xb0, 0x00))
+		} else {
+			unreachable!()
+		}
+	}
+
+	fn outputs(&mut self, node: &Node) -> usize {
+		let logd = node.logd.read().unwrap();
+		let node = logd.get_node(node.lid);
+		match node.function {
+			logical_design::NodeFunction::Arithmetic { .. } => 2,
+			logical_design::NodeFunction::Decider { .. } => 2,
+			logical_design::NodeFunction::Constant { .. } => 2,
+			logical_design::NodeFunction::Lamp { .. } => 0,
+			logical_design::NodeFunction::DisplayPanel { .. } => 0,
+			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		}
+	}
+
+	fn show_output(
+		&mut self,
+		pin: &egui_snarl::OutPin,
+		_ui: &mut egui::Ui,
+		_snarl: &mut egui_snarl::Snarl<Node>,
+	) -> impl egui_snarl::ui::SnarlPin + 'static {
+		if pin.id.output == 0 {
+			PinInfo::circle().with_fill(Color32::from_rgb(0xb0, 0x00, 0x00))
+		} else if pin.id.output == 1 {
+			PinInfo::circle().with_fill(Color32::from_rgb(0x00, 0xb0, 0x00))
+		} else {
+			unreachable!()
+		}
+	}
+
+	fn connect(
+		&mut self,
+		from: &egui_snarl::OutPin,
+		to: &egui_snarl::InPin,
+		snarl: &mut egui_snarl::Snarl<Node>,
+	) {
+		todo!()
+	}
+
+	fn disconnect(
+		&mut self,
+		from: &egui_snarl::OutPin,
+		to: &egui_snarl::InPin,
+		snarl: &mut egui_snarl::Snarl<Node>,
+	) {
+		todo!()
+	}
+
+	fn has_graph_menu(&mut self, _pos: egui::Pos2, _snarl: &mut egui_snarl::Snarl<Node>) -> bool {
+		true
+	}
+
+	fn show_graph_menu(
+		&mut self,
+		pos: egui::Pos2,
+		ui: &mut egui::Ui,
+		snarl: &mut egui_snarl::Snarl<Node>,
+	) {
+		ui.label("Add Node");
+		if ui.button("Decider").clicked() {
+			snarl.insert_node(pos, self.add_decider());
+			ui.close();
+		}
+		if ui.button("Arithmetic").clicked() {
+			snarl.insert_node(pos, self.add_arithmetic());
+			ui.close();
+		}
+		if ui.button("Constant").clicked() {
+			snarl.insert_node(pos, self.add_constant());
+			ui.close();
+		}
+		if ui.button("Lamp").clicked() {
+			snarl.insert_node(pos, self.add_lamp());
+			ui.close();
+		}
+		if ui.button("Display Panel").clicked() {
+			snarl.insert_node(pos, self.add_display_panel());
+			ui.close();
+		}
+	}
+
+	fn has_body(&mut self, node: &Node) -> bool {
+		true
+	}
+
+	fn show_body(
+		&mut self,
+		node: egui_snarl::NodeId,
+		inputs: &[egui_snarl::InPin],
+		outputs: &[egui_snarl::OutPin],
+		ui: &mut egui::Ui,
+		snarl: &mut egui_snarl::Snarl<Node>,
+	) {
+		let mut logd = self.logd.write().unwrap();
+		let node = if let Some(node) = snarl.get_node_mut(node) {
+			node
+		} else {
+			return;
+		};
+		let lnode = logd.mut_node(node.lid);
+		match &mut lnode.function {
+			logical_design::NodeFunction::Arithmetic {
+				op,
+				input_1,
+				input_2,
+				input_left_network,
+				input_right_network,
+			} => {
+				ui.vertical(|ui| {
+					add_signal_input_box(
+						ui,
+						input_1,
+						input_left_network,
+						&mut node.left_input_text[0],
+					);
+					egui::ComboBox::from_label("")
+						.width(ui.spacing().combo_width / 2.0)
+						.selected_text(format!("{}", op.resolve_string()))
+						.show_ui(ui, |ui| {
+							use ArithmeticOperator::*;
+							ui.selectable_value(op, Mult, Mult.resolve_string());
+							ui.selectable_value(op, Div, Div.resolve_string());
+							ui.selectable_value(op, Add, Add.resolve_string());
+							ui.selectable_value(op, Sub, Sub.resolve_string());
+							ui.selectable_value(op, Mod, Mod.resolve_string());
+							ui.selectable_value(op, Exp, Exp.resolve_string());
+							ui.selectable_value(op, Shl, Shl.resolve_string());
+							ui.selectable_value(op, Sshr, Sshr.resolve_string());
+							ui.selectable_value(op, And, And.resolve_string());
+							ui.selectable_value(op, Or, Or.resolve_string());
+							ui.selectable_value(op, Xor, Xor.resolve_string());
+						});
+					add_signal_input_box(
+						ui,
+						input_2,
+						input_right_network,
+						&mut node.right_input_text[0],
+					);
+					add_signal_input_box_name_only(
+						ui,
+						&mut lnode.output[0],
+						&mut node.output_input_text[0],
+						"Output",
+					);
+				});
+			},
+			logical_design::NodeFunction::Decider {
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				output_network,
+				use_input_count,
+				constants,
+			} => todo!(),
+			logical_design::NodeFunction::Constant { enabled, constants } => todo!(),
+			logical_design::NodeFunction::Lamp { expression } => todo!(),
+			logical_design::NodeFunction::DisplayPanel {
+				input_1,
+				input_2,
+				op,
+				text,
+			} => todo!(),
+			logical_design::NodeFunction::WireSum(wire_colour) => unreachable!(),
+		};
+	}
+}
+
+fn add_signal_input_box(
+	ui: &mut egui::Ui,
+	signal: &mut Signal,
+	nets: &mut (bool, bool),
+	text: &mut String,
+) {
+	let parse: Option<Signal> = {
+		let sig_parser = arithmetic_parser::signal_parser();
+		let res = sig_parser.parse(&text);
+		res.into_output()
+	};
+	ui.vertical(|ui| {
+		let edit_left =
+			egui::TextEdit::singleline(text).desired_width(ui.spacing().text_edit_width / 2.0);
+		let res = if parse.is_none() {
+			ui.add(edit_left.background_color(Color32::from_rgb(0x70, 0x00, 0x00)))
+		} else {
+			ui.add(edit_left)
+		};
+		if res.lost_focus() {
+			if let Some(sig) = parse {
+				*signal = sig;
+			}
+			*text = signal.unparse();
+		}
+		ui.horizontal(|ui| {
+			ui.checkbox(&mut nets.0, "R");
+			ui.checkbox(&mut nets.1, "G");
+		});
+	});
+}
+
+fn add_signal_input_box_name_only(
+	ui: &mut egui::Ui,
+	signal: &mut Signal,
+	text: &mut String,
+	name: &str,
+) {
+	let parse: Option<Signal> = {
+		let sig_parser = arithmetic_parser::signal_parser();
+		let res = sig_parser.parse(&text);
+		res.into_output()
+	};
+	ui.vertical(|ui| {
+		ui.label(name);
+		let edit_left =
+			egui::TextEdit::singleline(text).desired_width(ui.spacing().text_edit_width / 2.0);
+		let res = if parse.is_none() {
+			ui.add(edit_left.background_color(Color32::from_rgb(0x70, 0x00, 0x00)))
+		} else {
+			ui.add(edit_left)
+		};
+		if res.lost_focus() {
+			if let Some(sig) = parse {
+				*signal = sig;
+			}
+			*text = signal.unparse();
+		}
 	});
 }

@@ -3642,6 +3642,10 @@ impl LogicalDesign {
 		&self.nodes[id.0]
 	}
 
+	pub fn mut_node(&mut self, id: NodeId) -> &mut Node {
+		&mut self.nodes[id.0]
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn assert_is_wire_sum(&self, id: NodeId) {
 		match self.get_node(id).function {
@@ -4550,6 +4554,19 @@ impl Display for Signal {
 			Signal::Anything => write!(f, "Anything"),
 			Signal::Each => write!(f, "Each"),
 			Signal::Constant(c) => write!(f, "{}", c),
+		}
+	}
+}
+
+impl Signal {
+	pub fn unparse(&self) -> String {
+		match self {
+			Signal::None => format!("_"),
+			Signal::Id(id) => format!("{}", signal_lookup_table::lookup_str(*id).0),
+			Signal::Everything => format!("Everything"),
+			Signal::Anything => format!("Anything"),
+			Signal::Each => format!("Each"),
+			Signal::Constant(c) => format!("{}", c),
 		}
 	}
 }

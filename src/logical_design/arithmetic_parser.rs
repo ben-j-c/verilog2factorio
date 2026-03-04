@@ -48,6 +48,54 @@ fn precedence(op: &ArithmeticOperator) -> usize {
 	}
 }
 
+pub fn signal_parser<'src>() -> impl Parser<'src, &'src str, Signal, extra::Err<Rich<'src, char>>> {
+	let named_signal = {
+		let base = text::ident();
+		let suffix_word = text::ident();
+		let suffix_digits = text::digits(10).to_slice();
+		let suffix = just('-').ignore_then(suffix_word.or(suffix_digits));
+		base.then(suffix.or_not())
+			.map(
+				|(base_str, suffix_opt): (&str, Option<&str>)| match suffix_opt {
+					Some(suffix_str) => format!("{}-{}", base_str, suffix_str),
+					None => base_str.to_owned(),
+				},
+			)
+	};
+	let sig_name = named_signal.padded().try_map(|name: String, span| {
+		let name = name.to_lowercase();
+		if name == "each" {
+			return Ok(Signal::Each);
+		}
+		if name == "everything" {
+			return Ok(Signal::Everything);
+		}
+		if name == "every" {
+			return Ok(Signal::Everything);
+		}
+		if name == "anything" {
+			return Ok(Signal::Anything);
+		}
+		if name == "any" {
+			return Ok(Signal::Anything);
+		}
+		if name == "none" {
+			return Ok(Signal::None);
+		}
+		if name == "_" {
+			return Ok(Signal::None);
+		}
+		if let Some(id) = signal_lookup_table::lookup_id(&name) {
+			return Ok(Signal::Id(id));
+		}
+		Err(chumsky::error::Rich::custom(
+			span,
+			format!("Unknown signal name: '{}'", name),
+		))
+	});
+	sig_name
+}
+
 pub fn parser<'src>() -> impl Parser<'src, &'src str, ArithExpr, extra::Err<Rich<'src, char>>> {
 	let named_signal = {
 		let base = text::ident();

@@ -1,7 +1,10 @@
-var cacheName = 'v2f-template-pwa';
+var cacheName = 'v2f-pwa';
 var filesToCache = [
   './',
+  './sw.js',
   './index.html',
+  './v2f.js',
+  './v2f_bg.wasm',
 ];
 
 self.addEventListener('install', function (e) {

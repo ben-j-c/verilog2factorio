@@ -3,6 +3,7 @@ use std::{
 	io::BufReader,
 	ops::Deref,
 	path::{Path, PathBuf},
+	sync::{Arc, RwLock},
 };
 
 use checked_design::CheckedDesign;
@@ -19,6 +20,7 @@ use serializable_design::SerializableDesign;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::lua::PhysicalEnsembleAPI;
+use crate::sim::SimState;
 
 pub mod checked_design;
 mod connected_design;
@@ -101,6 +103,31 @@ pub struct Args {
 	/// Sub-tool to convert any file into a 32 bit $readmemh compatible format.
 	#[arg(short, long)]
 	pub convert_to_memh: bool,
+}
+
+pub(crate) type LogDRef = Arc<RwLock<LogicalDesign>>;
+pub(crate) type PhyDRef = Arc<RwLock<PhysicalDesign>>;
+pub(crate) type SimRef = Arc<RwLock<SimState>>;
+
+#[derive(Clone)]
+pub(crate) struct LogicalDesignAPI {
+	pub(crate) id: usize,
+	pub(crate) logd: LogDRef,
+	pub(crate) make_svg: bool,
+	pub(crate) group_io: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct PhysicalDesignAPI {
+	pub(crate) log_id: usize,
+	pub(crate) logd: LogDRef,
+	pub(crate) phyd: PhyDRef,
+}
+
+pub(crate) struct SimStateAPI {
+	pub(crate) log_id: usize,
+	pub(crate) logd: LogDRef,
+	pub(crate) sim: SimRef,
 }
 
 pub fn mapped_flow(args: Args) -> Result<String> {

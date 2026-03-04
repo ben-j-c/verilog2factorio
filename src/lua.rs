@@ -42,29 +42,7 @@ impl From<crate::Error> for mlua::Error {
 		Self::RuntimeError(format!("{:?}", value))
 	}
 }
-
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-#[derive(Clone)]
-pub(crate) struct LogicalDesignAPI {
-	pub(crate) id: usize,
-	pub(crate) logd: LogDRef,
-	pub(crate) make_svg: bool,
-	pub(crate) group_io: bool,
-}
-
-#[derive(Clone)]
-pub(crate) struct PhysicalDesignAPI {
-	pub(crate) log_id: usize,
-	pub(crate) logd: LogDRef,
-	pub(crate) phyd: PhyDRef,
-}
-
-pub(crate) struct SimStateAPI {
-	pub(crate) log_id: usize,
-	pub(crate) logd: LogDRef,
-	pub(crate) sim: SimRef,
-}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SignalTable {
