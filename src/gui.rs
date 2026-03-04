@@ -1,9 +1,8 @@
-use chumsky::{ParseResult, Parser};
-use egui::{Color32, Id, Layout, Spacing};
+use chumsky::Parser;
+use egui::{Color32, Id};
 use egui_snarl::ui::PinInfo;
 
 use crate::logical_design::{self, arithmetic_parser, ArithmeticOperator, DeciderOperator, Signal};
-use crate::signal_lookup_table;
 use crate::{logical_design::NodeId, LogDRef};
 
 #[derive(serde::Deserialize, serde::Serialize)]
