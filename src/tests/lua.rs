@@ -1,6 +1,6 @@
 use mlua::AnyUserData;
 
-use crate::lua;
+use crate::{lua, LogicalDesignAPI};
 
 #[test]
 fn simple() {
@@ -28,7 +28,7 @@ fn simple2() {
 		)
 		.eval::<AnyUserData>()
 		.unwrap()
-		.borrow::<lua::LogicalDesignAPI>()
+		.borrow::<LogicalDesignAPI>()
 		.unwrap();
 	assert_eq!(logd.logd.read().unwrap().nodes.len(), 1);
 }
@@ -54,7 +54,7 @@ fn single_decider() {
 		)
 		.eval::<AnyUserData>()
 		.unwrap()
-		.borrow::<lua::LogicalDesignAPI>()
+		.borrow::<LogicalDesignAPI>()
 		.unwrap();
 	assert_eq!(logd.logd.read().unwrap().nodes.len(), 5);
 }

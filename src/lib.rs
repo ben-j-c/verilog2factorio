@@ -10,7 +10,7 @@ use checked_design::CheckedDesign;
 use clap::Parser;
 use logical_design::LogicalDesign;
 #[cfg(not(target_arch = "wasm32"))]
-use lua::{get_lua, LogicalDesignAPI, PhysicalDesignAPI};
+use lua::get_lua;
 use mapped_design::MappedDesign;
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -35,6 +35,7 @@ use crate::{
 	signal_lookup_table,
 	sim::{self, vcd::VCD, SimState},
 	util::{hash_map, HashM},
+	LogicalDesignAPI, PhysicalDesignAPI, SimStateAPI,
 };
 
 impl From<crate::Error> for mlua::Error {
