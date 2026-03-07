@@ -45,7 +45,7 @@ use crate::{
 	mapped_design::{BitSliceOps, Direction, MappedDesign},
 	signal_lookup_table,
 	timing_engine::{Delay, TimingEngine},
-	util::{hash_set, HashS},
+	util::{self, hash_set, HashS},
 };
 use chumsky::Parser;
 
@@ -533,6 +533,7 @@ pub struct LogicalDesign {
 	pub(crate) ports: Vec<LogicalPort>,
 	pub(crate) description: String,
 	pub(crate) timing_engine: TimingEngine,
+	pub(crate) pruned: HashS<NodeId>,
 }
 
 impl UnwindSafe for LogicalDesign {}
@@ -560,6 +561,7 @@ impl LogicalDesign {
 			ports: vec![],
 			description: "".to_string(),
 			timing_engine: TimingEngine::default(),
+			pruned: hash_set(),
 		}
 	}
 
@@ -4319,6 +4321,106 @@ impl LogicalDesign {
 		while self.ports.len() > offset_ports {
 			self.ports.pop();
 		}
+	}
+
+	pub(crate) fn disconnect(&mut self, first: NodeId, second: NodeId, colour: WireColour) {
+		let (left, right) = util::mut_idx(&mut self.nodes, first.0, second.0);
+		match colour {
+			WireColour::Red => {
+				left.fanout_red.retain(|id| *id != second);
+				right.fanin_red.retain(|id| *id != first);
+			},
+			WireColour::Green => {
+				left.fanout_green.retain(|id| *id != second);
+				right.fanin_green.retain(|id| *id != first);
+			},
+		}
+	}
+
+	pub(crate) fn find_wire_between_disconnect(
+		&mut self,
+		first: NodeId,
+		second: NodeId,
+		colour: WireColour,
+	) {
+		let mut wire = NodeId::NONE;
+		for id in self.nodes[first.0].iter_fanout(colour) {
+			for id2 in self.nodes[id.0].iter_fanout(colour) {
+				if *id2 == second {
+					wire = *id;
+					break;
+				}
+			}
+			if wire != NodeId::NONE {
+				break;
+			}
+		}
+		if wire == NodeId::NONE {
+			return;
+		}
+		self.disconnect(first, wire, colour);
+		self.disconnect(wire, second, colour);
+		if self.nodes[wire.0].fanin_empty() && self.nodes[wire.0].fanout_empty() {
+			self.prune(wire);
+		}
+	}
+
+	pub(crate) fn prune(&mut self, id: NodeId) {
+		while !self.nodes[id.0].fanin_green.is_empty() {
+			let fanin = self.nodes[id.0].fanin_green.pop().unwrap();
+			self.disconnect(fanin, id, WireColour::Green);
+		}
+		while !self.nodes[id.0].fanin_red.is_empty() {
+			let fanin = self.nodes[id.0].fanin_red.pop().unwrap();
+			self.disconnect(fanin, id, WireColour::Red);
+		}
+		while !self.nodes[id.0].fanout_green.is_empty() {
+			let fanout = self.nodes[id.0].fanout_green.pop().unwrap();
+			self.disconnect(id, fanout, WireColour::Green);
+		}
+		while !self.nodes[id.0].fanout_red.is_empty() {
+			let fanout = self.nodes[id.0].fanout_red.pop().unwrap();
+			self.disconnect(id, fanout, WireColour::Red);
+		}
+		assert!(self.pruned.insert(id));
+	}
+
+	pub(crate) fn needs_compaction(&self) -> bool {
+		!self.pruned.is_empty()
+	}
+
+	pub(crate) fn delete_and_compact(&mut self) -> Vec<NodeId> {
+		let mut node_map = vec![NodeId::NONE; self.nodes.len()];
+		let mut new_nodes = Vec::with_capacity(self.nodes.len() - self.pruned.len());
+		let mut id_current = 0;
+		for i in 0..self.nodes.len() {
+			if !self.pruned.contains(&NodeId(i)) {
+				new_nodes.push(self.nodes[i].clone());
+				node_map[i] = NodeId(id_current);
+				id_current += 1;
+			}
+		}
+		for node in &mut new_nodes {
+			for fanin in &mut node.fanin_red {
+				*fanin = node_map[fanin.0];
+			}
+			for fanin in &mut node.fanin_green {
+				*fanin = node_map[fanin.0];
+			}
+			for fanout in &mut node.fanout_red {
+				*fanout = node_map[fanout.0];
+			}
+			for fanout in &mut node.fanout_green {
+				*fanout = node_map[fanout.0];
+			}
+		}
+		for port in self.ports.iter_mut() {
+			port.id = node_map[port.id.0];
+		}
+		self.timing_engine = TimingEngine::default();
+		self.pruned.clear();
+		self.nodes = new_nodes;
+		return node_map;
 	}
 }
 

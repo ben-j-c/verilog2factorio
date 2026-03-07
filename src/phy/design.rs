@@ -241,6 +241,10 @@ impl PhysicalDesign {
 	}
 
 	pub(crate) fn build_from(&mut self, logical: &LogicalDesign) -> bool {
+		assert!(
+			!logical.needs_compaction(),
+			"Physical planning can only happen on compact designs."
+		);
 		let partition_size = CFG.parition.target_size;
 		let scale_factor = CFG.parition.side_length_single_partition_scale_factor;
 		self.side_length_single_partition =

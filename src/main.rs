@@ -23,6 +23,18 @@ pub fn main() -> Result<(), v2f::Error> {
 			std::env::set_var("V2F_ROOT", std::env::current_dir().unwrap())
 		},
 	}
+	if args.gui {
+		let mut native_options = eframe::NativeOptions::default();
+		native_options.viewport = egui::ViewportBuilder::default()
+			.with_inner_size([800.0, 600.0])
+			.with_min_inner_size([300.0, 220.0]);
+		return eframe::run_native(
+			"eframe template",
+			native_options,
+			Box::new(|cc| Ok(Box::new(v2f::gui::V2FApp::new(cc)))),
+		)
+		.map_err(|e| e.into());
+	}
 	if args.convert_to_memh {
 		let input_file = args.input_file.ok_or(v2f::Error::NoSuchFile)?;
 		let output_file = args.output_file.unwrap_or(PathBuf::from("program.mem"));
@@ -78,7 +90,7 @@ pub fn main() -> Result<(), v2f::Error> {
 			.start(
 				canvas,
 				web_options,
-				Box::new(|cc| Ok(Box::new(v2f::gui::TemplateApp::new(cc)))),
+				Box::new(|cc| Ok(Box::new(v2f::gui::V2FApp::new(cc)))),
 			)
 			.await;
 

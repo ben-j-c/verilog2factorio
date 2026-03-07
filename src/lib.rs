@@ -58,6 +58,7 @@ pub enum Error {
 	ResultantFileNameIsBad(PathBuf),
 	V2FRootNotDefined(String),
 	YosysExeNotFound,
+	EframeError(String),
 }
 
 impl From<serde_json::Error> for Error {
@@ -79,6 +80,12 @@ impl From<std::io::Error> for Error {
 	}
 }
 
+impl From<eframe::Error> for Error {
+	fn from(value: eframe::Error) -> Self {
+		Self::EframeError(format!("{:?}", value))
+	}
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Verilog to Factorio combinator compiler (v2f)
@@ -89,7 +96,12 @@ pub struct Args {
 	///   .json -> technology-mapped
 	///   .lua -> script
 	/// Sub-tools use this flag for input files.
-	#[arg(short, long, required_unless_present = "dump_phy_cfg")]
+	#[arg(
+		short,
+		long,
+		required_unless_present = "dump_phy_cfg",
+		required_unless_present = "gui"
+	)]
 	pub input_file: Option<PathBuf>,
 
 	/// Output
@@ -103,6 +115,9 @@ pub struct Args {
 	/// Sub-tool to convert any file into a 32 bit $readmemh compatible format.
 	#[arg(short, long)]
 	pub convert_to_memh: bool,
+
+	#[arg(short, long)]
+	pub gui: bool,
 }
 
 pub(crate) type LogDRef = Arc<RwLock<LogicalDesign>>;

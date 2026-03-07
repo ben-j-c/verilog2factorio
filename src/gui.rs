@@ -1,27 +1,30 @@
 use chumsky::Parser;
 use egui::{Color32, Id};
-use egui_snarl::ui::PinInfo;
+use egui_snarl::ui::{PinInfo, SnarlStyle, WireLayer};
 
-use crate::logical_design::{self, arithmetic_parser, ArithmeticOperator, DeciderOperator, Signal};
+use crate::logical_design::{
+	self, arithmetic_parser, ArithmeticOperator, DeciderOperator, Signal, WireColour,
+};
 use crate::{logical_design::NodeId, LogDRef};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-pub struct TemplateApp {
+pub struct V2FApp {
 	snarl: egui_snarl::Snarl<Node>,
-	viewer: Viewer,
+	viewer: V2FViewer,
 }
 
-impl Default for TemplateApp {
+impl Default for V2FApp {
 	fn default() -> Self {
+		let snarl = egui_snarl::Snarl::new();
 		Self {
-			snarl: egui_snarl::Snarl::new(),
-			viewer: Viewer::default(),
+			snarl,
+			viewer: V2FViewer::default(),
 		}
 	}
 }
 
-impl TemplateApp {
+impl V2FApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
 		if let Some(storage) = cc.storage {
 			eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
@@ -31,7 +34,7 @@ impl TemplateApp {
 	}
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for V2FApp {
 	/// Called by the framework to save state before shutdown.
 	fn save(&mut self, storage: &mut dyn eframe::Storage) {
 		eframe::set_value(storage, eframe::APP_KEY, self);
@@ -65,9 +68,14 @@ impl eframe::App for TemplateApp {
 			egui::ScrollArea::vertical().show(ui, |ui| {});
 		});
 
+		let mut style = SnarlStyle::new();
+		style.wire_layer = Some(WireLayer::AboveNodes);
+		style.wire_width = Some(3.0);
+
 		egui::CentralPanel::default().show(ctx, |ui| {
 			egui_snarl::ui::SnarlWidget::new()
 				.id(Id::new("node-canvas"))
+				.style(style)
 				.show(&mut self.snarl, &mut self.viewer, ui)
 		});
 
@@ -99,11 +107,11 @@ struct Node {
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
-struct Viewer {
+struct V2FViewer {
 	logd: LogDRef,
 }
 
-impl Viewer {
+impl V2FViewer {
 	fn add_decider(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
 		Node {
@@ -163,7 +171,7 @@ impl Viewer {
 	}
 }
 
-impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
+impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 	fn title(&mut self, node: &Node) -> String {
 		let logd = node.logd.read().unwrap();
 		let node = logd.get_node(node.lid);
@@ -243,7 +251,22 @@ impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
 		to: &egui_snarl::InPin,
 		snarl: &mut egui_snarl::Snarl<Node>,
 	) {
-		todo!()
+		let mut logd = self.logd.write().unwrap();
+		let (lid_left, lid_right) = {
+			let lhs = snarl.get_node(from.id.node).unwrap();
+			let rhs = snarl.get_node(to.id.node).unwrap();
+			if from.id.output != to.id.input {
+				return;
+			}
+			(lhs.lid, rhs.lid)
+		};
+		if snarl.connect(from.id, to.id) {
+			if from.id.output == 0 {
+				logd.add_wire_red(vec![lid_left], vec![lid_right]);
+			} else {
+				logd.add_wire_green(vec![lid_left], vec![lid_right]);
+			}
+		}
 	}
 
 	fn disconnect(
@@ -252,7 +275,22 @@ impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
 		to: &egui_snarl::InPin,
 		snarl: &mut egui_snarl::Snarl<Node>,
 	) {
-		todo!()
+		let mut logd = self.logd.write().unwrap();
+		let (lid_left, lid_right) = {
+			let lhs = snarl.get_node(from.id.node).unwrap();
+			let rhs = snarl.get_node(to.id.node).unwrap();
+			if from.id.output != to.id.input {
+				return;
+			}
+			(lhs.lid, rhs.lid)
+		};
+		if snarl.disconnect(from.id, to.id) {
+			if from.id.output == 0 {
+				logd.find_wire_between_disconnect(lid_left, lid_right, WireColour::Red);
+			} else {
+				logd.find_wire_between_disconnect(lid_left, lid_right, WireColour::Green);
+			}
+		}
 	}
 
 	fn has_graph_menu(&mut self, _pos: egui::Pos2, _snarl: &mut egui_snarl::Snarl<Node>) -> bool {
@@ -345,7 +383,7 @@ impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
 						input_right_network,
 						&mut node.right_input_text[0],
 					);
-					add_signal_input_box_name_only(
+					add_signal_input_box_name_only_label(
 						ui,
 						&mut lnode.output[0],
 						&mut node.output_input_text[0],
@@ -361,17 +399,161 @@ impl egui_snarl::ui::SnarlViewer<Node> for Viewer {
 				output_network,
 				use_input_count,
 				constants,
-			} => todo!(),
-			logical_design::NodeFunction::Constant { enabled, constants } => todo!(),
-			logical_design::NodeFunction::Lamp { expression } => todo!(),
+			} => {},
+			logical_design::NodeFunction::Constant { enabled, constants } => {
+				ui.vertical(|ui| {
+					ui.checkbox(enabled, "Enabled");
+					if ui.button("Add constant").clicked() {
+						lnode.output.push(Signal::None);
+						node.output_input_text.push("none".to_owned());
+						constants.push(0);
+					}
+					for i in 0..constants.len() {
+						ui.horizontal(|ui| {
+							add_signal_input_box_name_only(
+								ui,
+								&mut lnode.output[i],
+								&mut node.output_input_text[i],
+							);
+							let dv = egui::DragValue::new(&mut constants[i]).speed(1);
+							ui.add(dv);
+						});
+					}
+				});
+			},
+			logical_design::NodeFunction::Lamp { expression } => {
+				//
+				ui.horizontal(|ui| {
+					add_signal_input_box_name_only(
+						ui,
+						&mut expression.0,
+						&mut node.left_input_text[0],
+					);
+
+					let op = &mut expression.1;
+
+					egui::ComboBox::from_label("")
+						.width(ui.spacing().combo_width / 2.0)
+						.selected_text(format!("{}", op.resolve_string()))
+						.show_ui(ui, |ui| {
+							use DeciderOperator::*;
+							ui.selectable_value(op, LessThan, LessThan.resolve_string());
+							ui.selectable_value(op, GreaterThan, GreaterThan.resolve_string());
+							ui.selectable_value(op, Equal, Equal.resolve_string());
+							ui.selectable_value(op, NotEqual, NotEqual.resolve_string());
+							ui.selectable_value(
+								op,
+								GreaterThanEqual,
+								GreaterThanEqual.resolve_string(),
+							);
+							ui.selectable_value(op, LessThanEqual, LessThanEqual.resolve_string());
+						});
+
+					add_signal_input_box_name_only(
+						ui,
+						&mut expression.2,
+						&mut node.right_input_text[0],
+					);
+				});
+			},
 			logical_design::NodeFunction::DisplayPanel {
 				input_1,
 				input_2,
 				op,
 				text,
-			} => todo!(),
-			logical_design::NodeFunction::WireSum(wire_colour) => unreachable!(),
+			} => {
+				ui.vertical(|ui| {
+					if ui.button("Add").clicked() {
+						lnode.output.push(Signal::None);
+						node.output_input_text.push("none".to_owned());
+						input_1.push(Signal::None);
+						node.left_input_text.push("none".to_owned());
+						input_2.push(Signal::None);
+						node.right_input_text.push("none".to_owned());
+						text.push(None);
+						op.push(DeciderOperator::LessThan);
+					}
+					for i in 0..input_1.len() {
+						ui.horizontal(|ui| {
+							add_signal_input_box_name_only(
+								ui,
+								&mut lnode.output[i],
+								&mut node.output_input_text[i],
+							);
+
+							let mut tmp = false;
+							if let Some(text) = &mut text[i] {
+								let edit_left = egui::TextEdit::singleline(text)
+									.desired_width(ui.spacing().text_edit_width / 2.0);
+								ui.add(edit_left);
+							} else if ui.checkbox(&mut tmp, "<no label>").clicked() {
+								text[i] = Some(String::new());
+							}
+
+							add_signal_input_box_name_only(
+								ui,
+								&mut input_1[i],
+								&mut node.left_input_text[i],
+							);
+
+							let op = &mut op[i];
+							egui::ComboBox::new(egui::Id::new("op_combo").with(i), "")
+								.width(ui.spacing().combo_width / 2.0)
+								.selected_text(format!("{}", op.resolve_string()))
+								.show_ui(ui, |ui| {
+									use DeciderOperator::*;
+									ui.selectable_value(op, LessThan, LessThan.resolve_string());
+									ui.selectable_value(
+										op,
+										GreaterThan,
+										GreaterThan.resolve_string(),
+									);
+									ui.selectable_value(op, Equal, Equal.resolve_string());
+									ui.selectable_value(op, NotEqual, NotEqual.resolve_string());
+									ui.selectable_value(
+										op,
+										GreaterThanEqual,
+										GreaterThanEqual.resolve_string(),
+									);
+									ui.selectable_value(
+										op,
+										LessThanEqual,
+										LessThanEqual.resolve_string(),
+									);
+								});
+
+							add_signal_input_box_name_only(
+								ui,
+								&mut input_2[i],
+								&mut node.right_input_text[i],
+							);
+						});
+					}
+				});
+			},
+			logical_design::NodeFunction::WireSum(_) => unreachable!(),
 		};
+	}
+
+	fn has_node_menu(&mut self, _node: &Node) -> bool {
+		true
+	}
+
+	fn show_node_menu(
+		&mut self,
+		nodeid: egui_snarl::NodeId,
+		_inputs: &[egui_snarl::InPin],
+		_outputs: &[egui_snarl::OutPin],
+		ui: &mut egui::Ui,
+		snarl: &mut egui_snarl::Snarl<Node>,
+	) {
+		let mut logd = self.logd.write().unwrap();
+		if ui.button("Delete").clicked() {
+			let node = snarl.get_node_mut(nodeid).unwrap();
+			logd.prune(node.lid);
+			snarl.remove_node(nodeid);
+			ui.close();
+		}
 	}
 }
 
@@ -407,7 +589,7 @@ fn add_signal_input_box(
 	});
 }
 
-fn add_signal_input_box_name_only(
+fn add_signal_input_box_name_only_label(
 	ui: &mut egui::Ui,
 	signal: &mut Signal,
 	text: &mut String,
@@ -434,4 +616,25 @@ fn add_signal_input_box_name_only(
 			*text = signal.unparse();
 		}
 	});
+}
+
+fn add_signal_input_box_name_only(ui: &mut egui::Ui, signal: &mut Signal, text: &mut String) {
+	let parse: Option<Signal> = {
+		let sig_parser = arithmetic_parser::signal_parser();
+		let res = sig_parser.parse(&text);
+		res.into_output()
+	};
+	let edit_left =
+		egui::TextEdit::singleline(text).desired_width(ui.spacing().text_edit_width / 2.0);
+	let res = if parse.is_none() {
+		ui.add(edit_left.background_color(Color32::from_rgb(0x70, 0x00, 0x00)))
+	} else {
+		ui.add(edit_left)
+	};
+	if res.lost_focus() {
+		if let Some(sig) = parse {
+			*signal = sig;
+		}
+		*text = signal.unparse();
+	}
 }
