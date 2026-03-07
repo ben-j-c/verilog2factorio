@@ -49,6 +49,24 @@ fn precedence(op: &ArithmeticOperator) -> usize {
 }
 
 pub fn signal_parser<'src>() -> impl Parser<'src, &'src str, Signal, extra::Err<Rich<'src, char>>> {
+	let constant = text::int(10)
+		.try_map(|v: &str, span| {
+			//
+			let v = v.parse();
+			match v {
+				Ok(v) => Ok(Signal::Constant(v)),
+				Err(e) => Err(chumsky::error::Rich::custom(
+					span,
+					format!("{} is not a valid constant", e),
+				)),
+			}
+		})
+		.padded();
+	signal_parser_no_constant().or(constant)
+}
+
+pub fn signal_parser_no_constant<'src>(
+) -> impl Parser<'src, &'src str, Signal, extra::Err<Rich<'src, char>>> {
 	let named_signal = {
 		let base = text::ident();
 		let suffix_word = text::ident();
@@ -62,37 +80,56 @@ pub fn signal_parser<'src>() -> impl Parser<'src, &'src str, Signal, extra::Err<
 				},
 			)
 	};
-	let sig_name = named_signal.padded().try_map(|name: String, span| {
-		let name = name.to_lowercase();
-		if name == "each" {
-			return Ok(Signal::Each);
-		}
-		if name == "everything" {
-			return Ok(Signal::Everything);
-		}
-		if name == "every" {
-			return Ok(Signal::Everything);
-		}
-		if name == "anything" {
-			return Ok(Signal::Anything);
-		}
-		if name == "any" {
-			return Ok(Signal::Anything);
-		}
-		if name == "none" {
-			return Ok(Signal::None);
-		}
-		if name == "_" {
-			return Ok(Signal::None);
-		}
-		if let Some(id) = signal_lookup_table::lookup_id(&name) {
-			return Ok(Signal::Id(id));
-		}
-		Err(chumsky::error::Rich::custom(
-			span,
-			format!("Unknown signal name: '{}'", name),
-		))
-	});
+	let sig_id = just("Id(")
+		.padded()
+		.ignore_then(text::int(10).try_map(|v: &str, span| {
+			let v = v.parse();
+			match v {
+				Ok(v) if v >= 0 || v < signal_lookup_table::n_ids() => Ok(Signal::Id(v)),
+				_ => Err(chumsky::error::Rich::custom(
+					span,
+					format!("Not a valid id"),
+				)),
+			}
+		}))
+		.padded()
+		.then_ignore(just(")"))
+		.padded();
+
+	let sig_name = named_signal
+		.padded()
+		.try_map(|name: String, span| {
+			let name = name.to_lowercase();
+			if name == "each" {
+				return Ok(Signal::Each);
+			}
+			if name == "everything" {
+				return Ok(Signal::Everything);
+			}
+			if name == "every" {
+				return Ok(Signal::Everything);
+			}
+			if name == "anything" {
+				return Ok(Signal::Anything);
+			}
+			if name == "any" {
+				return Ok(Signal::Anything);
+			}
+			if name == "none" {
+				return Ok(Signal::None);
+			}
+			if name == "_" {
+				return Ok(Signal::None);
+			}
+			if let Some(id) = signal_lookup_table::lookup_id_ignore_case(&name) {
+				return Ok(Signal::Id(id));
+			}
+			Err(chumsky::error::Rich::custom(
+				span,
+				format!("Unknown signal name: '{}'", name),
+			))
+		})
+		.or(sig_id);
 	sig_name
 }
 

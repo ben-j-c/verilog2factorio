@@ -319,6 +319,107 @@ impl NodeFunction {
 			panic!("Unwrapped node as arithmetic combinator when it was, in fact, not one.");
 		}
 	}
+
+	pub(crate) fn unwrap_decider_mut(
+		&mut self,
+	) -> (
+		&mut Vec<(Signal, DeciderOperator, Signal)>,
+		&mut Vec<DeciderRowConjDisj>,
+		&mut Vec<(bool, bool)>,
+		&mut Vec<(bool, bool)>,
+		&mut Vec<(bool, bool)>,
+		&mut Vec<bool>,
+		&mut Vec<Option<i32>>,
+	) {
+		if let NodeFunction::Decider {
+			expressions,
+			expression_conj_disj,
+			input_left_networks,
+			input_right_networks,
+			output_network,
+			use_input_count,
+			constants,
+		} = self
+		{
+			(
+				expressions,
+				expression_conj_disj,
+				input_left_networks,
+				input_right_networks,
+				output_network,
+				use_input_count,
+				constants,
+			)
+		} else {
+			panic!("Unwrapped node as decider when it was, in fact, not one.");
+		}
+	}
+
+	pub(crate) fn unwrap_arithmetic_mut(
+		&mut self,
+	) -> (
+		&mut ArithmeticOperator,
+		&mut Signal,
+		&mut Signal,
+		&mut (bool, bool),
+		&mut (bool, bool),
+	) {
+		if let NodeFunction::Arithmetic {
+			op,
+			input_1,
+			input_2,
+			input_left_network,
+			input_right_network,
+		} = self
+		{
+			(
+				op,
+				input_1,
+				input_2,
+				input_left_network,
+				input_right_network,
+			)
+		} else {
+			panic!("Unwrapped node as arithmetic combinator when it was, in fact, not one.");
+		}
+	}
+
+	pub(crate) fn unwrap_constant_mut(&mut self) -> (&mut bool, &mut Vec<i32>) {
+		if let NodeFunction::Constant { enabled, constants } = self {
+			(enabled, constants)
+		} else {
+			panic!("Unwrapped node as constant when it was, in fact, not one.");
+		}
+	}
+
+	pub(crate) fn unwrap_lamp_mut(&mut self) -> &mut (Signal, DeciderOperator, Signal) {
+		if let NodeFunction::Lamp { expression } = self {
+			expression
+		} else {
+			panic!("Unwrapped node as lamp when it was, in fact, not one.");
+		}
+	}
+
+	pub(crate) fn unwrap_display_panel_mut(
+		&mut self,
+	) -> (
+		&mut Vec<Signal>,
+		&mut Vec<Signal>,
+		&mut Vec<DeciderOperator>,
+		&mut Vec<Option<String>>,
+	) {
+		if let NodeFunction::DisplayPanel {
+			input_1,
+			input_2,
+			op,
+			text,
+		} = self
+		{
+			(input_1, input_2, op, text)
+		} else {
+			panic!("Unwrapped node as display panel when it was, in fact, not one.");
+		}
+	}
 }
 
 /// An id that is unique in a design. Can be used to uniquely identify a node in a design. Use this id to make connections.
@@ -3333,7 +3434,6 @@ impl LogicalDesign {
 		network: (bool, bool),
 	) {
 		assert!(!output.is_constant());
-		assert!(!output.is_none());
 		match &mut self.nodes[id.0].function {
 			NodeFunction::Decider {
 				use_input_count,
@@ -3345,6 +3445,26 @@ impl LogicalDesign {
 				output_network.push(network);
 				constants.push(None);
 				self.nodes[id.0].output.push(output);
+			},
+			_ => assert!(
+				false,
+				"Tried to add DeciderCombinator output to non-DeciderCombinator node"
+			),
+		}
+	}
+
+	pub fn remove_decider_output(&mut self, id: NodeId, idx: usize) {
+		match &mut self.nodes[id.0].function {
+			NodeFunction::Decider {
+				output_network,
+				use_input_count,
+				constants,
+				..
+			} => {
+				use_input_count.remove(idx);
+				output_network.remove(idx);
+				constants.remove(idx);
+				self.nodes[id.0].output.remove(idx);
 			},
 			_ => assert!(
 				false,

@@ -4,7 +4,7 @@ use chumsky::prelude::*;
 use itertools::Itertools;
 
 use crate::{
-	logical_design::{DeciderOperator, Signal},
+	logical_design::{arithmetic_parser::signal_parser, DeciderOperator, Signal},
 	signal_lookup_table,
 	util::hash_set,
 };
@@ -31,72 +31,6 @@ pub struct DeciderSop {
 }
 
 pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderSop, extra::Err<Rich<'src, char>>> {
-	let named_signal = {
-		let base = text::ident();
-		let suffix_word = text::ident();
-		let suffix_digits = text::digits(10).to_slice();
-		let suffix = just('-').ignore_then(suffix_word.or(suffix_digits));
-		base.then(suffix.or_not())
-			.map(
-				|(base_str, suffix_opt): (&str, Option<&str>)| match suffix_opt {
-					Some(suffix_str) => format!("{}-{}", base_str, suffix_str),
-					None => base_str.to_owned(),
-				},
-			)
-	};
-	let sig_name = named_signal.padded().try_map(|name: String, span| {
-		//
-		if name == "each" {
-			return Ok(Signal::Each);
-		}
-		if name == "everything" {
-			return Ok(Signal::Everything);
-		}
-		if name == "anything" {
-			return Ok(Signal::Anything);
-		}
-		if name == "none" {
-			return Ok(Signal::None);
-		}
-		if let Some(id) = signal_lookup_table::lookup_id(&name) {
-			return Ok(Signal::Id(id));
-		}
-		Err(chumsky::error::Rich::custom(
-			span,
-			format!("Unknown signal name: '{}'", name),
-		))
-	});
-
-	let sig_id = just("Id(")
-		.padded()
-		.ignore_then(text::int(10).try_map(|v: &str, span| {
-			let v = v.parse();
-			match v {
-				Ok(v) if v >= 0 || v < signal_lookup_table::n_ids() => Ok(Signal::Id(v)),
-				_ => Err(chumsky::error::Rich::custom(
-					span,
-					format!("Not a valid id"),
-				)),
-			}
-		}))
-		.padded()
-		.then_ignore(just(")"))
-		.padded();
-
-	let constant = text::int(10)
-		.try_map(|v: &str, span| {
-			//
-			let v = v.parse();
-			match v {
-				Ok(v) => Ok(Signal::Constant(v)),
-				Err(e) => Err(chumsky::error::Rich::custom(
-					span,
-					format!("{} is not a valid constant", e),
-				)),
-			}
-		})
-		.padded();
-
 	let op_lt = just("<").padded().map(|_| DeciderOperator::LessThan);
 	let op_gt = just(">").padded().map(|_| DeciderOperator::GreaterThan);
 	let op_eq = just("==").padded().map(|_| DeciderOperator::Equal);
@@ -128,25 +62,20 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, DeciderSop, extra::Err<Ric
 		.or(op_neq)
 		.padded();
 
-	let operand = sig_id
-		.then(net_decl)
-		.or(sig_name.then(net_decl))
-		.or(constant.map(|x| (x, (true, true))))
-		.padded();
+	let lhs_operand = signal_parser().then(net_decl).padded();
+	let rhs_operand = signal_parser().then(net_decl).padded();
 
-	let expr =
-		operand
-			.then(op)
-			.then(operand)
-			.map(|(((left, net_left), op), (right, net_right))| DeciderExpr {
-				left,
-				op,
-				right,
-				net_left,
-				net_right,
-				left_placeholder: None,
-				right_placeholder: None,
-			});
+	let expr = lhs_operand.then(op).then(rhs_operand).map(
+		|(((left, net_left), op), (right, net_right))| DeciderExpr {
+			left,
+			op,
+			right,
+			net_left,
+			net_right,
+			left_placeholder: None,
+			right_placeholder: None,
+		},
+	);
 
 	let conj = expr
 		.padded()

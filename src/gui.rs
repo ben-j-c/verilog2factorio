@@ -1,9 +1,10 @@
 use chumsky::Parser;
-use egui::{Color32, Id};
+use egui::{output, Color32, Id};
 use egui_snarl::ui::{PinInfo, SnarlStyle, WireLayer};
 
 use crate::logical_design::{
-	self, arithmetic_parser, ArithmeticOperator, DeciderOperator, Signal, WireColour,
+	self, arithmetic_parser, decider_parser, ArithmeticOperator, DeciderOperator, Signal,
+	WireColour,
 };
 use crate::{logical_design::NodeId, LogDRef};
 
@@ -97,13 +98,35 @@ fn source_link(ui: &mut egui::Ui) {
 	});
 }
 
-#[derive(Default, serde::Deserialize, serde::Serialize)]
-struct Node {
-	lid: NodeId,
-	logd: LogDRef,
-	left_input_text: Vec<String>,
-	right_input_text: Vec<String>,
-	output_input_text: Vec<String>,
+#[derive(serde::Deserialize, serde::Serialize)]
+enum Node {
+	Arithmetic {
+		lid: NodeId,
+		left: String,
+		right: String,
+		output: String,
+	},
+	Decider {
+		lid: NodeId,
+		inputs: String,
+		parse_bad: bool,
+		outputs: Vec<String>,
+	},
+	Constant {
+		lid: NodeId,
+		outputs: Vec<String>,
+	},
+	Lamp {
+		lid: NodeId,
+		left: String,
+		right: String,
+	},
+	DisplayPanel {
+		lid: NodeId,
+		lefts: Vec<String>,
+		rights: Vec<String>,
+		icons: Vec<String>,
+	},
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -114,91 +137,93 @@ struct V2FViewer {
 impl V2FViewer {
 	fn add_decider(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
-		Node {
-			lid: logd.add_decider(),
-			logd: self.logd.clone(),
-			left_input_text: Vec::default(),
-			right_input_text: Vec::default(),
-			output_input_text: Vec::default(),
+		let lid = logd.add_decider();
+		logd.set_decider_expr(lid, "none < none");
+		Node::Decider {
+			lid,
+			inputs: "none < none".to_owned(),
+			parse_bad: false,
+			outputs: vec![],
 		}
 	}
 
 	fn add_arithmetic(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
-		Node {
+		Node::Arithmetic {
 			lid: logd.add_arithmetic(
 				(Signal::None, ArithmeticOperator::Add, Signal::None),
 				Signal::None,
 			),
-			logd: self.logd.clone(),
-			left_input_text: vec!["none".to_owned()],
-			right_input_text: vec!["none".to_owned()],
-			output_input_text: vec!["none".to_owned()],
+			left: "none".to_owned(),
+			right: "none".to_owned(),
+			output: "none".to_owned(),
 		}
 	}
 
 	fn add_constant(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
-		Node {
+		Node::Constant {
 			lid: logd.add_constant(vec![], vec![]),
-			logd: self.logd.clone(),
-			left_input_text: Vec::default(),
-			right_input_text: Vec::default(),
-			output_input_text: Vec::default(),
+			outputs: vec![],
 		}
 	}
 
 	fn add_lamp(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
-		Node {
+		Node::Lamp {
 			lid: logd.add_lamp((Signal::None, DeciderOperator::Equal, Signal::None)),
-			logd: self.logd.clone(),
-			left_input_text: vec!["none".to_owned()],
-			right_input_text: vec!["none".to_owned()],
-			output_input_text: Vec::default(),
+			left: "none".to_owned(),
+			right: "none".to_owned(),
 		}
 	}
 
 	fn add_display_panel(&mut self) -> Node {
 		let mut logd = self.logd.write().unwrap();
-		Node {
+		Node::DisplayPanel {
 			lid: logd.add_display_panel(),
-			logd: self.logd.clone(),
-			left_input_text: Vec::default(),
-			right_input_text: Vec::default(),
-			output_input_text: Vec::default(),
+			lefts: vec![],
+			rights: vec![],
+			icons: vec![],
+		}
+	}
+}
+
+impl Node {
+	fn get_lid(&self) -> NodeId {
+		*match self {
+			Node::Arithmetic { lid, .. } => lid,
+			Node::Decider { lid, .. } => lid,
+			Node::Constant { lid, .. } => lid,
+			Node::Lamp { lid, .. } => lid,
+			Node::DisplayPanel { lid, .. } => lid,
 		}
 	}
 }
 
 impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 	fn title(&mut self, node: &Node) -> String {
-		let logd = node.logd.read().unwrap();
-		let node = logd.get_node(node.lid);
-		let pfx = match &node.function {
-			logical_design::NodeFunction::Arithmetic { .. } => "Arith.",
-			logical_design::NodeFunction::Decider { .. } => "Deci. ",
-			logical_design::NodeFunction::Constant { .. } => "Const.",
-			logical_design::NodeFunction::Lamp { .. } => "Lamp",
-			logical_design::NodeFunction::DisplayPanel { .. } => "Disp.",
-			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		let logd = self.logd.read().unwrap();
+		let lnode = logd.get_node(node.get_lid());
+		let pfx = match &node {
+			Node::Arithmetic { .. } => "Arithmetic",
+			Node::Decider { .. } => "Decider",
+			Node::Constant { .. } => "Constant",
+			Node::Lamp { .. } => "Lamp",
+			Node::DisplayPanel { .. } => "Display panel",
 		};
-		match &node.description {
+		match &lnode.description {
 			Some(d) => format!("{} {}", pfx, d),
 			None => format!("{}", pfx),
 		}
 	}
 
 	fn inputs(&mut self, node: &Node) -> usize {
-		let logd = node.logd.read().unwrap();
-		let node = logd.get_node(node.lid);
-		match node.function {
-			logical_design::NodeFunction::Arithmetic { .. } => 2,
-			logical_design::NodeFunction::Decider { .. } => 2,
-			logical_design::NodeFunction::Constant { .. } => 0,
-			logical_design::NodeFunction::Lamp { .. } => 2,
-			logical_design::NodeFunction::DisplayPanel { .. } => 2,
-			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		match node {
+			Node::Arithmetic { .. } => 2,
+			Node::Decider { .. } => 2,
+			Node::Constant { .. } => 0,
+			Node::Lamp { .. } => 2,
+			Node::DisplayPanel { .. } => 2,
 		}
 	}
 
@@ -218,15 +243,12 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 	}
 
 	fn outputs(&mut self, node: &Node) -> usize {
-		let logd = node.logd.read().unwrap();
-		let node = logd.get_node(node.lid);
-		match node.function {
-			logical_design::NodeFunction::Arithmetic { .. } => 2,
-			logical_design::NodeFunction::Decider { .. } => 2,
-			logical_design::NodeFunction::Constant { .. } => 2,
-			logical_design::NodeFunction::Lamp { .. } => 0,
-			logical_design::NodeFunction::DisplayPanel { .. } => 0,
-			logical_design::NodeFunction::WireSum(_) => unreachable!(),
+		match node {
+			Node::Arithmetic { .. } => 2,
+			Node::Decider { .. } => 2,
+			Node::Constant { .. } => 2,
+			Node::Lamp { .. } => 0,
+			Node::DisplayPanel { .. } => 0,
 		}
 	}
 
@@ -258,7 +280,7 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			if from.id.output != to.id.input {
 				return;
 			}
-			(lhs.lid, rhs.lid)
+			(lhs.get_lid(), rhs.get_lid())
 		};
 		if snarl.connect(from.id, to.id) {
 			if from.id.output == 0 {
@@ -282,7 +304,7 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			if from.id.output != to.id.input {
 				return;
 			}
-			(lhs.lid, rhs.lid)
+			(lhs.get_lid(), rhs.get_lid())
 		};
 		if snarl.disconnect(from.id, to.id) {
 			if from.id.output == 0 {
@@ -333,8 +355,8 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 	fn show_body(
 		&mut self,
 		node: egui_snarl::NodeId,
-		inputs: &[egui_snarl::InPin],
-		outputs: &[egui_snarl::OutPin],
+		_inputs: &[egui_snarl::InPin],
+		_outputs: &[egui_snarl::OutPin],
 		ui: &mut egui::Ui,
 		snarl: &mut egui_snarl::Snarl<Node>,
 	) {
@@ -344,22 +366,18 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		} else {
 			return;
 		};
-		let lnode = logd.mut_node(node.lid);
-		match &mut lnode.function {
-			logical_design::NodeFunction::Arithmetic {
-				op,
-				input_1,
-				input_2,
-				input_left_network,
-				input_right_network,
+		match node {
+			Node::Arithmetic {
+				lid,
+				left,
+				right,
+				output,
 			} => {
+				let lnode = logd.mut_node(*lid);
+				let (op, logd_left, logd_right, net_left, net_right) =
+					lnode.function.unwrap_arithmetic_mut();
 				ui.vertical(|ui| {
-					add_signal_input_box(
-						ui,
-						input_1,
-						input_left_network,
-						&mut node.left_input_text[0],
-					);
+					add_signal_input_box(ui, logd_left, net_left, left);
 					egui::ComboBox::from_label("")
 						.width(ui.spacing().combo_width / 2.0)
 						.selected_text(format!("{}", op.resolve_string()))
@@ -377,43 +395,95 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 							ui.selectable_value(op, Or, Or.resolve_string());
 							ui.selectable_value(op, Xor, Xor.resolve_string());
 						});
-					add_signal_input_box(
-						ui,
-						input_2,
-						input_right_network,
-						&mut node.right_input_text[0],
-					);
+					add_signal_input_box(ui, logd_right, net_right, right);
 					add_signal_input_box_name_only_label(
 						ui,
 						&mut lnode.output[0],
-						&mut node.output_input_text[0],
+						output,
 						"Output",
 					);
 				});
 			},
-			logical_design::NodeFunction::Decider {
-				expressions,
-				expression_conj_disj,
-				input_left_networks,
-				input_right_networks,
-				output_network,
-				use_input_count,
-				constants,
-			} => {},
-			logical_design::NodeFunction::Constant { enabled, constants } => {
+			Node::Decider {
+				lid,
+				inputs,
+				parse_bad,
+				outputs,
+			} => {
 				ui.vertical(|ui| {
+					ui.label("Decider Sum-of-Products Expression");
+					let mut text_edit = egui::TextEdit::multiline(inputs);
+					if *parse_bad {
+						text_edit = text_edit.background_color(Color32::from_rgb(0x70, 0x00, 0x00))
+					}
+					let interact = ui.add(text_edit);
+					if interact.lost_focus() {
+						let parse: Option<decider_parser::DeciderSop> = {
+							let sig_parser = decider_parser::parser();
+							let res = sig_parser.parse(inputs);
+							res.into_output()
+						};
+						if let Some(expr) = parse {
+							logd.set_decider_inputs(*lid, &expr);
+						}
+					}
+					if ui.button("Add output").clicked() {
+						outputs.push("none".to_owned());
+						logd.add_decider_out_input_count(*lid, Signal::None, (true, true));
+					}
+					let mut i = 0;
+					while i < outputs.len() {
+						ui.horizontal(|ui| {
+							if ui.button("X").clicked() {
+								outputs.remove(i);
+								logd.remove_decider_output(*lid, i);
+								i -= 1;
+								return;
+							}
+							add_signal_input_box_name_only_no_constants(
+								ui,
+								&mut logd.mut_node(*lid).output[i],
+								&mut outputs[i],
+							);
+							let lnode = logd.mut_node(*lid);
+							let (_, _, _, _, output_network, use_input_count, constants) =
+								lnode.function.unwrap_decider_mut();
+							ui.checkbox(&mut use_input_count[i], "Use input count");
+							if use_input_count[i] {
+								if constants[i].is_none() {
+									constants[i] = Some(1);
+								}
+								let dv =
+									egui::DragValue::new(constants[i].as_mut().unwrap()).speed(1);
+								ui.add(dv);
+							} else {
+								if constants[i].is_some() {
+									constants[i] = None;
+								}
+							}
+							ui.checkbox(&mut output_network[i].0, "R");
+							ui.checkbox(&mut output_network[i].1, "G");
+						});
+						i += 1;
+					}
+				});
+			},
+			Node::Constant { lid, outputs } => {
+				let lnode = logd.mut_node(*lid);
+				ui.vertical(|ui| {
+					let (enabled, constants) = lnode.function.unwrap_constant_mut();
 					ui.checkbox(enabled, "Enabled");
 					if ui.button("Add constant").clicked() {
 						lnode.output.push(Signal::None);
-						node.output_input_text.push("none".to_owned());
+						outputs.push("none".to_owned());
 						constants.push(0);
 					}
 					for i in 0..constants.len() {
 						ui.horizontal(|ui| {
-							add_signal_input_box_name_only(
+							add_signal_input_box_name_only_no_constants(
 								ui,
 								&mut lnode.output[i],
-								&mut node.output_input_text[i],
+								&mut outputs[i],
 							);
 							let dv = egui::DragValue::new(&mut constants[i]).speed(1);
 							ui.add(dv);
@@ -421,14 +491,11 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 					}
 				});
 			},
-			logical_design::NodeFunction::Lamp { expression } => {
-				//
+			Node::Lamp { lid, left, right } => {
+				let lnode = logd.mut_node(*lid);
+				let expression = lnode.function.unwrap_lamp_mut();
 				ui.horizontal(|ui| {
-					add_signal_input_box_name_only(
-						ui,
-						&mut expression.0,
-						&mut node.left_input_text[0],
-					);
+					add_signal_input_box_name_only(ui, &mut expression.0, left);
 
 					let op = &mut expression.1;
 
@@ -449,37 +516,34 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 							ui.selectable_value(op, LessThanEqual, LessThanEqual.resolve_string());
 						});
 
-					add_signal_input_box_name_only(
-						ui,
-						&mut expression.2,
-						&mut node.right_input_text[0],
-					);
+					add_signal_input_box_name_only(ui, &mut expression.2, right);
 				});
 			},
-			logical_design::NodeFunction::DisplayPanel {
-				input_1,
-				input_2,
-				op,
-				text,
+			Node::DisplayPanel {
+				lid,
+				lefts,
+				rights,
+				icons,
 			} => {
+				let lnode = logd.mut_node(*lid);
+				let (input_1, input_2, op, text) = lnode.function.unwrap_display_panel_mut();
 				ui.vertical(|ui| {
 					if ui.button("Add").clicked() {
 						lnode.output.push(Signal::None);
-						node.output_input_text.push("none".to_owned());
+						icons.push("none".to_owned());
+
 						input_1.push(Signal::None);
-						node.left_input_text.push("none".to_owned());
+						lefts.push("none".to_owned());
+
 						input_2.push(Signal::None);
-						node.right_input_text.push("none".to_owned());
+						rights.push("none".to_owned());
+
 						text.push(None);
 						op.push(DeciderOperator::LessThan);
 					}
 					for i in 0..input_1.len() {
 						ui.horizontal(|ui| {
-							add_signal_input_box_name_only(
-								ui,
-								&mut lnode.output[i],
-								&mut node.output_input_text[i],
-							);
+							add_signal_input_box_name_only(ui, &mut lnode.output[i], &mut icons[i]);
 
 							let mut tmp = false;
 							if let Some(text) = &mut text[i] {
@@ -490,11 +554,7 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 								text[i] = Some(String::new());
 							}
 
-							add_signal_input_box_name_only(
-								ui,
-								&mut input_1[i],
-								&mut node.left_input_text[i],
-							);
+							add_signal_input_box_name_only(ui, &mut input_1[i], &mut lefts[i]);
 
 							let op = &mut op[i];
 							egui::ComboBox::new(egui::Id::new("op_combo").with(i), "")
@@ -522,17 +582,12 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 									);
 								});
 
-							add_signal_input_box_name_only(
-								ui,
-								&mut input_2[i],
-								&mut node.right_input_text[i],
-							);
+							add_signal_input_box_name_only(ui, &mut input_2[i], &mut rights[i]);
 						});
 					}
 				});
 			},
-			logical_design::NodeFunction::WireSum(_) => unreachable!(),
-		};
+		}
 	}
 
 	fn has_node_menu(&mut self, _node: &Node) -> bool {
@@ -550,7 +605,7 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		let mut logd = self.logd.write().unwrap();
 		if ui.button("Delete").clicked() {
 			let node = snarl.get_node_mut(nodeid).unwrap();
-			logd.prune(node.lid);
+			logd.prune(node.get_lid());
 			snarl.remove_node(nodeid);
 			ui.close();
 		}
@@ -621,6 +676,31 @@ fn add_signal_input_box_name_only_label(
 fn add_signal_input_box_name_only(ui: &mut egui::Ui, signal: &mut Signal, text: &mut String) {
 	let parse: Option<Signal> = {
 		let sig_parser = arithmetic_parser::signal_parser();
+		let res = sig_parser.parse(&text);
+		res.into_output()
+	};
+	let edit_left =
+		egui::TextEdit::singleline(text).desired_width(ui.spacing().text_edit_width / 2.0);
+	let res = if parse.is_none() {
+		ui.add(edit_left.background_color(Color32::from_rgb(0x70, 0x00, 0x00)))
+	} else {
+		ui.add(edit_left)
+	};
+	if res.lost_focus() {
+		if let Some(sig) = parse {
+			*signal = sig;
+		}
+		*text = signal.unparse();
+	}
+}
+
+fn add_signal_input_box_name_only_no_constants(
+	ui: &mut egui::Ui,
+	signal: &mut Signal,
+	text: &mut String,
+) {
+	let parse: Option<Signal> = {
+		let sig_parser = arithmetic_parser::signal_parser_no_constant();
 		let res = sig_parser.parse(&text);
 		res.into_output()
 	};
