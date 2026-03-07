@@ -20,6 +20,7 @@ fn main() {
 		dump_phy_cfg: false,
 		output_file: None,
 		convert_to_memh: false,
+		gui: false,
 	};
 	match lua_flow(args) {
 		Ok(json) => {
