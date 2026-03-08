@@ -729,6 +729,16 @@ impl LogicalDesign {
 		self.nodes[in_node.0].fanin_green.push(out_node);
 	}
 
+	/// Connect the red wires from `out_node` to `in_node`. e.g., if `out_node` is an arithmetic combinator and `in_node` is a red wire, then the red terminal on the comb will be attached to a wire.
+	/// A subsequent call to this function where that red wire is now the `out_node` and some other combinator is the `in_node` will result in the arithmetic comb having an output wire
+	/// attached to the input of the second comb.
+	pub fn connect(&mut self, out_node: NodeId, in_node: NodeId, colour: WireColour) {
+		match colour {
+			WireColour::Red => self.connect_red(out_node, in_node),
+			WireColour::Green => self.connect_green(out_node, in_node),
+		}
+	}
+
 	/// Add a arithmetic combinator to this design. The expression matches what you see in game.
 	///
 	/// Returns the id for that new combinator.
@@ -3747,6 +3757,13 @@ impl LogicalDesign {
 	pub fn add_wire_floating_red(&mut self) -> NodeId {
 		self.add_node(
 			NodeFunction::WireSum(WireColour::Red),
+			vec![Signal::Everything],
+		)
+	}
+
+	pub fn add_wire_floating_green(&mut self) -> NodeId {
+		self.add_node(
+			NodeFunction::WireSum(WireColour::Green),
 			vec![Signal::Everything],
 		)
 	}

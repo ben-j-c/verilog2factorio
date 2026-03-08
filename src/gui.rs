@@ -127,6 +127,12 @@ enum Node {
 		rights: Vec<String>,
 		icons: Vec<String>,
 	},
+	WireHubRed {
+		lid: NodeId,
+	},
+	WireHubGreen {
+		lid: NodeId,
+	},
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -186,6 +192,18 @@ impl V2FViewer {
 			icons: vec![],
 		}
 	}
+
+	fn add_wire(&mut self, colour: WireColour) -> Node {
+		let mut logd = self.logd.write().unwrap();
+		match colour {
+			WireColour::Red => Node::WireHubRed {
+				lid: logd.add_wire_floating_red(),
+			},
+			WireColour::Green => Node::WireHubGreen {
+				lid: logd.add_wire_floating_green(),
+			},
+		}
+	}
 }
 
 impl Node {
@@ -196,6 +214,20 @@ impl Node {
 			Node::Constant { lid, .. } => lid,
 			Node::Lamp { lid, .. } => lid,
 			Node::DisplayPanel { lid, .. } => lid,
+			Node::WireHubRed { lid } => lid,
+			Node::WireHubGreen { lid } => lid,
+		}
+	}
+
+	fn is_wire_hub(&self) -> bool {
+		matches!(self, Node::WireHubRed { .. } | Node::WireHubGreen { .. })
+	}
+
+	fn get_colour(&self) -> WireColour {
+		match self {
+			Node::WireHubRed { .. } => WireColour::Red,
+			Node::WireHubGreen { .. } => WireColour::Green,
+			_ => unreachable!(),
 		}
 	}
 }
@@ -210,6 +242,8 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			Node::Constant { .. } => "Constant",
 			Node::Lamp { .. } => "Lamp",
 			Node::DisplayPanel { .. } => "Display panel",
+			Node::WireHubRed { .. } => "Red wire hub",
+			Node::WireHubGreen { .. } => "Green wire hub",
 		};
 		match &lnode.description {
 			Some(d) => format!("{} {}", pfx, d),
@@ -224,6 +258,8 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			Node::Constant { .. } => 0,
 			Node::Lamp { .. } => 2,
 			Node::DisplayPanel { .. } => 2,
+			Node::WireHubRed { .. } => 1,
+			Node::WireHubGreen { .. } => 1,
 		}
 	}
 
@@ -231,15 +267,23 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		&mut self,
 		pin: &egui_snarl::InPin,
 		_ui: &mut egui::Ui,
-		_snarl: &mut egui_snarl::Snarl<Node>,
+		snarl: &mut egui_snarl::Snarl<Node>,
 	) -> impl egui_snarl::ui::SnarlPin + 'static {
-		if pin.id.input == 0 {
-			PinInfo::circle().with_fill(Color32::from_rgb(0xb0, 0x00, 0x00))
-		} else if pin.id.input == 1 {
-			PinInfo::circle().with_fill(Color32::from_rgb(0x00, 0xb0, 0x00))
-		} else {
-			unreachable!()
-		}
+		let node = snarl.get_node(pin.id.node).unwrap();
+		let colour = match node {
+			Node::WireHubRed { .. } => Color32::from_rgb(0xb0, 0x00, 0x00),
+			Node::WireHubGreen { .. } => Color32::from_rgb(0x00, 0xb0, 0x00),
+			_ => {
+				if pin.id.input == 0 {
+					Color32::from_rgb(0xb0, 0x00, 0x00)
+				} else if pin.id.input == 1 {
+					Color32::from_rgb(0x00, 0xb0, 0x00)
+				} else {
+					unreachable!()
+				}
+			},
+		};
+		PinInfo::circle().with_fill(colour)
 	}
 
 	fn outputs(&mut self, node: &Node) -> usize {
@@ -249,6 +293,8 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			Node::Constant { .. } => 2,
 			Node::Lamp { .. } => 0,
 			Node::DisplayPanel { .. } => 0,
+			Node::WireHubRed { .. } => 1,
+			Node::WireHubGreen { .. } => 1,
 		}
 	}
 
@@ -256,15 +302,23 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		&mut self,
 		pin: &egui_snarl::OutPin,
 		_ui: &mut egui::Ui,
-		_snarl: &mut egui_snarl::Snarl<Node>,
+		snarl: &mut egui_snarl::Snarl<Node>,
 	) -> impl egui_snarl::ui::SnarlPin + 'static {
-		if pin.id.output == 0 {
-			PinInfo::circle().with_fill(Color32::from_rgb(0xb0, 0x00, 0x00))
-		} else if pin.id.output == 1 {
-			PinInfo::circle().with_fill(Color32::from_rgb(0x00, 0xb0, 0x00))
-		} else {
-			unreachable!()
-		}
+		let node = snarl.get_node(pin.id.node).unwrap();
+		let colour = match node {
+			Node::WireHubRed { .. } => Color32::from_rgb(0xb0, 0x00, 0x00),
+			Node::WireHubGreen { .. } => Color32::from_rgb(0x00, 0xb0, 0x00),
+			_ => {
+				if pin.id.output == 0 {
+					Color32::from_rgb(0xb0, 0x00, 0x00)
+				} else if pin.id.output == 1 {
+					Color32::from_rgb(0x00, 0xb0, 0x00)
+				} else {
+					unreachable!()
+				}
+			},
+		};
+		PinInfo::circle().with_fill(colour)
 	}
 
 	fn connect(
@@ -274,19 +328,48 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		snarl: &mut egui_snarl::Snarl<Node>,
 	) {
 		let mut logd = self.logd.write().unwrap();
-		let (lid_left, lid_right) = {
+		let (lid_left, lid_right, left_hub_colour, right_hub_colour) = {
 			let lhs = snarl.get_node(from.id.node).unwrap();
 			let rhs = snarl.get_node(to.id.node).unwrap();
-			if from.id.output != to.id.input {
+			(
+				lhs.get_lid(),
+				rhs.get_lid(),
+				if lhs.is_wire_hub() {
+					Some(lhs.get_colour())
+				} else {
+					None
+				},
+				if rhs.is_wire_hub() {
+					Some(rhs.get_colour())
+				} else {
+					None
+				},
+			)
+		};
+		if left_hub_colour.is_some() && right_hub_colour.is_some() {
+			return;
+		}
+		if left_hub_colour.is_some() || right_hub_colour.is_some() {
+			let colour = left_hub_colour.or(right_hub_colour).unwrap();
+			let colour_other = if left_hub_colour.is_some() {
+				terminal_to_colour(to.id.input)
+			} else {
+				terminal_to_colour(from.id.output)
+			};
+
+			if colour != colour_other {
 				return;
 			}
-			(lhs.get_lid(), rhs.get_lid())
-		};
-		if snarl.connect(from.id, to.id) {
+			if snarl.connect(from.id, to.id) {
+				logd.connect(lid_left, lid_right, colour);
+			}
+		} else if from.id.output != to.id.input {
+			return;
+		} else if snarl.connect(from.id, to.id) {
 			if from.id.output == 0 {
-				logd.add_wire_red(vec![lid_left], vec![lid_right]);
+				logd.add_wire_red_simple(lid_left, lid_right);
 			} else {
-				logd.add_wire_green(vec![lid_left], vec![lid_right]);
+				logd.add_wire_green_simple(lid_left, lid_right);
 			}
 		}
 	}
@@ -298,20 +381,39 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 		snarl: &mut egui_snarl::Snarl<Node>,
 	) {
 		let mut logd = self.logd.write().unwrap();
-		let (lid_left, lid_right) = {
+		let (lid_left, lid_right, left_hub_colour, right_hub_colour) = {
 			let lhs = snarl.get_node(from.id.node).unwrap();
 			let rhs = snarl.get_node(to.id.node).unwrap();
-			if from.id.output != to.id.input {
-				return;
-			}
-			(lhs.get_lid(), rhs.get_lid())
+			(
+				lhs.get_lid(),
+				rhs.get_lid(),
+				if lhs.is_wire_hub() {
+					Some(lhs.get_colour())
+				} else {
+					None
+				},
+				if rhs.is_wire_hub() {
+					Some(rhs.get_colour())
+				} else {
+					None
+				},
+			)
 		};
-		if snarl.disconnect(from.id, to.id) {
-			if from.id.output == 0 {
-				logd.find_wire_between_disconnect(lid_left, lid_right, WireColour::Red);
-			} else {
-				logd.find_wire_between_disconnect(lid_left, lid_right, WireColour::Green);
-			}
+		if !snarl.disconnect(from.id, to.id) {
+			return;
+		}
+		if left_hub_colour.is_some() || right_hub_colour.is_some() {
+			logd.disconnect(
+				lid_left,
+				lid_right,
+				left_hub_colour.or(right_hub_colour).unwrap(),
+			);
+		} else {
+			logd.find_wire_between_disconnect(
+				lid_left,
+				lid_right,
+				terminal_to_colour(from.id.output),
+			);
 		}
 	}
 
@@ -342,13 +444,21 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 			snarl.insert_node(pos, self.add_lamp());
 			ui.close();
 		}
-		if ui.button("Display Panel").clicked() {
+		if ui.button("Display panel").clicked() {
 			snarl.insert_node(pos, self.add_display_panel());
+			ui.close();
+		}
+		if ui.button("Red wire hub").clicked() {
+			snarl.insert_node(pos, self.add_wire(WireColour::Red));
+			ui.close();
+		}
+		if ui.button("Green wire hub").clicked() {
+			snarl.insert_node(pos, self.add_wire(WireColour::Green));
 			ui.close();
 		}
 	}
 
-	fn has_body(&mut self, node: &Node) -> bool {
+	fn has_body(&mut self, _node: &Node) -> bool {
 		true
 	}
 
@@ -587,6 +697,8 @@ impl egui_snarl::ui::SnarlViewer<Node> for V2FViewer {
 					}
 				});
 			},
+			Node::WireHubRed { lid } => {},
+			Node::WireHubGreen { lid } => {},
 		}
 	}
 
@@ -716,5 +828,13 @@ fn add_signal_input_box_name_only_no_constants(
 			*signal = sig;
 		}
 		*text = signal.unparse();
+	}
+}
+
+fn terminal_to_colour(terminal: usize) -> WireColour {
+	match terminal {
+		0 => WireColour::Red,
+		1 => WireColour::Green,
+		_ => unreachable!(),
 	}
 }
