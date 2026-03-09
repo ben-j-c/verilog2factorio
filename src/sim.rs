@@ -23,7 +23,7 @@ pub mod vcd;
 
 use crate::{
 	logical_design::{
-		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, Signal, WireColour,
+		ArithmeticOperator, LogicalDesign, Node, NodeFunction, NodeId, SeqNo, Signal, WireColour,
 		NET_RED_GREEN,
 	},
 	mapped_design::Direction,
@@ -33,7 +33,7 @@ use crate::{
 	util::{hash_map, hash_set, HashM},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub(crate) struct WireNetwork {
 	pub(crate) fanin: Vec<NodeId>,
 	pub(crate) fanout: Vec<NodeId>,
@@ -41,7 +41,9 @@ pub(crate) struct WireNetwork {
 	pub(crate) colour: WireColour,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+	Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize, serde::Serialize,
+)]
 pub struct NetId(pub usize);
 
 impl Default for NetId {
@@ -50,7 +52,7 @@ impl Default for NetId {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
 struct NetMapEntry {
 	input_red: Option<NetId>,
 	output_red: Option<NetId>,
@@ -89,11 +91,13 @@ impl NetMapEntry {
 	}
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Trace {
 	red: Vec<(usize, Vec<(i32, i32)>)>,
 	green: Vec<(usize, Vec<(i32, i32)>)>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct SimState {
 	/// Indexed by network id
 	network: Vec<WireNetwork>,
@@ -109,9 +113,11 @@ pub struct SimState {
 
 	new_state_red: Vec<OutputState>,
 	new_state_green: Vec<OutputState>,
+
+	seq_num: SeqNo,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct SimStateRow {
 	netmap: NetMapEntry,
 	red: OutputState,
@@ -121,7 +127,12 @@ pub struct SimStateRow {
 }
 
 impl SimState {
+	pub fn seq_num(&self) -> SeqNo {
+		self.seq_num
+	}
+
 	pub fn new(logd: Arc<RwLock<LogicalDesign>>) -> Self {
+		let seq_num = logd.read().unwrap().seq_num;
 		let mut ret = Self {
 			network: vec![],
 			network_ownership: vec![],
@@ -132,13 +143,25 @@ impl SimState {
 			trace_set: vec![],
 			new_state_green: vec![],
 			new_state_red: vec![],
+			seq_num,
 		};
 		ret.update_logical_design();
 		ret
 	}
 
+	pub fn reset_network_connectivity(&mut self, start: usize) {
+		self.network.clear();
+		for i in start..self.state.len() {
+			self.network_ownership[i] = NetId::default();
+			self.state[i].first_wire_green = NodeId::default();
+			self.state[i].first_wire_red = NodeId::default();
+			self.state[i].netmap = NetMapEntry::default();
+		}
+	}
+
 	pub fn update_logical_design(&mut self) {
-		let logd = self.logd.read().unwrap();
+		let logd = self.logd.clone();
+		let logd = logd.read().unwrap();
 		let state_len = self.state.len();
 		for _ in logd.nodes.iter().skip(state_len) {
 			self.network_ownership.push(NetId::default());
@@ -148,7 +171,14 @@ impl SimState {
 				green: vec![],
 			});
 		}
-		for (nodeid, node) in logd.nodes.iter().enumerate().skip(state_len) {
+
+		let n_skip = if logd.seq_num != self.seq_num {
+			self.reset_network_connectivity(0);
+			0
+		} else {
+			state_len
+		};
+		for (nodeid, node) in logd.nodes.iter().enumerate().skip(n_skip) {
 			let colour = if let NodeFunction::WireSum(colour) = node.function {
 				colour
 			} else {
@@ -175,7 +205,15 @@ impl SimState {
 				network_wires.contains(&NodeId(nodeid)),
 				"Wire not in it's own network!"
 			);
-			let network_id = NetId(self.network.len());
+			let existing_net_id = network_wires
+				.iter()
+				.map(|e| self.network_ownership[e.0])
+				.find(|ownership| *ownership != NetId::default());
+			let network_id = if let Some(existing_net_id) = existing_net_id {
+				existing_net_id
+			} else {
+				NetId(self.network.len())
+			};
 			for wire in &network_wires {
 				*self.state[wire.0].netmap.input_mut(colour) = Some(network_id);
 				*self.state[wire.0].netmap.output_mut(colour) = Some(network_id);
@@ -206,7 +244,7 @@ impl SimState {
 				colour,
 			});
 		}
-		for (nodeid, _node) in logd.nodes.iter().enumerate().skip(state_len) {
+		for (nodeid, _node) in logd.nodes.iter().enumerate().skip(n_skip) {
 			let output_red_entry = self.state[nodeid].netmap.output_red;
 			if output_red_entry.is_some() {
 				let first_wire = self.network[output_red_entry.unwrap().0]
@@ -225,6 +263,10 @@ impl SimState {
 					.0;
 				self.state[nodeid].first_wire_green = NodeId(first_wire);
 			}
+		}
+		if self.seq_num != logd.seq_num {
+			self.seq_num = logd.seq_num;
+			self.step(0);
 		}
 	}
 
@@ -377,6 +419,35 @@ impl SimState {
 		std::mem::swap(&mut self.new_state_red, &mut new_state_red);
 		std::mem::swap(&mut self.new_state_green, &mut new_state_green);
 
+		if steps == 0 {
+			// just a network only update
+			let logd = self.logd.read().unwrap();
+			for (idx, row) in self.state.iter_mut().enumerate() {
+				if logd.is_wire(NodeId(idx)) {
+					continue;
+				}
+				new_state_red[idx] = row.red.clone();
+				new_state_green[idx] = row.green.clone();
+			}
+			self.compute_nets(
+				&mut new_state_red,
+				&mut new_state_green,
+				&mut network_states,
+			);
+			for (idx, row) in self.state.iter_mut().enumerate() {
+				if !logd.is_wire(NodeId(idx)) {
+					continue;
+				}
+				std::mem::swap(&mut row.red, &mut new_state_red[idx]);
+				std::mem::swap(&mut row.green, &mut new_state_green[idx]);
+			}
+			for row in &mut new_state_red {
+				row.data.clear();
+			}
+			for row in &mut new_state_green {
+				row.data.clear();
+			}
+		}
 		for _ in 0..steps {
 			self.compute_combs(&mut new_state_red, &mut new_state_green);
 			self.compute_nets(
@@ -1374,6 +1445,10 @@ impl SimState {
 			}
 		}
 	}
+
+	pub(crate) fn reinit_logd(&mut self, clone: Arc<RwLock<LogicalDesign>>) {
+		self.logd = clone;
+	}
 }
 
 fn draw_transition_edge(
@@ -1497,7 +1572,7 @@ fn draw_trace_tick(
 
 static ZERO: i32 = 0;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct OutputState {
 	data: HashM<i32, i32>,
 }
@@ -1535,19 +1610,19 @@ impl Display for SimState {
 }
 
 impl OutputState {
-	fn clear(&mut self) {
+	pub fn clear(&mut self) {
 		self.data.clear();
 	}
 
-	fn copy(&mut self, other: &Self) {
+	pub fn copy(&mut self, other: &Self) {
 		self.data.clone_from(&other.data);
 	}
 
-	fn keys(&self) -> impl Iterator<Item = i32> + '_ {
+	pub fn keys(&self) -> impl Iterator<Item = i32> + '_ {
 		self.data.iter().map(|(id, _)| *id)
 	}
 
-	fn is_subset(&self, other: &Self) -> bool {
+	pub fn is_subset(&self, other: &Self) -> bool {
 		for (id, count) in &self.data {
 			let other_get = other.data.get(id);
 			if *count != 0 {

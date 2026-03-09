@@ -627,6 +627,9 @@ pub(crate) struct LogicalPort {
 	signal: Signal,
 }
 
+#[derive(Debug, Copy, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
+pub struct SeqNo(usize);
+
 /// A design you want to build up and save.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LogicalDesign {
@@ -635,6 +638,7 @@ pub struct LogicalDesign {
 	pub(crate) description: String,
 	pub(crate) timing_engine: TimingEngine,
 	pub(crate) pruned: HashS<NodeId>,
+	pub(crate) seq_num: SeqNo,
 }
 
 impl UnwindSafe for LogicalDesign {}
@@ -663,6 +667,7 @@ impl LogicalDesign {
 			description: "".to_string(),
 			timing_engine: TimingEngine::default(),
 			pruned: hash_set(),
+			seq_num: SeqNo::default(),
 		}
 	}
 
@@ -709,6 +714,7 @@ impl LogicalDesign {
 		));
 		self.nodes[out_node.0].fanout_red.push(in_node);
 		self.nodes[in_node.0].fanin_red.push(out_node);
+		self.seq_num.0 += 1;
 	}
 
 	/// See [`connect_red`] but replace red with green.
@@ -727,6 +733,7 @@ impl LogicalDesign {
 		));
 		self.nodes[out_node.0].fanout_green.push(in_node);
 		self.nodes[in_node.0].fanin_green.push(out_node);
+		self.seq_num.0 += 1;
 	}
 
 	/// Connect the red wires from `out_node` to `in_node`. e.g., if `out_node` is an arithmetic combinator and `in_node` is a red wire, then the red terminal on the comb will be attached to a wire.
@@ -4304,7 +4311,9 @@ impl LogicalDesign {
 				},
 			}
 		}
-		retval.into_iter().collect_vec()
+		let mut retval = retval.into_iter().collect_vec();
+		retval.sort();
+		retval
 	}
 
 	pub(crate) fn get_wire_network_on_cell(
@@ -4461,6 +4470,7 @@ impl LogicalDesign {
 	}
 
 	pub(crate) fn disconnect(&mut self, first: NodeId, second: NodeId, colour: WireColour) {
+		self.seq_num.0 += 1;
 		let (left, right) = util::mut_idx(&mut self.nodes, first.0, second.0);
 		match colour {
 			WireColour::Red => {
@@ -4503,6 +4513,7 @@ impl LogicalDesign {
 	}
 
 	pub(crate) fn prune(&mut self, id: NodeId) {
+		self.seq_num.0 += 1;
 		while !self.nodes[id.0].fanin_green.is_empty() {
 			let fanin = self.nodes[id.0].fanin_green.pop().unwrap();
 			self.disconnect(fanin, id, WireColour::Green);
@@ -4557,6 +4568,7 @@ impl LogicalDesign {
 		self.timing_engine = TimingEngine::default();
 		self.pruned.clear();
 		self.nodes = new_nodes;
+		self.seq_num.0 += 1;
 		return node_map;
 	}
 }
