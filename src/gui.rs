@@ -1,5 +1,8 @@
+use std::f32::consts::E;
+
 use chumsky::Parser;
-use egui::{Color32, Id};
+use egui::{Color32, Id, Label, RichText};
+use egui_extras::syntax_highlighting::CodeTheme;
 use egui_snarl::ui::{PinInfo, SnarlStyle, WireLayer};
 use itertools::Itertools;
 
@@ -7,6 +10,8 @@ use crate::logical_design::{
 	arithmetic_parser, decider_parser, ArithmeticOperator, DeciderOperator, LogicalDesign, Signal,
 	WireColour,
 };
+use crate::phy::{self, PhysicalDesign};
+use crate::serializable_design::SerializableDesign;
 use crate::signal_lookup_table;
 use crate::sim::SimState;
 use crate::{logical_design::NodeId, LogDRef};
@@ -16,6 +21,8 @@ use crate::{logical_design::NodeId, LogDRef};
 pub struct V2FApp {
 	snarl: egui_snarl::Snarl<Node>,
 	viewer: V2FViewer,
+
+	blueprint: Option<String>,
 }
 
 impl Default for V2FApp {
@@ -24,6 +31,7 @@ impl Default for V2FApp {
 		Self {
 			snarl,
 			viewer: V2FViewer::default(),
+			blueprint: None,
 		}
 	}
 }
@@ -77,6 +85,7 @@ impl eframe::App for V2FApp {
 
 		egui::SidePanel::left("side_panel").show(ctx, |ui| {
 			egui::ScrollArea::vertical().show(ui, |ui| {
+				#[cfg(debug_assertions)]
 				if ui.button("Dump Logical Design").clicked() {
 					println!("{}", self.viewer.logd.read().unwrap());
 				}
@@ -90,6 +99,7 @@ impl eframe::App for V2FApp {
 					}
 				});
 				if let Some((sim, settings)) = &mut self.viewer.sim {
+					ui.label("Step sim");
 					ui.horizontal(|ui| {
 						let dv = egui::DragValue::new(&mut settings.n_steps).speed(1);
 						ui.add(dv);
@@ -109,6 +119,43 @@ impl eframe::App for V2FApp {
 					ui.checkbox(&mut settings.show_on_nodes, "Show on nodes");
 					ui.label(format!("{:?}", sim.seq_num()));
 					ui.label(format!("{:?}", self.viewer.logd.read().unwrap().seq_num));
+				}
+				ui.separator();
+				if ui.button("Get blueprint").clicked() {
+					let mut logd = self.viewer.logd.read().unwrap().clone();
+					logd.delete_and_compact();
+					let mut phyd = PhysicalDesign::new();
+					phyd.build_from(&logd);
+					let mut serd = SerializableDesign::new();
+					serd.build_from(&phyd, &logd);
+					let text = serde_json::to_string_pretty(&serd);
+					match text {
+						Ok(text) => self.blueprint = Some(text),
+						Err(e) => self.blueprint = Some(format!("{}", e)),
+					}
+				}
+				let mut is_open = true;
+				if let Some(text) = &self.blueprint {
+					egui::Window::new("Blueprint")
+						.open(&mut is_open)
+						.resizable(true)
+						.scroll(true)
+						.show(ctx, |ui| {
+							if !cfg!(target_arch = "wasm32") {
+								if ui.button("Copy to clipboard").clicked() {
+									ctx.copy_text(text.clone());
+								}
+							}
+							egui_extras::syntax_highlighting::code_view_ui(
+								ui,
+								&CodeTheme::default(),
+								&text,
+								"json",
+							);
+						});
+					if !is_open {
+						self.blueprint = None;
+					}
 				}
 			});
 		});
