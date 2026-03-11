@@ -16,13 +16,18 @@ pub fn main() -> Result<(), v2f::Error> {
 		v2f::dump_phy_cfg();
 		return Ok(());
 	}
+	#[cfg(not(target_arch = "wasm32"))]
 	match std::env::var("V2F_ROOT") {
 		Ok(_) => {},
 		Err(_) => {
-			println!("Assuming V2F_ROOT as current working directory.");
-			std::env::set_var("V2F_ROOT", std::env::current_dir().unwrap())
+			let detected_root = std::env::current_exe().ok()
+				.and_then(|p| p.parent().map(PathBuf::from))
+				.or_else(|| std::env::current_dir().ok())
+				.expect("Could not infer V2F_ROOT, please set this environment variable to location of executable.");
+			println!("Assuming V2F_ROOT as {:?}", detected_root);
+			std::env::set_var("V2F_ROOT", detected_root);
 		},
-	}
+	};
 	if args.gui {
 		let mut native_options = eframe::NativeOptions::default();
 		native_options.viewport = egui::ViewportBuilder::default()

@@ -17,6 +17,7 @@ use rayon::{
 
 mod decider_model;
 pub mod snapshot;
+#[cfg(false)]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod tui;
 pub mod vcd;

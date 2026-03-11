@@ -1,7 +1,7 @@
-use std::f32::consts::E;
+use std::path::PathBuf;
 
 use chumsky::Parser;
-use egui::{Color32, Id, Label, RichText};
+use egui::{Color32, Id};
 use egui_extras::syntax_highlighting::CodeTheme;
 use egui_snarl::ui::{PinInfo, SnarlStyle, WireLayer};
 use itertools::Itertools;
@@ -10,7 +10,7 @@ use crate::logical_design::{
 	arithmetic_parser, decider_parser, ArithmeticOperator, DeciderOperator, LogicalDesign, Signal,
 	WireColour,
 };
-use crate::phy::{self, PhysicalDesign};
+use crate::phy::PhysicalDesign;
 use crate::serializable_design::SerializableDesign;
 use crate::signal_lookup_table;
 use crate::sim::SimState;
@@ -23,6 +23,8 @@ pub struct V2FApp {
 	viewer: V2FViewer,
 
 	blueprint: Option<String>,
+
+	cwd: PathBuf,
 }
 
 impl Default for V2FApp {
@@ -32,6 +34,7 @@ impl Default for V2FApp {
 			snarl,
 			viewer: V2FViewer::default(),
 			blueprint: None,
+			cwd: std::env::current_dir().unwrap(),
 		}
 	}
 }
@@ -43,6 +46,14 @@ impl V2FApp {
 			if let Some((sim, _)) = &mut ret.viewer.sim {
 				sim.reinit_logd(ret.viewer.logd.clone());
 			}
+			match std::env::set_current_dir(&ret.cwd) {
+				Ok(()) => {},
+				Err(_) => {
+					println!("Failed to open {:?}", ret.cwd);
+					println!("Falling back to default.");
+					return Default::default();
+				},
+			}
 			ret
 		} else {
 			Default::default()
@@ -51,26 +62,31 @@ impl V2FApp {
 }
 
 impl eframe::App for V2FApp {
-	/// Called by the framework to save state before shutdown.
 	fn save(&mut self, storage: &mut dyn eframe::Storage) {
 		eframe::set_value(storage, eframe::APP_KEY, self);
 	}
 
-	/// Called each time the UI needs repainting, which may be many times per second.
 	fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-		// Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-		// For inspiration and more examples, go to https://emilk.github.io/egui
-
 		egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-			// The top panel is often a good place for a menu bar:
-
 			egui::MenuBar::new().ui(ui, |ui| {
-				// NOTE: no File->Quit on web pages!
-				let is_web = cfg!(target_arch = "wasm32");
-				if !is_web {
+				#[cfg(not(target_arch = "wasm32"))]
+				{
 					ui.menu_button("File", |ui| {
 						if ui.button("New").clicked() {
 							*self = V2FApp::default();
+						}
+						if ui.button("Change Directory").clicked() {
+							let task = rfd::FileDialog::new().pick_folder();
+							if let Some(path) = task {
+								println!("Selected path: {:?}", path);
+								match std::env::set_current_dir(&path) {
+									Ok(()) => {
+										*self = V2FApp::default();
+										self.cwd = path.clone();
+									},
+									Err(_) => println!("Failed to switch to different directory."),
+								}
+							}
 						}
 						if ui.button("Quit").clicked() {
 							ctx.send_viewport_cmd(egui::ViewportCommand::Close);

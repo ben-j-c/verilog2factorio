@@ -39,12 +39,10 @@ glow = { version = "0.16.0" }
 log = "0.4.29"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-color-eyre = "0.6.5"
-mlua-sys = { version = "0.6.7", features = ["lua54"] }
-mlua = { version = "0.10.3", features = ["lua54"] }
-ratatui = "0.30.0"
+mlua = { version = "0.11.6", features = ["lua54"] }
 rustyline = "15.0.0"
 metis = { version = "0.2.2" }
+rfd = "0.17.2"
 
 [profile.perf]
 inherits = "dev"

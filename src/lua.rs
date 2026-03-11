@@ -1075,6 +1075,7 @@ impl UserData for SimStateAPI {
 			this.sim.write().unwrap().inspect();
 			Ok(())
 		});
+		#[cfg(false)]
 		methods.add_method("inspect_tui", |_, this, _: ()| {
 			sim::tui::run_tui(this.logd.clone(), this.sim.clone())
 				.map_err(|s| Error::RuntimeError(s))
