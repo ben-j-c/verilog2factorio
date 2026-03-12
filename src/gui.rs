@@ -25,45 +25,85 @@ pub struct V2FApp {
 	blueprint: Option<String>,
 
 	cwd: PathBuf,
+	project_file: Option<PathBuf>,
 }
 
 impl Default for V2FApp {
 	fn default() -> Self {
 		let snarl = egui_snarl::Snarl::new();
+		let cwd = std::env::current_dir().unwrap();
 		Self {
 			snarl,
 			viewer: V2FViewer::default(),
 			blueprint: None,
-			cwd: std::env::current_dir().unwrap(),
+			cwd,
+			project_file: None,
 		}
 	}
 }
 
 impl V2FApp {
 	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-		if let Some(storage) = cc.storage {
-			let mut ret: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-			if let Some((sim, _)) = &mut ret.viewer.sim {
-				sim.reinit_logd(ret.viewer.logd.clone());
+		#[cfg(not(target_arch = "wasm32"))]
+		{
+			if let Some(storage) = cc.storage {
+				let project_file: Option<PathBuf> = eframe::get_value(storage, eframe::APP_KEY);
+				if let Some(project_file) = project_file {
+					let v: Option<Self> = project_file
+						.parent()
+						.and_then(|path| std::env::set_current_dir(path).ok())
+						.and_then(|_| std::fs::File::open(&project_file).ok())
+						.and_then(|file| serde_json::from_reader(file).ok());
+					match v {
+						Some(mut this) => {
+							this.project_file = Some(project_file.clone());
+							return this;
+						},
+						None => {
+							println!("Failed to open {:?}", project_file);
+						},
+					}
+				}
 			}
-			match std::env::set_current_dir(&ret.cwd) {
-				Ok(()) => {},
-				Err(_) => {
-					println!("Failed to open {:?}", ret.cwd);
-					println!("Falling back to default.");
-					return Default::default();
-				},
+			return Default::default();
+		}
+		#[cfg(target_arch = "wasm32")]
+		{
+			if let Some(storage) = cc.storage {
+				let mut ret: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+				if let Some((sim, _)) = &mut ret.viewer.sim {
+					sim.reinit_logd(ret.viewer.logd.clone());
+				}
+
+				ret
+			} else {
+				Default::default()
 			}
-			ret
-		} else {
-			Default::default()
 		}
 	}
 }
 
 impl eframe::App for V2FApp {
 	fn save(&mut self, storage: &mut dyn eframe::Storage) {
-		eframe::set_value(storage, eframe::APP_KEY, self);
+		#[cfg(not(target_arch = "wasm32"))]
+		{
+			if let Some(pf) = &self.project_file {
+				match std::fs::File::create(&pf)
+					.ok()
+					.map(|f| serde_json::to_writer_pretty(f, self))
+				{
+					Some(Ok(())) => {},
+					_ => {
+						println!("Failed to save project: {:?}", pf);
+					},
+				}
+				eframe::set_value(storage, eframe::APP_KEY, pf);
+			}
+		}
+		#[cfg(target_arch = "wasm32")]
+		{
+			eframe::set_value(storage, eframe::APP_KEY, self);
+		}
 	}
 
 	fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -75,16 +115,67 @@ impl eframe::App for V2FApp {
 						if ui.button("New").clicked() {
 							*self = V2FApp::default();
 						}
-						if ui.button("Change Directory").clicked() {
-							let task = rfd::FileDialog::new().pick_folder();
-							if let Some(path) = task {
+						if ui.button("Open Project").clicked() {
+							let task = rfd::FileDialog::new()
+								.add_filter("v2f", &["v2f"])
+								.pick_file();
+							if let Some(project_file) = task {
+								let path =
+									project_file.parent().expect("Dialog didn't give a file.");
 								println!("Selected path: {:?}", path);
-								match std::env::set_current_dir(&path) {
-									Ok(()) => {
-										*self = V2FApp::default();
-										self.cwd = path.clone();
+								let v = std::env::set_current_dir(&path)
+									.ok()
+									.and_then(|_| std::fs::File::open(&project_file).ok())
+									.and_then(|file| serde_json::from_reader(file).ok());
+								match v {
+									Some(v) => {
+										*self = v;
 									},
-									Err(_) => println!("Failed to switch to different directory."),
+									None => {
+										println!("Failed to open {:?}", project_file);
+									},
+								}
+							} else {
+								println!("Cancelled");
+							}
+						}
+						if self.project_file.is_some() && ui.button("Save").clicked() {
+							let project_file = self.project_file.as_ref().unwrap();
+							let res = project_file
+								.parent()
+								.and_then(|p| std::env::set_current_dir(p).ok())
+								.and_then(|_| std::fs::File::create(&project_file).ok())
+								.and_then(|file| serde_json::to_writer_pretty(file, self).ok());
+
+							match res {
+								Some(_) => {
+									self.cwd = project_file.parent().unwrap().to_path_buf();
+									self.project_file = Some(project_file.into());
+								},
+								None => {
+									println!("Failed to save {:?}", project_file);
+								},
+							}
+						}
+						if ui.button("Save As").clicked() {
+							let task = rfd::FileDialog::new()
+								.add_filter("v2f", &["v2f"])
+								.save_file();
+							if let Some(project_file) = task {
+								let res = project_file
+									.parent()
+									.and_then(|p| std::env::set_current_dir(p).ok())
+									.and_then(|_| std::fs::File::create(&project_file).ok())
+									.and_then(|file| serde_json::to_writer_pretty(file, self).ok());
+
+								match res {
+									Some(_) => {
+										self.cwd = project_file.parent().unwrap().to_path_buf();
+										self.project_file = Some(project_file);
+									},
+									None => {
+										println!("Failed to save {:?}", project_file);
+									},
 								}
 							}
 						}
