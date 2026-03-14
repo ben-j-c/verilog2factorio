@@ -107,6 +107,11 @@ Under [`/examples/riscv_v2f_optimized/top_v2f`](https://github.com/ben-j-c/riscv
 Once compiled and the clock started, the [`hello_world`](https://github.com/ben-j-c/riscv_v2f_optimized/blob/master/top_v2f/programs/hello_world.c) program runs and produces the following result. I had a little bug in the ASCII font, so the smiley face is frowning. I have not yet rerun this program to get a better picture.
 ![In game view](https://raw.githubusercontent.com/ben-j-c/riscv_v2f_optimized/refs/heads/master/top_v2f/doc/1000ft_view.png)
 
+And a closeup.
+
+![closeup in game](https://raw.githubusercontent.com/ben-j-c/riscv_v2f_optimized/refs/heads/master/top_v2f/doc/closeup.png)
+
+
 Here is an image of what the core looks like. This is their diagram, and is identical to mine.
 ![Image of the RV32IM core](https://github.com/ben-j-c/riscv_v2f_optimized/blob/7f76b0459d402eee0993eac75e75c2aa3ca6af48/doc/overview.png)
 
