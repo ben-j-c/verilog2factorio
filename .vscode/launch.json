@@ -201,5 +201,28 @@
 			],
 			"cwd": "${workspaceFolder}/examples/riscv_v2f_optimized/testbench/pipe_ctrl"
 		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug gui",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=v2f",
+					"--package=v2f",
+				],
+				"filter": {
+					"name": "v2f",
+					"kind": "bin"
+				}
+			},
+			"env": {
+				"V2F_ROOT": "${workspaceFolder}"
+			},
+			"args": [
+				"--gui",
+			],
+			"cwd": "${workspaceFolder}"
+		},
 	]
 }

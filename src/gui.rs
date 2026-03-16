@@ -1,7 +1,8 @@
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 
 use chumsky::Parser;
-use egui::{Color32, Id};
+use egui::{Color32, Id, RichText};
 use egui_extras::syntax_highlighting::CodeTheme;
 use egui_snarl::ui::{PinInfo, SnarlStyle, WireLayer};
 use itertools::Itertools;
@@ -200,8 +201,9 @@ impl eframe::App for V2FApp {
 					if ui.button("New Simulation").clicked() {
 						let logd = self.viewer.logd.clone();
 						self.viewer.sim = Some((SimState::new(logd), SimSettings::default()));
+						self.viewer.sim.as_ref().unwrap().0.clear_error_is_assert();
 					}
-					if ui.button("Delete").clicked() {
+					if self.viewer.sim.is_some() && ui.button("Stop").clicked() {
 						self.viewer.sim = None;
 					}
 				});
@@ -226,6 +228,38 @@ impl eframe::App for V2FApp {
 					ui.checkbox(&mut settings.show_on_nodes, "Show on nodes");
 					ui.label(format!("{:?}", sim.seq_num()));
 					ui.label(format!("{:?}", self.viewer.logd.read().unwrap().seq_num));
+					if sim.has_errors() {
+						let errors = sim.get_errors();
+						ui.separator();
+						ui.horizontal(|ui| {
+							if ui
+								.button(RichText::new("SIM ERRORS!").color(Color32::RED))
+								.clicked()
+							{
+								settings.show_errors = !settings.show_errors
+							}
+							if ui.button("Clear errors").clicked() {
+								sim.clear_errors();
+								settings.show_errors = false;
+							}
+						});
+
+						if settings.show_errors {
+							let mut is_open = true;
+							egui::Window::new("Errors")
+								.open(&mut is_open)
+								.resizable(true)
+								.scroll(true)
+								.show(ctx, |ui| {
+									for error in errors {
+										ui.label(RichText::new(error).code().color(Color32::RED));
+									}
+								});
+							if !is_open {
+								settings.show_errors = false;
+							}
+						}
+					}
 				}
 				ui.separator();
 				if ui.button("Get blueprint").clicked() {
@@ -343,6 +377,7 @@ struct V2FViewer {
 struct SimSettings {
 	n_steps: u32,
 	show_on_nodes: bool,
+	show_errors: bool,
 }
 
 impl V2FViewer {

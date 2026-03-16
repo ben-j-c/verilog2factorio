@@ -1,7 +1,8 @@
 use std::{
+	cell::{Ref, RefCell},
 	fmt::Display,
 	ops::{BitAnd, BitOr, BitXor, Index, IndexMut},
-	sync::{Arc, RwLock},
+	sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
 	usize,
 };
 
@@ -33,6 +34,28 @@ use crate::{
 	svg::SVG,
 	util::{hash_map, hash_set, HashM},
 };
+
+macro_rules! sim_assert {
+	($self: ident, $cond:expr, $($arg:tt)+) => {
+		if !($cond) {
+			if $self.error_is_assert.load(std::sync::atomic::Ordering::Relaxed) {
+				panic!($($arg)+);
+			} else {
+				$self.error.lock().unwrap().borrow_mut().push(format!("{}:{}\n{}", file!(), line!(), format_args!($($arg)+)));
+			}
+		}
+	};
+	($self: ident, $cond:expr) => {
+		if !($cond) {
+			if $self.error_is_assert
+			.load(std::sync::atomic::Ordering::Relaxed) {
+				panic!();
+			} else {
+				$self.error.lock().unwrap().borrow_mut().push(format!("{}:{}", file!(), line!()));
+			}
+		}
+	};
+}
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub(crate) struct WireNetwork {
@@ -98,7 +121,7 @@ pub struct Trace {
 	green: Vec<(usize, Vec<(i32, i32)>)>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct SimState {
 	/// Indexed by network id
 	network: Vec<WireNetwork>,
@@ -116,6 +139,9 @@ pub struct SimState {
 	new_state_green: Vec<OutputState>,
 
 	seq_num: SeqNo,
+
+	error: Mutex<RefCell<Vec<String>>>,
+	error_is_assert: AtomicBool,
 }
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
@@ -145,9 +171,28 @@ impl SimState {
 			new_state_green: vec![],
 			new_state_red: vec![],
 			seq_num,
+			error: Mutex::default(),
+			error_is_assert: AtomicBool::new(true),
 		};
 		ret.update_logical_design();
 		ret
+	}
+
+	pub fn clear_error_is_assert(&self) {
+		self.error_is_assert
+			.store(false, std::sync::atomic::Ordering::Relaxed);
+	}
+
+	pub fn get_errors(&self) -> Vec<String> {
+		self.error.lock().unwrap().borrow().clone()
+	}
+
+	pub fn has_errors(&self) -> bool {
+		!self.error.lock().unwrap().borrow().is_empty()
+	}
+
+	pub fn clear_errors(&self) {
+		self.error.lock().unwrap().borrow_mut().clear();
 	}
 
 	pub fn reset_network_connectivity(&mut self, start: usize) {
@@ -198,11 +243,13 @@ impl SimState {
 				},
 			}
 
-			assert!(
+			sim_assert!(
+				self,
 				!network_wires.is_empty(),
-				"A \"wire\" network was found with no wires."
+				"A \"wire\" network was found with no wires.",
 			);
-			assert!(
+			sim_assert!(
+				self,
 				network_wires.contains(&NodeId(nodeid)),
 				"Wire not in it's own network!"
 			);
@@ -589,11 +636,11 @@ impl SimState {
 	) {
 		let (op, input_1, input_2, input_left_network, input_right_network) =
 			node.function.unwrap_arithmetic();
-		assert!(input_1 != Signal::Anything);
-		assert!(input_1 != Signal::Everything);
-		assert!(input_2 != Signal::Anything);
-		assert!(input_2 != Signal::Everything);
-		assert!(node.output.len() == 1);
+		sim_assert!(self, input_1 != Signal::Anything);
+		sim_assert!(self, input_1 != Signal::Everything);
+		sim_assert!(self, input_2 != Signal::Anything);
+		sim_assert!(self, input_2 != Signal::Everything);
+		sim_assert!(self, node.output.len() == 1);
 		let output = *node.output.first().unwrap();
 		if output == Signal::None {
 			return;
@@ -666,7 +713,7 @@ impl SimState {
 				}
 			},
 			(false, false) => {
-				assert!(!output_each, "Invalid output");
+				sim_assert!(self, !output_each, "Invalid output");
 				let left = if let Signal::Id(id) = input_1 {
 					self.get_seen_signal_count(node.id, id, input_left_network)
 				} else if let Signal::Constant(c) = input_1 {
@@ -715,7 +762,7 @@ impl SimState {
 						new_state_red[sig_id] = *count;
 						new_state_green[sig_id] = *count;
 					} else {
-						assert!(false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
+						sim_assert!(self, false, "Constant combinator with id {} is trying to drive an invalid signal type", node.id.0);
 					}
 				}
 			},
