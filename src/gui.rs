@@ -877,8 +877,15 @@ fn show_node_config(
 					outputs.push("none".to_owned());
 					constants.push(0);
 				}
-				for i in 0..constants.len() {
+				let mut i = 0;
+				while i < outputs.len() {
 					ui.horizontal(|ui| {
+						if ui.button("X").clicked() {
+							outputs.remove(i);
+							constants.remove(i);
+							i -= 1;
+							return;
+						}
 						add_signal_input_box_name_only_no_constants(
 							ui,
 							&mut lnode.output[i],
@@ -887,6 +894,7 @@ fn show_node_config(
 						let dv = egui::DragValue::new(&mut constants[i]).speed(1);
 						ui.add(dv);
 					});
+					i += 1;
 				}
 			});
 		},
