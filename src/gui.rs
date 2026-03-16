@@ -1027,8 +1027,26 @@ fn show_node_sim_state(
 					crate::logical_design::NodeFunction::DisplayPanel { .. } => {
 						ui.add_space(16.0);
 					},
-					crate::logical_design::NodeFunction::WireSum(WireColour::Red) => {},
-					crate::logical_design::NodeFunction::WireSum(WireColour::Green) => {},
+					crate::logical_design::NodeFunction::WireSum(WireColour::Red) => {
+						let state = sim.probe_red_out(lid);
+						for (id, count) in state.iter().sorted() {
+							ui.label(format!(
+								"{} = {}",
+								signal_lookup_table::lookup_str(*id).0,
+								count
+							));
+						}
+					},
+					crate::logical_design::NodeFunction::WireSum(WireColour::Green) => {
+						let state = sim.probe_green_out(lid);
+						for (id, count) in state.iter().sorted() {
+							ui.label(format!(
+								"{} = {}",
+								signal_lookup_table::lookup_str(*id).0,
+								count
+							));
+						}
+					},
 				}
 			});
 		}
