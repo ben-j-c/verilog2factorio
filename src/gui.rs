@@ -32,7 +32,8 @@ pub struct V2FApp {
 impl Default for V2FApp {
 	fn default() -> Self {
 		let snarl = egui_snarl::Snarl::new();
-		let cwd = std::env::current_dir().unwrap();
+
+		let cwd = std::env::current_dir().unwrap_or(PathBuf::default());
 		Self {
 			snarl,
 			viewer: V2FViewer::default(),
@@ -187,6 +188,14 @@ impl eframe::App for V2FApp {
 					ui.add_space(16.0);
 				}
 
+				#[cfg(target_arch = "wasm32")]
+				{
+					if ui.button("New").clicked() {
+						*self = V2FApp::default();
+					}
+					//
+				}
+
 				egui::widgets::global_theme_preference_buttons(ui);
 			});
 		});
@@ -265,14 +274,18 @@ impl eframe::App for V2FApp {
 				if ui.button("Get blueprint").clicked() {
 					let mut logd = self.viewer.logd.read().unwrap().clone();
 					logd.delete_and_compact();
-					let mut phyd = PhysicalDesign::new();
-					phyd.build_from(&logd);
-					let mut serd = SerializableDesign::new();
-					serd.build_from(&phyd, &logd);
-					let text = serde_json::to_string_pretty(&serd);
-					match text {
-						Ok(text) => self.blueprint = Some(text),
-						Err(e) => self.blueprint = Some(format!("{}", e)),
+					if logd.nodes.is_empty() {
+						self.blueprint = Some(format!("Nothing in the design yet..."));
+					} else {
+						let mut phyd = PhysicalDesign::new();
+						phyd.build_from(&logd);
+						let mut serd = SerializableDesign::new();
+						serd.build_from(&phyd, &logd);
+						let text = serde_json::to_string_pretty(&serd);
+						match text {
+							Ok(text) => self.blueprint = Some(text),
+							Err(e) => self.blueprint = Some(format!("{}", e)),
+						}
 					}
 				}
 				let mut is_open = true;
