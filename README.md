@@ -13,6 +13,12 @@ create designs.
 
 # How to get started
 
+## Just a webpage please
+
+[Ok here you go](https://benjaminc.dev/v2f)
+
+This isn't the full flow. Getting Yosys in the browser is very painful, so here is just the backend flow with a GUI slapped on top.
+
 ## With prebuilt development image
 
 Click the following to open a dev container on a github hosted machine:
