@@ -17,7 +17,9 @@ create designs.
 
 [Ok here you go](https://benjaminc.dev/v2f)
 
-This isn't the full flow. Getting Yosys in the browser is very painful, so here is just the backend flow with a GUI slapped on top.
+This isn't the full flow. Getting Yosys in the browser is very painful, so here is just the backend flow with a GUI slapped on top. You can place combinators and simulate them. This is what it looks like:
+
+![The GUI](svg/gui.png)
 
 ## With prebuilt development image
 
