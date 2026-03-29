@@ -48,7 +48,9 @@ pub fn main() -> Result<(), v2f::Error> {
 		v2f::util::save_memh_file(output_file, program_i32)?;
 		return Ok(());
 	}
-	match if args.input_file.as_ref().unwrap().extension().unwrap() == "lua" {
+	let input_file = args.input_file.ok_or(v2f::Error::NoSuchFile)?;
+	let is_lua = input_file.extension().map_or(false, |ext| ext == "lua");
+	match if is_lua {
 		lua_flow(args)
 	} else {
 		mapped_flow(args)
